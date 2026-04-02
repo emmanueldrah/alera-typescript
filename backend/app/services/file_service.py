@@ -1,5 +1,5 @@
 """
-File management utilities and services
+File management utilities and services for ALERA healthcare platform
 """
 
 import os
@@ -11,37 +11,40 @@ from fastapi import UploadFile, HTTPException
 import shutil
 from config import settings
 
-# File storage configuration - use /tmp on Vercel (read-only filesystem)
-# Detect Vercel by checking for /var/task directory marker
-IS_VERCEL = os.path.exists('/var/task') or os.path.exists('/var/runtime')
 
-if IS_VERCEL or settings.ENVIRONMENT == "production":
-    UPLOAD_DIR = Path("/tmp/alera_uploads")
-else:
-    UPLOAD_DIR = Path("uploads")
-
+# Configuration constants
 ALLOWED_EXTENSIONS = {".pdf", ".doc", ".docx", ".jpg", ".jpeg", ".png", ".txt", ".xls", ".xlsx"}
 MAX_FILE_SIZE = 25 * 1024 * 1024  # 25 MB
-UPLOAD_DIR_CREATED = False
 
-def ensure_upload_dir():
-    """Lazily create upload directory on first use (not at import time)"""
-    global UPLOAD_DIR_CREATED
-    if UPLOAD_DIR_CREATED:
-        return
-    try:
-        UPLOAD_DIR.mkdir(exist_ok=True, parents=True)
-        UPLOAD_DIR_CREATED = True
-    except OSError:
-        # Read-only filesystem (expected on Vercel) - gracefully continue
-        pass
-    except Exception:
-        # Any other error - also gracefully continue
-        pass
+# Determine upload directory based on environment
+# On Vercel, use /tmp (only writable location)
+# On local, use ./uploads
+def get_upload_dir():
+    """Get the upload directory path - deferred to function call, not module import"""
+    is_vercel = os.path.exists('/var/task') or os.path.exists('/var/runtime')
+    is_production = settings.ENVIRONMENT == "production"
+    
+    if is_vercel or is_production:
+        return Path("/tmp/alera_uploads")
+    else:
+        return Path("uploads")
+
+
+UPLOAD_DIR = get_upload_dir()
 
 
 class FileStorageService:
     """Handle file uploads and storage"""
+
+    @staticmethod
+    def ensure_upload_directory():
+        """Create upload directory if needed - called only when actually saving files"""
+        try:
+            # Never fails on read-only filesystem - just silently continues
+            UPLOAD_DIR.mkdir(exist_ok=True, parents=True)
+        except Exception:
+            # Silently ignore all errors - we'll handle them when actually writing
+            pass
 
     @staticmethod
     def validate_file(file: UploadFile) -> tuple[bool, str]:
@@ -83,15 +86,14 @@ class FileStorageService:
         if not is_valid:
             raise HTTPException(status_code=400, detail=message)
 
-        # Ensure upload directory exists (lazy initialization)
-        ensure_upload_dir()
+        # Ensure upload directory exists
+        FileStorageService.ensure_upload_directory()
 
-        # Create subfolder (with error handling for read-only filesystems)
+        # Create subfolder
         save_dir = UPLOAD_DIR / subfolder
         try:
             save_dir.mkdir(parents=True, exist_ok=True)
-        except OSError:
-            # Read-only filesystem - continue anyway, file ops will handle it
+        except Exception:
             pass
 
         # Generate unique filename
@@ -135,9 +137,12 @@ class FileStorageService:
         save_dir = UPLOAD_DIR / subfolder
         
         # Find file with this ID (could be any extension)
-        for file_path in save_dir.glob(f"{file_id}.*"):
-            if file_path.is_file():
-                return file_path
+        try:
+            for file_path in save_dir.glob(f"{file_id}.*"):
+                if file_path.is_file():
+                    return file_path
+        except Exception:
+            pass
         
         return None
 
@@ -146,8 +151,11 @@ class FileStorageService:
         """Delete a file by file ID"""
         file_path = FileStorageService.get_file_path(file_id, subfolder)
         if file_path and file_path.exists():
-            file_path.unlink()
-            return True
+            try:
+                file_path.unlink()
+                return True
+            except Exception:
+                return False
         return False
 
     @staticmethod
@@ -155,7 +163,10 @@ class FileStorageService:
         """Get file size in bytes"""
         file_path = FileStorageService.get_file_path(file_id, subfolder)
         if file_path and file_path.exists():
-            return file_path.stat().st_size
+            try:
+                return file_path.stat().st_size
+            except Exception:
+                return 0
         return 0
 
 
