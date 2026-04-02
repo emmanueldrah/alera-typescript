@@ -3,6 +3,9 @@ import sys
 import traceback
 import os
 
+# Force rebuild timestamp: 2026-04-02 21:35
+# This ensures Vercel always uses fresh code, not cached bytecode
+
 # Identify the root directory and ensure the backend is in the path
 ROOT_DIR = Path(__file__).resolve().parent.parent
 BACKEND_DIR = ROOT_DIR / "backend"
