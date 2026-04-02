@@ -3,7 +3,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.middleware.trustedhost import TrustedHostMiddleware
 from config import settings
 from database import init_db
-from app.routes import auth, users, appointments, prescriptions, allergies
+from app.routes import auth, users, appointments, prescriptions, allergies, notifications, telemedicine, admin
 
 # Initialize database
 init_db()
@@ -38,6 +38,9 @@ app.include_router(users.router)
 app.include_router(appointments.router)
 app.include_router(prescriptions.router)
 app.include_router(allergies.router)
+app.include_router(notifications.router)
+app.include_router(telemedicine.router)
+app.include_router(admin.router)
 
 
 @app.get("/health")
