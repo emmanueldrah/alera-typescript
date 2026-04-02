@@ -98,6 +98,10 @@ class FileStorageService:
         if not is_valid:
             raise HTTPException(status_code=400, detail=message)
 
+        # Ensure filename is not None
+        if not file.filename or not isinstance(file.filename, str):
+            raise HTTPException(status_code=400, detail="Invalid filename")
+
         # Ensure upload directory exists
         FileStorageService.ensure_upload_directory()
 
@@ -109,7 +113,8 @@ class FileStorageService:
             pass
 
         # Generate unique filename
-        file_ext = Path(file.filename).suffix.lower()
+        filename = file.filename if file.filename else "unknown"
+        file_ext = Path(filename).suffix.lower()
         file_id = f"{prefix}_{uuid.uuid4().hex[:12]}"
         unique_filename = f"{file_id}{file_ext}"
         file_path = save_dir / unique_filename
@@ -146,6 +151,9 @@ class FileStorageService:
     @staticmethod
     def get_file_path(file_id: str, subfolder: str = "documents") -> Optional[Path]:
         """Get file path by file ID"""
+        if not file_id or not isinstance(file_id, str):
+            return None
+        
         save_dir = get_upload_dir() / subfolder
         
         # Find file with this ID (could be any extension)
@@ -161,6 +169,9 @@ class FileStorageService:
     @staticmethod
     def delete_file(file_id: str, subfolder: str = "documents") -> bool:
         """Delete a file by file ID"""
+        if not file_id:
+            return False
+        
         file_path = FileStorageService.get_file_path(file_id, subfolder)
         if file_path and file_path.exists():
             try:
@@ -173,6 +184,9 @@ class FileStorageService:
     @staticmethod
     def get_file_size(file_id: str, subfolder: str = "documents") -> int:
         """Get file size in bytes"""
+        if not file_id:
+            return 0
+        
         file_path = FileStorageService.get_file_path(file_id, subfolder)
         if file_path and file_path.exists():
             try:
