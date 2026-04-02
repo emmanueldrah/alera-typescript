@@ -16,21 +16,33 @@ from config import settings
 ALLOWED_EXTENSIONS = {".pdf", ".doc", ".docx", ".jpg", ".jpeg", ".png", ".txt", ".xls", ".xlsx"}
 MAX_FILE_SIZE = 25 * 1024 * 1024  # 25 MB
 
-# Determine upload directory based on environment
-# On Vercel, use /tmp (only writable location)
-# On local, use ./uploads
+# Upload directory cache
+_UPLOAD_DIR_CACHE = None
+
+
 def get_upload_dir():
-    """Get the upload directory path - deferred to function call, not module import"""
-    is_vercel = os.path.exists('/var/task') or os.path.exists('/var/runtime')
-    is_production = settings.ENVIRONMENT == "production"
+    """
+    Get the upload directory path - lazily initialized.
+    This is deferred from module import time to avoid filesystem access on startup.
+    """
+    global _UPLOAD_DIR_CACHE
     
-    if is_vercel or is_production:
-        return Path("/tmp/alera_uploads")
-    else:
-        return Path("uploads")
-
-
-UPLOAD_DIR = get_upload_dir()
+    if _UPLOAD_DIR_CACHE is not None:
+        return _UPLOAD_DIR_CACHE
+    
+    try:
+        is_vercel = os.path.exists('/var/task') or os.path.exists('/var/runtime')
+        is_production = settings.ENVIRONMENT == "production"
+        
+        if is_vercel or is_production:
+            _UPLOAD_DIR_CACHE = Path("/tmp/alera_uploads")
+        else:
+            _UPLOAD_DIR_CACHE = Path("uploads")
+    except Exception:
+        # Fallback to /tmp if any error occurs
+        _UPLOAD_DIR_CACHE = Path("/tmp/alera_uploads")
+    
+    return _UPLOAD_DIR_CACHE
 
 
 class FileStorageService:
@@ -41,7 +53,7 @@ class FileStorageService:
         """Create upload directory if needed - called only when actually saving files"""
         try:
             # Never fails on read-only filesystem - just silently continues
-            UPLOAD_DIR.mkdir(exist_ok=True, parents=True)
+            get_upload_dir().mkdir(exist_ok=True, parents=True)
         except Exception:
             # Silently ignore all errors - we'll handle them when actually writing
             pass
@@ -90,7 +102,7 @@ class FileStorageService:
         FileStorageService.ensure_upload_directory()
 
         # Create subfolder
-        save_dir = UPLOAD_DIR / subfolder
+        save_dir = get_upload_dir() / subfolder
         try:
             save_dir.mkdir(parents=True, exist_ok=True)
         except Exception:
@@ -134,7 +146,7 @@ class FileStorageService:
     @staticmethod
     def get_file_path(file_id: str, subfolder: str = "documents") -> Optional[Path]:
         """Get file path by file ID"""
-        save_dir = UPLOAD_DIR / subfolder
+        save_dir = get_upload_dir() / subfolder
         
         # Find file with this ID (could be any extension)
         try:
