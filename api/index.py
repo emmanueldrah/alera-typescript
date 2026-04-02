@@ -8,11 +8,13 @@ BACKEND_DIR = ROOT_DIR / "backend"
 if str(BACKEND_DIR) not in sys.path:
     sys.path.insert(0, str(BACKEND_DIR))
 
-# Initialize database before importing app
+# Import the FastAPI app first so all models are registered on Base.metadata
+from main import app
+
+# Initialize database after model imports so create_all() can see every table
 from database import init_db
+
 try:
     init_db()
 except Exception as e:
     print(f"Warning: Could not initialize database: {e}")
-
-from main import app
