@@ -42,8 +42,8 @@ class Settings(BaseSettings):
     TWILIO_PHONE_NUMBER: str = ""
 
     # Environment
-    ENVIRONMENT: str = Field(default="development", description="Environment: development, staging, or production")
-    DEBUG: bool = Field(default=True, description="Debug mode flag")
+    ENVIRONMENT: str = Field(default="production", description="Environment: development, staging, or production")
+    DEBUG: bool = Field(default=False, description="Debug mode flag")
 
     # WebRTC
     AGORA_APP_ID: str = ""
