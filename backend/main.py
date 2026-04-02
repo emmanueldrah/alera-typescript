@@ -1,12 +1,10 @@
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.middleware.trustedhost import TrustedHostMiddleware
+from fastapi.responses import JSONResponse
 from config import settings
 from database import init_db
-from app.routes import auth, users, appointments, prescriptions, allergies, notifications, telemedicine, admin
-
-# Initialize database
-init_db()
+from app.routes import auth, users, appointments, prescriptions, allergies, notifications, telemedicine, admin, documents, consents, reminders_templates, audit
 
 # Create FastAPI app
 app = FastAPI(
@@ -41,6 +39,16 @@ app.include_router(allergies.router)
 app.include_router(notifications.router)
 app.include_router(telemedicine.router)
 app.include_router(admin.router)
+app.include_router(documents.router)
+app.include_router(consents.router)
+app.include_router(reminders_templates.router)
+app.include_router(audit.router)
+
+
+@app.on_event("startup")
+async def startup_event():
+    """Initialize database tables when the application starts."""
+    init_db()
 
 
 @app.get("/health")
@@ -66,10 +74,13 @@ async def root():
 @app.exception_handler(Exception)
 async def global_exception_handler(request, exc):
     """Global exception handler"""
-    return {
-        "detail": str(exc),
-        "status": "error"
-    }
+    return JSONResponse(
+        status_code=500,
+        content={
+            "detail": str(exc),
+            "status": "error"
+        }
+    )
 
 
 if __name__ == "__main__":

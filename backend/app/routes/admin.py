@@ -6,6 +6,8 @@ from app.models.user import User, UserRole
 from app.models.appointment import Appointment, AppointmentStatus
 from app.models.prescription import Prescription
 from app.utils.dependencies import get_current_admin
+from app.schemas import UserResponse
+from app.schemas.additional_features import AuditLogResponse
 from datetime import datetime, timedelta
 
 router = APIRouter(prefix="/api/admin", tags=["admin"])
@@ -48,7 +50,7 @@ async def get_dashboard_stats(
     }
 
 
-@router.get("/users/")
+@router.get("/users/", response_model=list[UserResponse])
 async def list_all_users(
     current_user: User = Depends(get_current_admin),
     db: Session = Depends(get_db),
@@ -61,7 +63,14 @@ async def list_all_users(
     query = db.query(User)
     
     if role_filter:
-        query = query.filter(User.role == role_filter)
+        try:
+            role = UserRole[role_filter.upper()]
+        except KeyError:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail=f"Invalid role filter: {role_filter}"
+            )
+        query = query.filter(User.role == role)
     
     users = query.offset(skip).limit(limit).all()
     
@@ -215,7 +224,7 @@ async def get_user_analytics(
     }
 
 
-@router.get("/audit-logs/")
+@router.get("/audit-logs/", response_model=list[AuditLogResponse])
 async def get_audit_logs(
     current_user: User = Depends(get_current_admin),
     db: Session = Depends(get_db),
@@ -230,7 +239,7 @@ async def get_audit_logs(
         AuditLog.created_at.desc()
     ).offset(skip).limit(limit).all()
     
-    return logs
+    return [AuditLogResponse(**log.to_dict()) for log in logs]
 
 
 @router.get("/system/health")

@@ -7,6 +7,7 @@ from app.schemas import (
 )
 from app.models.user import User, UserRole
 from app.utils.auth import hash_password, verify_password, create_access_token, create_refresh_token
+from app.utils.dependencies import get_current_user
 from config import settings
 
 router = APIRouter(prefix="/api/auth", tags=["auth"])
@@ -122,17 +123,11 @@ async def refresh(refresh_token: str):
 @router.post("/change-password")
 async def change_password(
     request: PasswordChangeRequest,
-    current_user: User = Depends(lambda db: None),
+    current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db)
 ):
     """Change user password"""
-    
-    from app.utils.dependencies import get_current_user
-    from fastapi.security import HTTPBearer, HTTPAuthCredentials
-    
-    # Note: In actual implementation, would use proper dependency injection
-    # This is simplified for demonstration
-    
+
     if not verify_password(request.old_password, current_user.hashed_password):
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
@@ -144,11 +139,12 @@ async def change_password(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail="New passwords do not match"
         )
-    
+
     # Hash and update password
     current_user.hashed_password = hash_password(request.new_password)
     db.commit()
-    
+    db.refresh(current_user)
+
     return {"message": "Password changed successfully"}
 
 
