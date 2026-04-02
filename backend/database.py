@@ -5,6 +5,7 @@ from sqlalchemy.pool import NullPool, StaticPool
 from config import settings
 from typing import Generator
 import sys
+import os
 
 database_url = settings.DATABASE_URL
 
