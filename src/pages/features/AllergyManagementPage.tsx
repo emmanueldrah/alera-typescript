@@ -15,12 +15,12 @@ const SEVERITY_LEVELS = ['mild', 'moderate', 'severe', 'life-threatening'] as co
 type AllergyType = typeof ALLERGY_TYPES[number];
 type SeverityLevel = typeof SEVERITY_LEVELS[number];
 
-const isAllergyType = (value: any): value is AllergyType => {
-  return ALLERGY_TYPES.includes(value);
+const isAllergyType = (value: unknown): value is AllergyType => {
+  return ALLERGY_TYPES.includes(value as AllergyType);
 };
 
-const isSeverityLevel = (value: any): value is SeverityLevel => {
-  return SEVERITY_LEVELS.includes(value);
+const isSeverityLevel = (value: unknown): value is SeverityLevel => {
+  return SEVERITY_LEVELS.includes(value as SeverityLevel)
 };
 
 const AllergyManagementPage = () => {

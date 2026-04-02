@@ -1,16 +1,35 @@
 {
-  "name": "vite_react_shadcn_ts",
+  "name": "alera-healthcare",
+  "description": "ALERA - Healthcare Management System. A comprehensive healthcare platform for patients, providers, labs, pharmacies, hospitals, and emergency services.",
   "private": true,
-  "version": "0.0.0",
+  "version": "1.0.0",
   "type": "module",
+  "license": "MIT",
+  "author": {
+    "name": "Emmanuel Drah",
+    "email": "support@alera.health"
+  },
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/emmanueldrah/alera-typescript.git"
+  },
+  "keywords": [
+    "healthcare",
+    "medical",
+    "appointments",
+    "prescriptions",
+    "patient-management"
+  ],
   "scripts": {
     "dev": "vite",
     "build": "vite build",
     "build:dev": "vite build --mode development",
-    "lint": "eslint .",
     "preview": "vite preview",
+    "lint": "eslint .",
+    "lint:fix": "eslint . --fix",
     "test": "vitest run",
-    "test:watch": "vitest"
+    "test:watch": "vitest",
+    "type-check": "tsc --noEmit"
   },
   "dependencies": {
     "@hookform/resolvers": "^3.10.0",
@@ -82,6 +101,7 @@
     "jsdom": "^20.0.3",
     "postcss": "^8.5.6",
     "tailwindcss": "^3.4.17",
+    "terser": "^5.46.1",
     "typescript": "^5.8.3",
     "typescript-eslint": "^8.38.0",
     "vite": "^5.4.19",

@@ -8,30 +8,56 @@ const manualChunks = (id: string) => {
   if (id.includes('recharts')) return 'charts';
   if (id.includes('framer-motion')) return 'motion';
   if (id.includes('@radix-ui') || id.includes('cmdk') || id.includes('vaul') || id.includes('sonner')) return 'ui';
+  if (id.includes('react')) return 'react-vendor';
   return undefined;
 };
 
 // https://vitejs.dev/config/
-export default defineConfig(({ mode }) => ({
-  server: {
-    host: "::",
-    port: 8080,
-    hmr: {
-      overlay: false,
-    },
-  },
-  plugins: [react()],
-  resolve: {
-    alias: {
-      '@': path.resolve(__dirname, './src'),
-    },
-    dedupe: ['react', 'react-dom', 'react/jsx-runtime', 'react/jsx-dev-runtime'],
-  },
-  build: {
-    rollupOptions: {
-      output: {
-        manualChunks,
+export default defineConfig(({ mode }) => {
+  const isDev = mode === 'development';
+  
+  return {
+    server: {
+      host: '::',
+      port: 8080,
+      hmr: {
+        overlay: true,
       },
     },
-  },
-}));
+    plugins: [react()],
+    resolve: {
+      alias: {
+        '@': path.resolve(__dirname, './src'),
+      },
+      dedupe: ['react', 'react-dom', 'react/jsx-runtime', 'react/jsx-dev-runtime'],
+    },
+    build: {
+      outDir: 'dist',
+      sourcemap: isDev,
+      minify: isDev ? false : 'terser',
+      terserOptions: isDev ? {} : {
+        compress: {
+          drop_console: true,
+          drop_debugger: true,
+        },
+      },
+      chunkSizeWarningLimit: 1000,
+      rollupOptions: {
+        output: {
+          manualChunks,
+          entryFileNames: 'js/[name]-[hash].js',
+          chunkFileNames: 'js/[name]-[hash].js',
+          assetFileNames: ({ name }) => {
+            if (name && name.endsWith('.css')) {
+              return 'css/[name]-[hash][extname]';
+            }
+            return 'assets/[name]-[hash][extname]';
+          },
+        },
+      },
+    },
+    define: {
+      __DEV__: JSON.stringify(isDev),
+    },
+  };
+});

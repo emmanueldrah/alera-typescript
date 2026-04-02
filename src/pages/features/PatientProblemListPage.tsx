@@ -63,14 +63,14 @@ const PatientProblemListPage = () => {
   };
 
   const handleResolveProblem = (id: string) => {
-    updatePatientProblem(id, (p) => ({ ...p, status: 'resolved' }));
+    updatePatientProblem(id, (p: PatientProblem) => ({ ...p, status: 'resolved' as const }));
   };
 
   const handleReactivateProblem = (id: string) => {
-    updatePatientProblem(id, (p) => ({ ...p, status: 'active' }));
+    updatePatientProblem(id, (p: PatientProblem) => ({ ...p, status: 'active' as const }));
   };
 
-  const getSeverityColor = (severity: string) => {
+  const getSeverityColor = (severity: string): string => {
     switch (severity) {
       case 'mild':
         return 'text-green-600 bg-green-50 border-green-200';
@@ -194,7 +194,7 @@ const PatientProblemListPage = () => {
         {['all', 'active', 'resolved'].map((status) => (
           <button
             key={status}
-            onClick={() => setStatusFilter(status as any)}
+            onClick={() => setStatusFilter(status as ProblemStatus)}
             className={`px-4 py-2 rounded-lg text-sm font-medium transition ${
               statusFilter === status
                 ? 'bg-primary text-primary-foreground'

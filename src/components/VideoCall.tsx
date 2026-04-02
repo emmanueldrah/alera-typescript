@@ -52,7 +52,9 @@ const VideoCall = ({
         localVideoRef.current.srcObject = stream;
       }
     } catch {
-      console.log('Camera not available, using placeholder');
+      if (import.meta.env.DEV) {
+        console.log('Camera not available, using placeholder');
+      }
     }
   }, []);
 
@@ -75,7 +77,9 @@ const VideoCall = ({
         screenStreamRef.current = null;
       };
     } catch {
-      console.log('Screen sharing cancelled or not available');
+      if (import.meta.env.DEV) {
+        console.log('Screen sharing cancelled or not available');
+      }
     }
   }, []);
 

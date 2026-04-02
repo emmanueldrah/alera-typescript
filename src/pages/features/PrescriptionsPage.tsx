@@ -16,7 +16,7 @@ const PrescriptionsPage = () => {
   const [searchParams] = useSearchParams();
   const [showForm, setShowForm] = useState(false);
   const [formData, setFormData] = useState({ patientId: '', medName: '', dosage: '', frequency: '', duration: '' });
-  const [interactionWarnings, setInteractionWarnings] = useState<any[]>([]);
+  const [interactionWarnings, setInteractionWarnings] = useState<Array<{ severity: string; message: string; drugs: string[] }>>([]);
   const [overrideReason, setOverrideReason] = useState('');
   const [confirmedWithWarnings, setConfirmedWithWarnings] = useState(false);
   const [duplicateWarning, setDuplicateWarning] = useState<string | null>(null);
