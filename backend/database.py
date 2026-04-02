@@ -1,29 +1,49 @@
 from sqlalchemy import create_engine, event
 from sqlalchemy.ext.declarative import declarative_base
 from sqlalchemy.orm import sessionmaker, Session
-from sqlalchemy.pool import NullPool
+from sqlalchemy.pool import NullPool, StaticPool
 from config import settings
 from typing import Generator
 import sys
 
 database_url = settings.DATABASE_URL
-if settings.ENVIRONMENT == "production" and database_url == "sqlite:///alera.db":
-    database_url = "sqlite:////tmp/alera.db"
 
+# Handle production database settings
+if settings.ENVIRONMENT == "production":
+    # For SQLite in production, use /tmp
+    if database_url == "sqlite:///alera.db":
+        database_url = "sqlite:////tmp/alera.db"
+
+# Database engine configuration
 engine_kwargs = {
     "echo": settings.DATABASE_ECHO,
     "pool_pre_ping": True,
-    "poolclass": NullPool if settings.ENVIRONMENT == "production" else None,
 }
 
+# Use appropriate pool settings based on database type
 if database_url.startswith("sqlite"):
+    # SQLite: No connection pooling for serverless
+    engine_kwargs["poolclass"] = StaticPool
     engine_kwargs["connect_args"] = {"check_same_thread": False}
+elif database_url.startswith("postgresql"):
+    # PostgreSQL: Use NullPool for serverless (no connection pooling)
+    # Vercel uses ephemeral connections
+    engine_kwargs["poolclass"] = NullPool
+else:
+    # Default: No pooling for other database types
+    if settings.ENVIRONMENT == "production":
+        engine_kwargs["poolclass"] = NullPool
 
-# Create engine
-engine = create_engine(
-    database_url,
-    **engine_kwargs,
-)
+try:
+    # Create engine
+    engine = create_engine(
+        database_url,
+        **engine_kwargs,
+    )
+except Exception as e:
+    print(f"ERROR: Failed to create database engine with URL: {database_url[:50]}...")
+    print(f"ERROR: {str(e)}")
+    raise
 
 # Create session factory
 SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
@@ -56,7 +76,12 @@ def receive_connect(dbapi_connection, connection_record):
 
 def init_db():
     """Initialize database - create all tables"""
-    Base.metadata.create_all(bind=engine)
+    try:
+        Base.metadata.create_all(bind=engine)
+        print("✓ Database tables initialized successfully")
+    except Exception as e:
+        print(f"ERROR: Failed to initialize database tables: {e}")
+        raise
 
 
 # Keep both import styles pointing at the same module.

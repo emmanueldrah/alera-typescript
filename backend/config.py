@@ -3,6 +3,10 @@ from pydantic import field_validator, Field
 from typing import List
 import sys
 import secrets
+import os
+
+# Set default environment
+os.environ.setdefault('ENVIRONMENT', 'production')
 
 
 class Settings(BaseSettings):
@@ -28,7 +32,8 @@ class Settings(BaseSettings):
     CORS_ORIGINS: List[str] = [
         "http://localhost:5173",
         "http://localhost:3000",
-        "https://alera-typescript.vercel.app"
+        "https://alera-typescript.vercel.app",
+        "https://alera-gamma.vercel.app"
     ]
     CORS_ORIGIN_REGEX: str = r"https://.*\.vercel\.app"
 
@@ -50,7 +55,10 @@ class Settings(BaseSettings):
     AGORA_APP_CERTIFICATE: str = ""
 
     # HIPAA
-    ENCRYPTION_KEY: str = ""
+    ENCRYPTION_KEY: str = Field(
+        default_factory=lambda: secrets.token_hex(16),
+        description="Encryption key for sensitive data"
+    )
     AUDIT_LOG_RETENTION_DAYS: int = 2555
 
     class Config:
@@ -77,7 +85,14 @@ class Settings(BaseSettings):
         return bool(value)
 
 
-settings = Settings()
+try:
+    settings = Settings()
+    print(f"✓ Config loaded: ENV={settings.ENVIRONMENT} DB={settings.DATABASE_URL[:30]}...")
+except Exception as e:
+    print(f"ERROR: Failed to load config: {e}")
+    import traceback
+    traceback.print_exc()
+    raise
 
 # Keep both import styles pointing at the same module.
 sys.modules.setdefault("config", sys.modules[__name__])
