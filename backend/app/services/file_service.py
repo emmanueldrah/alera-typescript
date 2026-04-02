@@ -22,19 +22,22 @@ else:
 
 ALLOWED_EXTENSIONS = {".pdf", ".doc", ".docx", ".jpg", ".jpeg", ".png", ".txt", ".xls", ".xlsx"}
 MAX_FILE_SIZE = 25 * 1024 * 1024  # 25 MB
-
-# Safely create upload directory with fallback handling
 UPLOAD_DIR_CREATED = False
-try:
-    UPLOAD_DIR.mkdir(exist_ok=True, parents=True)
-    UPLOAD_DIR_CREATED = True
-    print(f"✓ Upload directory created/verified: {UPLOAD_DIR}")
-except OSError as e:
-    print(f"⚠ Warning: Could not create upload directory {UPLOAD_DIR}: {e}")
-    # On read-only filesystems like Vercel, this is expected
-    # Files will be stored in /tmp instead, which is ephemeral
-except Exception as e:
-    print(f"⚠ Unexpected error creating upload directory: {e}")
+
+def ensure_upload_dir():
+    """Lazily create upload directory on first use (not at import time)"""
+    global UPLOAD_DIR_CREATED
+    if UPLOAD_DIR_CREATED:
+        return
+    try:
+        UPLOAD_DIR.mkdir(exist_ok=True, parents=True)
+        UPLOAD_DIR_CREATED = True
+    except OSError:
+        # Read-only filesystem (expected on Vercel) - gracefully continue
+        pass
+    except Exception:
+        # Any other error - also gracefully continue
+        pass
 
 
 class FileStorageService:
@@ -80,9 +83,16 @@ class FileStorageService:
         if not is_valid:
             raise HTTPException(status_code=400, detail=message)
 
-        # Create subfolder
+        # Ensure upload directory exists (lazy initialization)
+        ensure_upload_dir()
+
+        # Create subfolder (with error handling for read-only filesystems)
         save_dir = UPLOAD_DIR / subfolder
-        save_dir.mkdir(parents=True, exist_ok=True)
+        try:
+            save_dir.mkdir(parents=True, exist_ok=True)
+        except OSError:
+            # Read-only filesystem - continue anyway, file ops will handle it
+            pass
 
         # Generate unique filename
         file_ext = Path(file.filename).suffix.lower()
@@ -112,8 +122,11 @@ class FileStorageService:
                 "upload_time": datetime.utcnow().isoformat(),
             }
         except Exception as e:
-            if file_path.exists():
-                file_path.unlink()
+            try:
+                if file_path.exists():
+                    file_path.unlink()
+            except Exception:
+                pass
             raise HTTPException(status_code=500, detail=f"Failed to save file: {str(e)}")
 
     @staticmethod
