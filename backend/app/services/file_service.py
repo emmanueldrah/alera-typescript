@@ -1,5 +1,7 @@
 """
 File management utilities and services for ALERA healthcare platform
+
+VERSION: 2026-04-02 21:25 - Force rebuild with no module-level filesystem ops
 """
 
 import os
