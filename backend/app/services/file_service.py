@@ -172,3 +172,4 @@ class DocumentService:
             return "clinical_note"
         else:
             return "other"
+
