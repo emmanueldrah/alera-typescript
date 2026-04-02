@@ -6,12 +6,23 @@ from config import settings
 from typing import Generator
 import sys
 
+database_url = settings.DATABASE_URL
+if settings.ENVIRONMENT == "production" and database_url == "sqlite:///alera.db":
+    database_url = "sqlite:////tmp/alera.db"
+
+engine_kwargs = {
+    "echo": settings.DATABASE_ECHO,
+    "pool_pre_ping": True,
+    "poolclass": NullPool if settings.ENVIRONMENT == "production" else None,
+}
+
+if database_url.startswith("sqlite"):
+    engine_kwargs["connect_args"] = {"check_same_thread": False}
+
 # Create engine
 engine = create_engine(
-    settings.DATABASE_URL,
-    echo=settings.DATABASE_ECHO,
-    pool_pre_ping=True,
-    poolclass=NullPool if settings.ENVIRONMENT == "production" else None
+    database_url,
+    **engine_kwargs,
 )
 
 # Create session factory

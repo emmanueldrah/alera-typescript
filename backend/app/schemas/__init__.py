@@ -33,13 +33,16 @@ class UserCreate(UserBase):
 class UserUpdate(BaseModel):
     first_name: Optional[str] = None
     last_name: Optional[str] = None
+    full_name: Optional[str] = None
     phone: Optional[str] = None
+    date_of_birth: Optional[datetime] = None
     address: Optional[str] = None
     city: Optional[str] = None
     state: Optional[str] = None
     zip_code: Optional[str] = None
     bio: Optional[str] = None
     profile_image_url: Optional[str] = None
+    specialization: Optional[str] = None
 
 
 class UserResponse(BaseModel):
@@ -53,8 +56,14 @@ class UserResponse(BaseModel):
     is_verified: bool
     phone: Optional[str]
     date_of_birth: Optional[datetime]
+    city: Optional[str]
+    state: Optional[str]
+    zip_code: Optional[str]
+    bio: Optional[str]
+    profile_image_url: Optional[str]
     address: Optional[str]
     created_at: datetime
+    last_login: Optional[datetime]
     
     class Config:
         from_attributes = True

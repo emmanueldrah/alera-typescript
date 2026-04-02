@@ -44,7 +44,7 @@ const mapBackendUser = (data: ApiUser): User => {
   const fullName = data.full_name?.trim() || [data.first_name, data.last_name].filter(Boolean).join(' ').trim();
   const [firstName = '', ...lastNameParts] = fullName.split(' ');
   return {
-    id: data.id,
+    id: String(data.id),
     email: data.email,
     name: fullName || data.email,
     role: data.role as UserRole,
@@ -170,13 +170,14 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     if (!user) throw new Error('No user logged in');
 
     const response = await authApi.updateProfile({
-      full_name: undefined,
       phone: profile.phone,
       address: profile.address,
       city: profile.city,
       state: profile.state,
       zip_code: profile.zipCode,
       date_of_birth: profile.dateOfBirth,
+      bio: profile.bio,
+      profile_image_url: profile.avatar,
     });
 
     if (isApiUser(response)) {
@@ -187,9 +188,9 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const updateBasicInfo = useCallback(async (firstName: string, lastName: string) => {
     if (!user) throw new Error('No user logged in');
 
-    const fullName = `${firstName} ${lastName}`.trim();
     const response = await authApi.updateProfile({
-      full_name: fullName,
+      first_name: firstName,
+      last_name: lastName,
     });
 
     if (isApiUser(response)) {

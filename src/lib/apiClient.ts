@@ -1,7 +1,20 @@
 import axios, { AxiosInstance, AxiosError } from 'axios';
 import type { InternalAxiosRequestConfig } from 'axios';
 
-const API_BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:8000/api';
+const resolveApiBaseUrl = () => {
+  if (import.meta.env.PROD) {
+    return '/api';
+  }
+
+  const configuredUrl = import.meta.env.VITE_API_URL?.trim();
+  if (configuredUrl) {
+    return configuredUrl.replace(/\/+$/, '');
+  }
+
+  return '/api';
+};
+
+const API_BASE_URL = resolveApiBaseUrl();
 
 // Create axios instance
 export const apiClient: AxiosInstance = axios.create({

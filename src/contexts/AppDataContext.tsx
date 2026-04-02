@@ -6,42 +6,40 @@ import { AppDataContext, type AppDataContextType } from './app-data-context';
 import { appointmentsApi, prescriptionsApi, allergiesApi } from '@/lib/apiService';
 
 type BackendAppointment = {
-  id: string;
-  patient_id: string;
-  patient_name?: string;
-  provider_id: string;
-  provider_name?: string;
-  appointment_date: string;
-  appointment_time: string;
-  appointment_type?: 'in-person' | 'telehealth';
+  id: string | number;
+  patient_id: string | number;
+  provider_id: string | number;
+  title: string;
+  description?: string;
+  scheduled_time: string;
+  appointment_type?: 'in_person' | 'telehealth' | 'phone';
   status?: Appointment['status'];
-  reason_for_visit?: string;
   notes?: string;
 };
 
 type BackendPrescription = {
-  id: string;
+  id: string | number;
   medication_name: string;
   dosage: string;
+  dosage_unit?: string;
   frequency: string;
-  duration_days: number;
-  notes?: string;
-  provider_id?: string;
-  provider_name?: string;
-  patient_id: string;
-  patient_name?: string;
+  route?: string;
+  instructions?: string;
+  quantity?: number;
+  provider_id?: string | number;
+  patient_id: string | number;
   status?: Prescription['status'];
-  refills_allowed?: number;
+  refills?: number;
 };
 
 type BackendAllergy = {
-  id: string;
-  patient_id: string;
-  allergen_name: string;
+  id: string | number;
+  patient_id: string | number;
+  allergen: string;
   allergen_type: string;
   severity: PatientAllergy['severity'];
   reaction_description: string;
-  notes?: string;
+  treatment?: string;
 };
 
 const getListPayload = <T,>(value: unknown): T[] => {
@@ -141,44 +139,44 @@ const safeParse = (raw: string | null): StoredAppData => {
 
 // Helper to convert backend appointment to frontend format
 const mapBackendAppointment = (apt: BackendAppointment): Appointment => ({
-  id: apt.id,
-  patientId: apt.patient_id,
-  patientName: apt.patient_name || 'Unknown',
-  doctorId: apt.provider_id,
-  doctorName: apt.provider_name || 'Unknown',
-  date: apt.appointment_date,
-  time: apt.appointment_time,
+  id: String(apt.id),
+  patientId: String(apt.patient_id),
+  patientName: `Patient #${apt.patient_id}`,
+  doctorId: String(apt.provider_id),
+  doctorName: `Provider #${apt.provider_id}`,
+  date: new Date(apt.scheduled_time).toISOString().slice(0, 10),
+  time: new Date(apt.scheduled_time).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
   type: apt.appointment_type === 'telehealth' ? 'Telehealth' : 'In-Person',
   status: apt.status || 'pending',
-  reason: apt.reason_for_visit,
+  reason: apt.title,
   notes: apt.notes || '',
 });
 
 // Helper to convert backend prescription to frontend format
 const mapBackendPrescription = (presc: BackendPrescription): Prescription => ({
-  id: presc.id,
+  id: String(presc.id),
   medicationName: presc.medication_name,
-  dose: presc.dosage,
+  dose: [presc.dosage, presc.dosage_unit].filter(Boolean).join(' '),
   frequency: presc.frequency,
-  duration: `${presc.duration_days} days`,
-  instructions: presc.notes || '',
-  doctorId: presc.provider_id || '',
-  doctorName: presc.provider_name || 'Unknown',
-  patientId: presc.patient_id,
-  patientName: presc.patient_name || 'Unknown',
+  duration: presc.quantity ? `${presc.quantity} doses` : 'Ongoing',
+  instructions: presc.instructions || '',
+  doctorId: presc.provider_id ? String(presc.provider_id) : '',
+  doctorName: presc.provider_id ? `Provider #${presc.provider_id}` : 'Unknown',
+  patientId: String(presc.patient_id),
+  patientName: `Patient #${presc.patient_id}`,
   status: presc.status || 'active',
-  refillsAllowed: presc.refills_allowed || 0,
+  refillsAllowed: presc.refills || 0,
 });
 
 // Helper to convert backend allergy to frontend format
 const mapBackendAllergy = (allergy: BackendAllergy): PatientAllergy => ({
-  id: allergy.id,
-  patientId: allergy.patient_id,
-  allergen: allergy.allergen_name,
+  id: String(allergy.id),
+  patientId: String(allergy.patient_id),
+  allergen: allergy.allergen,
   type: allergy.allergen_type,
   severity: allergy.severity,
   reaction: allergy.reaction_description,
-  notes: allergy.notes || '',
+  notes: allergy.treatment || '',
 });
 
 export const AppDataProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {

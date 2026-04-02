@@ -1,7 +1,7 @@
 import { apiClient } from './apiClient';
 
 export interface ApiUser {
-  id: string;
+  id: string | number;
   email: string;
   full_name?: string;
   first_name?: string;
@@ -18,6 +18,7 @@ export interface ApiUser {
   zip_code?: string;
   date_of_birth?: string;
   bio?: string;
+  specialty?: string;
 }
 
 export interface ApiAuthResponse {
@@ -61,6 +62,8 @@ export const authApi = {
   },
 
   updateProfile: async (userData: {
+    first_name?: string;
+    last_name?: string;
     full_name?: string;
     phone?: string;
     date_of_birth?: string;
@@ -69,6 +72,8 @@ export const authApi = {
     city?: string;
     state?: string;
     zip_code?: string;
+    bio?: string;
+    profile_image_url?: string;
     specialization?: string;
   }) => {
     const response = await apiClient.put('/users/me', userData);
@@ -82,8 +87,9 @@ export const authApi = {
 
   changePassword: async (currentPassword: string, newPassword: string) => {
     const response = await apiClient.post('/auth/change-password', {
-      current_password: currentPassword,
+      old_password: currentPassword,
       new_password: newPassword,
+      confirm_password: newPassword,
     });
     return response.data;
   },
@@ -105,6 +111,8 @@ export const usersApi = {
   },
 
   updateProfile: async (userData: {
+    first_name?: string;
+    last_name?: string;
     full_name?: string;
     phone?: string;
     date_of_birth?: string;
@@ -113,6 +121,8 @@ export const usersApi = {
     city?: string;
     state?: string;
     zip_code?: string;
+    bio?: string;
+    profile_image_url?: string;
     specialization?: string;
   }) => {
     const response = await apiClient.put('/users/me', userData);

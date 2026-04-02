@@ -1,19 +1,23 @@
 from pydantic_settings import BaseSettings
-from pydantic import field_validator
+from pydantic import field_validator, Field
 from typing import List
 import sys
+import secrets
 
 
 class Settings(BaseSettings):
     # Database
-    DATABASE_URL: str = "sqlite:///alera.db"
+    DATABASE_URL: str = Field(default="sqlite:///alera.db", description="Database connection URL")
     DATABASE_ECHO: bool = False
 
     # Redis
-    REDIS_URL: str = "redis://localhost:6379/0"
+    REDIS_URL: str = Field(default="redis://localhost:6379/0", description="Redis connection URL")
 
-    # Security
-    SECRET_KEY: str = "your-super-secret-key-change-in-production"
+    # Security - Generate a strong default if not provided
+    SECRET_KEY: str = Field(
+        default_factory=lambda: secrets.token_urlsafe(32),
+        description="Secret key for JWT tokens - MUST be set in production"
+    )
     ALGORITHM: str = "HS256"
     ACCESS_TOKEN_EXPIRE_MINUTES: int = 30
     REFRESH_TOKEN_EXPIRE_DAYS: int = 7
@@ -26,6 +30,7 @@ class Settings(BaseSettings):
         "http://localhost:3000",
         "https://alera-typescript.vercel.app"
     ]
+    CORS_ORIGIN_REGEX: str = r"https://.*\.vercel\.app"
 
     # Email
     SENDGRID_API_KEY: str = ""
@@ -37,8 +42,8 @@ class Settings(BaseSettings):
     TWILIO_PHONE_NUMBER: str = ""
 
     # Environment
-    ENVIRONMENT: str = "development"
-    DEBUG: bool = True
+    ENVIRONMENT: str = Field(default="development", description="Environment: development, staging, or production")
+    DEBUG: bool = Field(default=True, description="Debug mode flag")
 
     # WebRTC
     AGORA_APP_ID: str = ""
@@ -51,6 +56,7 @@ class Settings(BaseSettings):
     class Config:
         env_file = ".env"
         case_sensitive = True
+        extra = "allow"  # Allow extra fields from environment variables
 
     @field_validator("DEBUG", mode="before")
     @classmethod

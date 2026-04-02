@@ -21,12 +21,23 @@ async def update_current_user(
     db: Session = Depends(get_db)
 ):
     """Update current user information"""
-    
-    # Update allowed fields
-    update_data = user_update.dict(exclude_unset=True)
+
+    update_data = user_update.model_dump(exclude_unset=True)
+    full_name = update_data.pop("full_name", None)
+    specialization = update_data.pop("specialization", None)
+
+    if isinstance(full_name, str):
+        name_parts = [part for part in full_name.strip().split() if part]
+        if name_parts:
+            update_data["first_name"] = name_parts[0]
+            update_data["last_name"] = " ".join(name_parts[1:]) or current_user.last_name
+
+    if specialization is not None:
+        update_data["specialty"] = specialization
+
     for field, value in update_data.items():
         setattr(current_user, field, value)
-    
+
     db.commit()
     db.refresh(current_user)
     return current_user
