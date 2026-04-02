@@ -3,6 +3,7 @@ import type { AmbulanceRequest, Appointment, ImagingScan, LabTest, Prescription,
 import { ambulances as mockAmbulances, inventoryItems as mockInventoryItems, referrals as mockReferrals, providerVerifications as mockVerifications, drugInteractionDatabase as mockDrugInteractions, patientAllergies as mockAllergies, medicalHistories as mockMedicalHistories, patientConsents as mockConsents } from '@/data/mockData';
 import { storageKeys } from '@/lib/storageKeys';
 import { AppDataContext, type AppDataContextType } from './app-data-context';
+import { appointmentsApi, prescriptionsApi, allergiesApi } from '@/lib/apiService';
 
 interface StoredAppData {
   appointments: Appointment[];
@@ -87,15 +88,105 @@ const safeParse = (raw: string | null): StoredAppData => {
   }
 };
 
+// Helper to convert backend appointment to frontend format
+const mapBackendAppointment = (apt: any): Appointment => ({
+  id: apt.id,
+  patientId: apt.patient_id,
+  patientName: apt.patient_name || 'Unknown',
+  doctorId: apt.provider_id,
+  doctorName: apt.provider_name || 'Unknown',
+  date: apt.appointment_date,
+  time: apt.appointment_time,
+  type: apt.appointment_type === 'telehealth' ? 'Telehealth' : 'In-Person',
+  status: apt.status || 'pending',
+  reason: apt.reason_for_visit,
+  notes: apt.notes || '',
+});
+
+// Helper to convert backend prescription to frontend format
+const mapBackendPrescription = (presc: any): Prescription => ({
+  id: presc.id,
+  medicationName: presc.medication_name,
+  dose: presc.dosage,
+  frequency: presc.frequency,
+  duration: `${presc.duration_days} days`,
+  instructions: presc.notes || '',
+  doctorId: presc.provider_id || '',
+  doctorName: presc.provider_name || 'Unknown',
+  patientId: presc.patient_id,
+  patientName: presc.patient_name || 'Unknown',
+  status: presc.status || 'active',
+  refillsAllowed: presc.refills_allowed || 0,
+});
+
+// Helper to convert backend allergy to frontend format
+const mapBackendAllergy = (allergy: any): PatientAllergy => ({
+  id: allergy.id,
+  patientId: allergy.patient_id,
+  allergen: allergy.allergen_name,
+  type: allergy.allergen_type,
+  severity: allergy.severity,
+  reaction: allergy.reaction_description,
+  notes: allergy.notes || '',
+});
+
 export const AppDataProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const [data, setData] = useState<StoredAppData>(emptyData);
+  const [isLoadingAPI, setIsLoadingAPI] = useState(true);
 
+  // Load data from API on mount
   useEffect(() => {
-    setData(safeParse(localStorage.getItem(STORAGE_KEY)));
+    const loadAPIData = async () => {
+      try {
+        const token = localStorage.getItem('access_token');
+        if (!token) {
+          // Not authenticated, use mock data
+          setIsLoadingAPI(false);
+          setData(safeParse(localStorage.getItem(STORAGE_KEY)));
+          return;
+        }
+
+        const [appointmentsRes, prescriptionsRes, allergiesRes] = await Promise.allSettled([
+          appointmentsApi.listAppointments(0, 100),
+          prescriptionsApi.listPrescriptions(0, 100),
+          allergiesApi.listAllergies(0, 100),
+        ]);
+
+        const appointments = appointmentsRes.status === 'fulfilled' 
+          ? (appointmentsRes.value.items || appointmentsRes.value).map(mapBackendAppointment)
+          : [];
+        
+        const prescriptions = prescriptionsRes.status === 'fulfilled'
+          ? (prescriptionsRes.value.items || prescriptionsRes.value).map(mapBackendPrescription)
+          : [];
+
+          const patientAllergies = allergiesRes.status === 'fulfilled'
+          ? (allergiesRes.value.items || allergiesRes.value).map(mapBackendAllergy)
+          : [];
+
+        setData((current) => ({
+          ...current,
+          appointments,
+          prescriptions,
+          patientAllergies,
+          ambulances: mockAmbulances,
+          inventoryItems: mockInventoryItems,
+          referrals: mockReferrals,
+          providerVerifications: mockVerifications,
+        }));
+      } catch (error) {
+        console.error('Failed to load API data:', error);
+        setData(safeParse(localStorage.getItem(STORAGE_KEY)));
+      } finally {
+        setIsLoadingAPI(false);
+      }
+    };
+
+    loadAPIData();
 
     const handleStorage = (event: StorageEvent) => {
-      if (event.key !== STORAGE_KEY) return;
-      setData(safeParse(event.newValue));
+      if (event.key !== 'access_token') return;
+      loadAPIData(); // Reload data if auth changes
     };
 
     window.addEventListener('storage', handleStorage);

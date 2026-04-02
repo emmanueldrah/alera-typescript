@@ -1,0 +1,225 @@
+import { AxiosError } from 'axios';
+
+export interface ApiError {
+  status?: number;
+  message: string;
+  details?: unknown;
+  code?: string;
+}
+
+/**
+ * Extract error message from various error types
+ */
+export const getErrorMessage = (error: unknown): string => {
+  // Handle AxiosError
+  if (error instanceof Error) {
+    const axiosError = error as AxiosError;
+    
+    if (axiosError.response) {
+      // Server responded with error status
+      const status = axiosError.response.status;
+      const data = axiosError.response.data as Record<string, any>;
+
+      if (status === 400) {
+        return data?.detail || data?.message || 'Invalid request. Please check your input.';
+      }
+
+      if (status === 401) {
+        return 'Session expired. Please log in again.';
+      }
+
+      if (status === 403) {
+        return 'You do not have permission to perform this action.';
+      }
+
+      if (status === 404) {
+        return 'The requested resource was not found.';
+      }
+
+      if (status === 409) {
+        return 'This resource already exists. Please use a different value.';
+      }
+
+      if (status === 422) {
+        return data?.detail || 'Validation error. Please check your input.';
+      }
+
+      if (status === 500) {
+        return 'Server error. Please try again later.';
+      }
+
+      if (status >= 500) {
+        return 'Server error. Our team has been notified. Please try again later.';
+      }
+
+      return data?.message || data?.detail || 'An error occurred.';
+    }
+
+    if (axiosError.request) {
+      // Request made but no response
+      return 'Unable to reach the server. Please check your connection.';
+    }
+
+    // Error in request setup
+    return axiosError.message || 'An error occurred.';
+  }
+
+  // Handle custom API error objects
+  if (typeof error === 'object' && error !== null) {
+    const obj = error as Record<string, any>;
+    if (obj.message) {
+      return obj.message;
+    }
+  }
+
+  // Fallback to string representation
+  return String(error) || 'An unknown error occurred.';
+};
+
+/**
+ * Get structured error information for logging
+ */
+export const getErrorDetails = (error: unknown): ApiError => {
+  if (error instanceof AxiosError) {
+    return {
+      status: error.response?.status,
+      message: getErrorMessage(error),
+      details: error.response?.data,
+      code: error.code,
+    };
+  }
+
+  return {
+    message: getErrorMessage(error),
+    details: error,
+  };
+};
+
+/**
+ * Determine if error is a network error
+ */
+export const isNetworkError = (error: unknown): boolean => {
+  if (error instanceof AxiosError) {
+    return !error.response && !error.code?.includes('ERR_');
+  }
+  return false;
+};
+
+/**
+ * Determine if error is authentication related
+ */
+export const isAuthError = (error: unknown): boolean => {
+  if (error instanceof AxiosError) {
+    return error.response?.status === 401;
+  }
+  return false;
+};
+
+/**
+ * Determine if error is authorization related
+ */
+export const isAuthorizationError = (error: unknown): boolean => {
+  if (error instanceof AxiosError) {
+    return error.response?.status === 403;
+  }
+  return false;
+};
+
+/**
+ * Determine if error is validation related
+ */
+export const isValidationError = (error: unknown): boolean => {
+  if (error instanceof AxiosError) {
+    return error.response?.status === 422 || error.response?.status === 400;
+  }
+  return false;
+};
+
+/**
+ * Extract validation errors in key-value format
+ */
+export const getValidationErrors = (error: unknown): Record<string, string> => {
+  if (error instanceof AxiosError && error.response?.status === 422) {
+    const data = error.response.data as Record<string, any>;
+    const errors: Record<string, string> = {};
+
+    if (Array.isArray(data?.detail)) {
+      data.detail.forEach((err: any) => {
+        const field = err.loc?.[1] || 'unknown';
+        errors[field] = err.msg || 'Invalid value';
+      });
+    }
+
+    return errors;
+  }
+
+  return {};
+};
+
+/**
+ * Format error for user display
+ */
+export const formatErrorMessage = (error: unknown): string => {
+  const message = getErrorMessage(error);
+
+  // Capitalize first letter
+  if (message.length > 0) {
+    return message.charAt(0).toUpperCase() + message.slice(1);
+  }
+
+  return message;
+};
+
+/**
+ * Create user-friendly error message from API error
+ */
+export const createFriendlyErrorMessage = (error: unknown, context?: string): string => {
+  let message = formatErrorMessage(error);
+
+  if (context) {
+    message = `Failed to ${context}. ${message}`;
+  }
+
+  // Remove duplicate periods
+  message = message.replace(/\.+$/, '.');
+
+  return message;
+};
+
+/**
+ * Log error for debugging
+ */
+export const logError = (error: unknown, context?: string): void => {
+  const details = getErrorDetails(error);
+
+  console.error(`[API Error${context ? ` - ${context}` : ''}]`, {
+    message: details.message,
+    status: details.status,
+    code: details.code,
+    details: details.details,
+  });
+};
+
+/**
+ * Handle API error with appropriate actions
+ */
+export const handleApiError = (
+  error: unknown,
+  context?: string,
+  onAuthError?: () => void,
+  onAuthorizationError?: () => void
+): string => {
+  logError(error, context);
+
+  if (isAuthError(error)) {
+    onAuthError?.();
+    return 'Your session has expired. Please log in again.';
+  }
+
+  if (isAuthorizationError(error)) {
+    onAuthorizationError?.();
+    return 'You do not have permission to perform this action.';
+  }
+
+  return createFriendlyErrorMessage(error, context);
+};
