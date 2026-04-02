@@ -58,8 +58,8 @@ def convert_with_imagemagick():
 def convert_with_cairosvg():
     """Convert SVG to PNG and ICO using cairosvg and pillow"""
     try:
-        from cairosvg import svg2png
-        from PIL import Image
+        from cairosvg import svg2png  # type: ignore
+        from PIL import Image  # type: ignore
         
         svg_file = "public/alera-icon.svg"
         png_file = "public/alera-icon.png"
