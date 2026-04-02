@@ -11,25 +11,30 @@ from fastapi import UploadFile, HTTPException
 import shutil
 from config import settings
 
-# File storage configuration
-# On Vercel (production), use /tmp since filesystem is read-only
-# On local development, use ./uploads
-if settings.ENVIRONMENT == "production" or os.name == 'posix' and os.path.exists('/var/task'):
-    # We're on Vercel
+# File storage configuration - use /tmp on Vercel (read-only filesystem)
+# Detect Vercel by checking for /var/task directory marker
+IS_VERCEL = os.path.exists('/var/task') or os.path.exists('/var/runtime')
+
+if IS_VERCEL or settings.ENVIRONMENT == "production":
     UPLOAD_DIR = Path("/tmp/alera_uploads")
 else:
-    # Local development
     UPLOAD_DIR = Path("uploads")
 
 ALLOWED_EXTENSIONS = {".pdf", ".doc", ".docx", ".jpg", ".jpeg", ".png", ".txt", ".xls", ".xlsx"}
 MAX_FILE_SIZE = 25 * 1024 * 1024  # 25 MB
 
-# Create upload directory if it doesn't exist (with error handling for read-only filesystems)
+# Safely create upload directory with fallback handling
+UPLOAD_DIR_CREATED = False
 try:
     UPLOAD_DIR.mkdir(exist_ok=True, parents=True)
+    UPLOAD_DIR_CREATED = True
+    print(f"✓ Upload directory created/verified: {UPLOAD_DIR}")
 except OSError as e:
-    print(f"Warning: Could not create upload directory {UPLOAD_DIR}: {e}")
-    # Don't crash - uploads may not be needed or might be disabled
+    print(f"⚠ Warning: Could not create upload directory {UPLOAD_DIR}: {e}")
+    # On read-only filesystems like Vercel, this is expected
+    # Files will be stored in /tmp instead, which is ephemeral
+except Exception as e:
+    print(f"⚠ Unexpected error creating upload directory: {e}")
 
 
 class FileStorageService:
