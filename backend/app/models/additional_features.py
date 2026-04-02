@@ -33,7 +33,7 @@ class PatientDocument(Base):
     
     # Metadata
     description = Column(String)
-    uploaded_by = Column(Integer)  # user_id
+    uploaded_by = Column(Integer, ForeignKey("users.id"))  # user_id
     is_private = Column(Boolean, default=False)
     
     # Tracking

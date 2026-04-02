@@ -5,8 +5,8 @@ from typing import Optional
 from config import settings
 from fastapi import HTTPException, status
 
-# Password hashing
-pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
+# Password hashing - use argon2 instead of bcrypt to avoid version issues
+pwd_context = CryptContext(schemes=["argon2"], deprecated="auto")
 
 
 def hash_password(password: str) -> str:

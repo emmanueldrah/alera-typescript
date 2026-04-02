@@ -1,11 +1,10 @@
 import { useState } from 'react';
 import { useNavigate, Link } from 'react-router-dom';
-import type { UserRole } from '@/contexts/AuthContext';
 import { useAuth } from '@/contexts/useAuth';
 import { motion } from 'framer-motion';
 import { Heart, User, Building2, FlaskConical, ScanLine, Pill, Ambulance, ArrowRight, Eye, EyeOff } from 'lucide-react';
 
-type SignupRole = Exclude<UserRole, 'admin'>;
+type SignupRole = 'patient' | 'doctor' | 'hospital' | 'laboratory' | 'imaging' | 'pharmacy' | 'ambulance';
 
 const roles: { value: SignupRole; label: string; icon: React.ReactNode; desc: string }[] = [
   { value: 'patient', label: 'Patient', icon: <User className="w-5 h-5" />, desc: 'Book appointments & view records' },

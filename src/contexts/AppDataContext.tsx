@@ -5,6 +5,57 @@ import { storageKeys } from '@/lib/storageKeys';
 import { AppDataContext, type AppDataContextType } from './app-data-context';
 import { appointmentsApi, prescriptionsApi, allergiesApi } from '@/lib/apiService';
 
+type BackendAppointment = {
+  id: string;
+  patient_id: string;
+  patient_name?: string;
+  provider_id: string;
+  provider_name?: string;
+  appointment_date: string;
+  appointment_time: string;
+  appointment_type?: 'in-person' | 'telehealth';
+  status?: Appointment['status'];
+  reason_for_visit?: string;
+  notes?: string;
+};
+
+type BackendPrescription = {
+  id: string;
+  medication_name: string;
+  dosage: string;
+  frequency: string;
+  duration_days: number;
+  notes?: string;
+  provider_id?: string;
+  provider_name?: string;
+  patient_id: string;
+  patient_name?: string;
+  status?: Prescription['status'];
+  refills_allowed?: number;
+};
+
+type BackendAllergy = {
+  id: string;
+  patient_id: string;
+  allergen_name: string;
+  allergen_type: string;
+  severity: PatientAllergy['severity'];
+  reaction_description: string;
+  notes?: string;
+};
+
+const getListPayload = <T,>(value: unknown): T[] => {
+  if (Array.isArray(value)) {
+    return value as T[];
+  }
+
+  if (typeof value === 'object' && value !== null && Array.isArray((value as { items?: unknown }).items)) {
+    return (value as { items: T[] }).items;
+  }
+
+  return [];
+};
+
 interface StoredAppData {
   appointments: Appointment[];
   prescriptions: Prescription[];
@@ -89,7 +140,7 @@ const safeParse = (raw: string | null): StoredAppData => {
 };
 
 // Helper to convert backend appointment to frontend format
-const mapBackendAppointment = (apt: any): Appointment => ({
+const mapBackendAppointment = (apt: BackendAppointment): Appointment => ({
   id: apt.id,
   patientId: apt.patient_id,
   patientName: apt.patient_name || 'Unknown',
@@ -104,7 +155,7 @@ const mapBackendAppointment = (apt: any): Appointment => ({
 });
 
 // Helper to convert backend prescription to frontend format
-const mapBackendPrescription = (presc: any): Prescription => ({
+const mapBackendPrescription = (presc: BackendPrescription): Prescription => ({
   id: presc.id,
   medicationName: presc.medication_name,
   dose: presc.dosage,
@@ -120,7 +171,7 @@ const mapBackendPrescription = (presc: any): Prescription => ({
 });
 
 // Helper to convert backend allergy to frontend format
-const mapBackendAllergy = (allergy: any): PatientAllergy => ({
+const mapBackendAllergy = (allergy: BackendAllergy): PatientAllergy => ({
   id: allergy.id,
   patientId: allergy.patient_id,
   allergen: allergy.allergen_name,
@@ -152,16 +203,16 @@ export const AppDataProvider: React.FC<{ children: React.ReactNode }> = ({ child
           allergiesApi.listAllergies(0, 100),
         ]);
 
-        const appointments = appointmentsRes.status === 'fulfilled' 
-          ? (appointmentsRes.value.items || appointmentsRes.value).map(mapBackendAppointment)
-          : [];
-        
-        const prescriptions = prescriptionsRes.status === 'fulfilled'
-          ? (prescriptionsRes.value.items || prescriptionsRes.value).map(mapBackendPrescription)
+        const appointments = appointmentsRes.status === 'fulfilled'
+          ? getListPayload<BackendAppointment>(appointmentsRes.value).map(mapBackendAppointment)
           : [];
 
-          const patientAllergies = allergiesRes.status === 'fulfilled'
-          ? (allergiesRes.value.items || allergiesRes.value).map(mapBackendAllergy)
+        const prescriptions = prescriptionsRes.status === 'fulfilled'
+          ? getListPayload<BackendPrescription>(prescriptionsRes.value).map(mapBackendPrescription)
+          : [];
+
+        const patientAllergies = allergiesRes.status === 'fulfilled'
+          ? getListPayload<BackendAllergy>(allergiesRes.value).map(mapBackendAllergy)
           : [];
 
         setData((current) => ({

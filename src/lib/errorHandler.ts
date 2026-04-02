@@ -7,6 +7,22 @@ export interface ApiError {
   code?: string;
 }
 
+const isRecord = (value: unknown): value is Record<string, unknown> => typeof value === 'object' && value !== null;
+
+const getMessageField = (value: unknown): string | undefined => {
+  if (!isRecord(value)) return undefined;
+
+  const message = value.message;
+  return typeof message === 'string' ? message : undefined;
+};
+
+const getDetailField = (value: unknown): string | undefined => {
+  if (!isRecord(value)) return undefined;
+
+  const detail = value.detail;
+  return typeof detail === 'string' ? detail : undefined;
+};
+
 /**
  * Extract error message from various error types
  */
@@ -18,10 +34,12 @@ export const getErrorMessage = (error: unknown): string => {
     if (axiosError.response) {
       // Server responded with error status
       const status = axiosError.response.status;
-      const data = axiosError.response.data as Record<string, any>;
+      const data = axiosError.response.data as unknown;
+      const message = getMessageField(data);
+      const detail = getDetailField(data);
 
       if (status === 400) {
-        return data?.detail || data?.message || 'Invalid request. Please check your input.';
+        return detail || message || 'Invalid request. Please check your input.';
       }
 
       if (status === 401) {
@@ -41,7 +59,7 @@ export const getErrorMessage = (error: unknown): string => {
       }
 
       if (status === 422) {
-        return data?.detail || 'Validation error. Please check your input.';
+        return detail || 'Validation error. Please check your input.';
       }
 
       if (status === 500) {
@@ -52,7 +70,7 @@ export const getErrorMessage = (error: unknown): string => {
         return 'Server error. Our team has been notified. Please try again later.';
       }
 
-      return data?.message || data?.detail || 'An error occurred.';
+      return message || detail || 'An error occurred.';
     }
 
     if (axiosError.request) {
@@ -65,10 +83,10 @@ export const getErrorMessage = (error: unknown): string => {
   }
 
   // Handle custom API error objects
-  if (typeof error === 'object' && error !== null) {
-    const obj = error as Record<string, any>;
-    if (obj.message) {
-      return obj.message;
+  if (isRecord(error)) {
+    const message = error.message;
+    if (typeof message === 'string') {
+      return message;
     }
   }
 
@@ -140,13 +158,17 @@ export const isValidationError = (error: unknown): boolean => {
  */
 export const getValidationErrors = (error: unknown): Record<string, string> => {
   if (error instanceof AxiosError && error.response?.status === 422) {
-    const data = error.response.data as Record<string, any>;
+    const data = error.response.data as unknown;
     const errors: Record<string, string> = {};
 
-    if (Array.isArray(data?.detail)) {
-      data.detail.forEach((err: any) => {
-        const field = err.loc?.[1] || 'unknown';
-        errors[field] = err.msg || 'Invalid value';
+    if (isRecord(data) && Array.isArray(data.detail)) {
+      data.detail.forEach((err) => {
+        if (!isRecord(err)) return;
+
+        const loc = err.loc;
+        const field = Array.isArray(loc) && typeof loc[1] === 'string' ? loc[1] : 'unknown';
+        const msg = typeof err.msg === 'string' ? err.msg : 'Invalid value';
+        errors[field] = msg;
       });
     }
 

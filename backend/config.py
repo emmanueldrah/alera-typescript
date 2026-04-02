@@ -6,7 +6,7 @@ import os
 
 class Settings(BaseSettings):
     # Database
-    DATABASE_URL: str = "postgresql://user:password@localhost:5432/alera_db"
+    DATABASE_URL: str = "sqlite:///alera.db"
     DATABASE_ECHO: bool = False
 
     # Redis

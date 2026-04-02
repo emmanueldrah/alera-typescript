@@ -1,7 +1,7 @@
 import React, { useState, useCallback, useEffect } from 'react';
 import { clearAleraStorage, storageKeys } from '@/lib/storageKeys';
 import { AuthContext } from './auth-context';
-import { authApi } from '@/lib/apiService';
+import { authApi, type ApiUser } from '@/lib/apiService';
 import { setTokens, getAccessToken, clearTokens } from '@/lib/apiClient';
 
 export type UserRole = 'patient' | 'provider' | 'pharmacist' | 'admin';
@@ -33,8 +33,14 @@ export interface User {
   lastLogin?: string;
 }
 
+type SignupRole = UserRole | 'doctor' | 'hospital' | 'laboratory' | 'imaging' | 'pharmacy' | 'ambulance';
+
+const isApiUser = (data: unknown): data is ApiUser => {
+  return typeof data === 'object' && data !== null && 'id' in data && 'email' in data;
+};
+
 // Map backend user roles to frontend format if needed
-const mapBackendUser = (data: any): User => {
+const mapBackendUser = (data: ApiUser): User => {
   const [firstName = '', ...lastNameParts] = (data.full_name || '').split(' ');
   return {
     id: data.id,
@@ -73,8 +79,8 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         const token = getAccessToken();
         if (token) {
           // Try to fetch current user
-          const userData = await authApi.getCurrentUser?.() || null;
-          if (userData) {
+          const userData = await authApi.getCurrentUser();
+          if (isApiUser(userData)) {
             setUser(mapBackendUser(userData));
           } else {
             clearTokens();
@@ -104,20 +110,41 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     }
   }, []);
 
-  const signup = useCallback(async (name: string, email: string, password: string, role: UserRole) => {
+  const signup = useCallback(async (name: string, email: string, password: string, role: SignupRole) => {
     try {
       const [firstName = '', ...lastNameParts] = name.split(' ');
+      const lastName = lastNameParts.join(' ') || 'User';
+      
+      // Map frontend roles to backend roles
+      const roleMap: Record<string, UserRole> = {
+        'patient': 'patient',
+        'doctor': 'provider',
+        'hospital': 'provider',
+        'laboratory': 'provider',
+        'imaging': 'provider',
+        'pharmacy': 'pharmacist',
+        'ambulance': 'provider'
+      };
+      const backendRole = roleMap[role] || 'patient';
+      
+      // Generate username from email (remove domain)
+      const username = email.split('@')[0] || name.toLowerCase().replace(/\s+/g, '.');
+      
       const response = await authApi.register({
-        full_name: name,
         email,
         password,
-        role,
+        username,
+        first_name: firstName,
+        last_name: lastName,
+        role: backendRole,
         phone: undefined,
       });
       
       const { access_token, refresh_token, user: userData } = response;
       setTokens(access_token, refresh_token);
-      setUser(mapBackendUser(userData));
+      if (isApiUser(userData)) {
+        setUser(mapBackendUser(userData));
+      }
     } catch (error) {
       clearTokens();
       throw error;
@@ -137,87 +164,65 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
   const updateProfile = useCallback(async (profile: Partial<UserProfile>) => {
     if (!user) throw new Error('No user logged in');
-    
-    try {
-      const response = await authApi.updateProfile({
-        full_name: undefined,
-        phone: profile.phone,
-        address: profile.address,
-        city: profile.city,
-        state: profile.state,
-        zip_code: profile.zipCode,
-        date_of_birth: profile.dateOfBirth,
-      });
-      
-      const updatedUser = mapBackendUser(response);
-      setUser(updatedUser);
-    } catch (error) {
-      throw error;
+
+    const response = await authApi.updateProfile({
+      full_name: undefined,
+      phone: profile.phone,
+      address: profile.address,
+      city: profile.city,
+      state: profile.state,
+      zip_code: profile.zipCode,
+      date_of_birth: profile.dateOfBirth,
+    });
+
+    if (isApiUser(response)) {
+      setUser(mapBackendUser(response));
     }
   }, [user]);
 
   const updateBasicInfo = useCallback(async (firstName: string, lastName: string) => {
     if (!user) throw new Error('No user logged in');
-    
-    try {
-      const fullName = `${firstName} ${lastName}`.trim();
-      const response = await authApi.updateProfile({
-        full_name: fullName,
-      });
-      
-      const updatedUser = mapBackendUser(response);
-      setUser(updatedUser);
-    } catch (error) {
-      throw error;
+
+    const fullName = `${firstName} ${lastName}`.trim();
+    const response = await authApi.updateProfile({
+      full_name: fullName,
+    });
+
+    if (isApiUser(response)) {
+      setUser(mapBackendUser(response));
     }
   }, [user]);
 
   const changePassword = useCallback(async (currentPassword: string, newPassword: string) => {
     if (!user) throw new Error('No user logged in');
-    
-    try {
-      await authApi.changePassword(currentPassword, newPassword);
-    } catch (error) {
-      throw error;
-    }
+
+    await authApi.changePassword(currentPassword, newPassword);
   }, [user]);
 
   const updateNotificationPreferences = useCallback(async (email: boolean, sms: boolean) => {
     if (!user) throw new Error('No user logged in');
-    
-    try {
-      await updateProfile({
-        notificationEmail: email,
-        notificationSms: sms,
-      });
-    } catch (error) {
-      throw error;
-    }
+
+    await updateProfile({
+      notificationEmail: email,
+      notificationSms: sms,
+    });
   }, [user, updateProfile]);
 
   const updatePrivacySettings = useCallback(async (publicProfile: boolean) => {
     if (!user) throw new Error('No user logged in');
-    
-    try {
-      await updateProfile({
-        privacyPublicProfile: publicProfile,
-      });
-    } catch (error) {
-      throw error;
-    }
+
+    await updateProfile({
+      privacyPublicProfile: publicProfile,
+    });
   }, [user, updateProfile]);
 
   const deleteAccount = useCallback(async (password: string) => {
     if (!user) throw new Error('No user logged in');
-    
-    try {
-      // TODO: Implement account deletion endpoint
-      // await authApi.deleteAccount(password);
-      clearTokens();
-      setUser(null);
-    } catch (error) {
-      throw error;
-    }
+
+    // TODO: Implement account deletion endpoint
+    // await authApi.deleteAccount(password);
+    clearTokens();
+    setUser(null);
   }, [user]);
 
   const clearCache = useCallback(() => {
@@ -238,15 +243,12 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   // Get current user helper (for when needed)
   const getCurrentUser = useCallback(async () => {
     if (!user) throw new Error('No user logged in');
-    try {
-      const userData = await authApi.getCurrentUser?.();
-      if (userData) {
-        const updatedUser = mapBackendUser(userData);
-        setUser(updatedUser);
-        return updatedUser;
-      }
-    } catch (error) {
-      throw error;
+
+    const userData = await authApi.getCurrentUser();
+    if (isApiUser(userData)) {
+      const updatedUser = mapBackendUser(userData);
+      setUser(updatedUser);
+      return updatedUser;
     }
   }, [user]);
 

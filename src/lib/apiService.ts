@@ -1,5 +1,32 @@
 import { apiClient } from './apiClient';
 
+export interface ApiUser {
+  id: string;
+  email: string;
+  full_name?: string;
+  role: 'patient' | 'provider' | 'pharmacist' | 'admin';
+  avatar?: string;
+  created_at?: string;
+  last_login?: string;
+  phone?: string;
+  address?: string;
+  city?: string;
+  state?: string;
+  zip_code?: string;
+  date_of_birth?: string;
+  bio?: string;
+}
+
+export interface ApiAuthResponse {
+  access_token: string;
+  refresh_token?: string;
+  user: ApiUser;
+}
+
+export interface ApiListResponse<T> {
+  items?: T[];
+}
+
 // ============================================================================
 // AUTH ENDPOINTS
 // ============================================================================
@@ -8,7 +35,9 @@ export const authApi = {
   register: async (userData: {
     email: string;
     password: string;
-    full_name: string;
+    username: string;
+    first_name: string;
+    last_name: string;
     role: 'patient' | 'provider' | 'pharmacist' | 'admin';
     phone?: string;
   }) => {
@@ -23,6 +52,21 @@ export const authApi = {
 
   getCurrentUser: async () => {
     const response = await apiClient.get('/users/me');
+    return response.data;
+  },
+
+  updateProfile: async (userData: {
+    full_name?: string;
+    phone?: string;
+    date_of_birth?: string;
+    gender?: string;
+    address?: string;
+    city?: string;
+    state?: string;
+    zip_code?: string;
+    specialization?: string;
+  }) => {
+    const response = await apiClient.put('/users/me', userData);
     return response.data;
   },
 
