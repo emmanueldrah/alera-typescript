@@ -1,0 +1,12 @@
+[Desktop Entry]
+Version=1.0
+Type=Application
+Name=ALERA
+Comment=ALERA Healthcare Platform
+Exec=bash -c '/home/sad/Downloads/alera/scripts/desktop-launch.sh && xdg-open http://127.0.0.1:8080/'
+Icon=/home/sad/Downloads/alera/public/alera-icon.png
+Terminal=false
+Categories=Office;MedicalSoftware;
+StartupNotify=true
+StartupWMClass=firefox
+

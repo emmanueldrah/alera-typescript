@@ -1,0 +1,26 @@
+import type { User } from '@/contexts/AuthContext';
+import type { ImagingScan, LabTest, Prescription } from '@/data/mockData';
+
+export const getVisiblePrescriptions = (prescriptions: Prescription[], user?: Pick<User, 'id' | 'role'> | null) => {
+  if (!user) return [];
+  if (user.role === 'doctor') return prescriptions.filter((prescription) => prescription.doctorId === user.id);
+  if (user.role === 'patient') return prescriptions.filter((prescription) => prescription.patientId === user.id);
+  if (user.role === 'pharmacy') return prescriptions;
+  return [];
+};
+
+export const getVisibleLabTests = (labTests: LabTest[], user?: Pick<User, 'id' | 'role'> | null) => {
+  if (!user) return [];
+  if (user.role === 'laboratory') return labTests;
+  if (user.role === 'doctor') return labTests.filter((test) => test.doctorId === user.id);
+  if (user.role === 'patient') return labTests.filter((test) => test.patientId === user.id);
+  return [];
+};
+
+export const getVisibleImagingScans = (imagingScans: ImagingScan[], user?: Pick<User, 'id' | 'role'> | null) => {
+  if (!user) return [];
+  if (user.role === 'imaging') return imagingScans;
+  if (user.role === 'doctor') return imagingScans.filter((scan) => scan.doctorId === user.id);
+  if (user.role === 'patient') return imagingScans.filter((scan) => scan.patientId === user.id);
+  return [];
+};
