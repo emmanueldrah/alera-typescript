@@ -9,14 +9,27 @@ from typing import Optional
 from datetime import datetime
 from fastapi import UploadFile, HTTPException
 import shutil
+from config import settings
 
 # File storage configuration
-UPLOAD_DIR = Path("uploads")
+# On Vercel (production), use /tmp since filesystem is read-only
+# On local development, use ./uploads
+if settings.ENVIRONMENT == "production" or os.name == 'posix' and os.path.exists('/var/task'):
+    # We're on Vercel
+    UPLOAD_DIR = Path("/tmp/alera_uploads")
+else:
+    # Local development
+    UPLOAD_DIR = Path("uploads")
+
 ALLOWED_EXTENSIONS = {".pdf", ".doc", ".docx", ".jpg", ".jpeg", ".png", ".txt", ".xls", ".xlsx"}
 MAX_FILE_SIZE = 25 * 1024 * 1024  # 25 MB
 
-# Create upload directory if it doesn't exist
-UPLOAD_DIR.mkdir(exist_ok=True)
+# Create upload directory if it doesn't exist (with error handling for read-only filesystems)
+try:
+    UPLOAD_DIR.mkdir(exist_ok=True, parents=True)
+except OSError as e:
+    print(f"Warning: Could not create upload directory {UPLOAD_DIR}: {e}")
+    # Don't crash - uploads may not be needed or might be disabled
 
 
 class FileStorageService:
