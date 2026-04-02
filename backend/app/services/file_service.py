@@ -21,7 +21,6 @@ MAX_FILE_SIZE = 25 * 1024 * 1024  # 25 MB
 # Upload directory cache
 _UPLOAD_DIR_CACHE = None
 
-
 def get_upload_dir():
     """
     Get the upload directory path - lazily initialized.
