@@ -11,8 +11,18 @@ database_url = settings.DATABASE_URL
 # Handle production database settings
 if settings.ENVIRONMENT == "production":
     # For SQLite in production, use /tmp
-    if database_url == "sqlite:///alera.db":
-        database_url = "sqlite:////tmp/alera.db"
+    if database_url.startswith("sqlite"):
+        try:
+            # Ensure we use an absolute path in /tmp
+            db_name = database_url.split("///")[-1] if "///" in database_url else "alera.db"
+            database_url = f"sqlite:////tmp/{db_name}"
+            print(f"ℹ Using production SQLite database at: {database_url}")
+            
+            # Ensure /tmp exists (it should on Vercel)
+            if not os.path.exists("/tmp"):
+                print("WARNING: /tmp directory not found, SQLite might fail")
+        except Exception as e:
+            print(f"WARNING: Failed to reconfigure SQLite path: {e}")
 
 # Database engine configuration
 engine_kwargs = {
@@ -43,6 +53,7 @@ try:
 except Exception as e:
     print(f"ERROR: Failed to create database engine with URL: {database_url[:50]}...")
     print(f"ERROR: {str(e)}")
+    # If we are in production and it's a critical failure, we should probably know
     raise
 
 # Create session factory

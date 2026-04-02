@@ -2,6 +2,7 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.middleware.trustedhost import TrustedHostMiddleware
 from fastapi.responses import JSONResponse
+import os
 from config import settings
 from database import init_db
 from app.routes import auth, users, appointments, prescriptions, allergies, notifications, telemedicine, admin, documents, consents, reminders_templates, audit
@@ -49,8 +50,13 @@ app.include_router(audit.router)
 @app.on_event("startup")
 async def startup_event():
     """Initialize database tables when the application starts."""
-    init_db()
-
+    # On Vercel (serverless), we usually initialize in api/index.py
+    # or let the first request handle it.
+    if settings.ENVIRONMENT != "production" or not os.environ.get("VERCEL"):
+        try:
+            init_db()
+        except Exception as e:
+            print(f"Error during startup database initialization: {e}")
 
 @app.get("/health")
 async def health_check():
@@ -58,9 +64,9 @@ async def health_check():
     return {
         "status": "healthy",
         "service": "ALERA Healthcare API",
-        "version": "1.0.0"
+        "version": "1.0.0",
+        "environment": settings.ENVIRONMENT
     }
-
 
 @app.get("/")
 async def root():
@@ -71,14 +77,22 @@ async def root():
         "health": "/health"
     }
 
-
 @app.exception_handler(Exception)
 async def global_exception_handler(request, exc):
     """Global exception handler"""
+    import traceback
+    
+    error_detail = str(exc)
+    if settings.DEBUG or settings.ENVIRONMENT != "production":
+        error_detail = {
+            "message": str(exc),
+            "traceback": traceback.format_exc()
+        }
+        
     return JSONResponse(
         status_code=500,
         content={
-            "detail": str(exc),
+            "detail": error_detail,
             "status": "error"
         }
     )

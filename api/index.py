@@ -1,32 +1,43 @@
 from pathlib import Path
 import sys
 import traceback
+import os
 
+# Identify the root directory and ensure the backend is in the path
 ROOT_DIR = Path(__file__).resolve().parent.parent
 BACKEND_DIR = ROOT_DIR / "backend"
 
 if str(BACKEND_DIR) not in sys.path:
+    # Use insert(1) to avoid overriding built-in modules but ensure local ones take precedence
     sys.path.insert(0, str(BACKEND_DIR))
+    sys.path.insert(0, str(ROOT_DIR))
 
+# Import the FastAPI app
 try:
-    # Import the FastAPI app first so all models are registered on Base.metadata
     from main import app
     print("✓ FastAPI app imported successfully")
 except Exception as e:
     print(f"ERROR: Failed to import FastAPI app: {e}")
     traceback.print_exc()
+    
+    # If we crash here, the function will fail with a 500.
+    # In a production setting, we could create a dummy app to report the error properly.
     raise
 
+# Conditional database initialization for Vercel
+# This avoids doing it multiple times and handles cases where the DB is ready
 try:
-    # Initialize database after model imports so create_all() can see every table
     from database import init_db
+    # On Vercel, we only want to ensure tables exist
+    # but we should handle the case where the environment is restricted
     init_db()
     print("✓ Database initialized successfully")
 except Exception as e:
     print(f"ERROR: Failed to initialize database: {e}")
-    traceback.print_exc()
-    # Don't crash - database might be already initialized
-    # or we might be in a read-only state
+    # Don't crash the entire function if database init fails
+    # (unless it's absolutely required for any response)
+    if os.environ.get('ENVIRONMENT') != 'production':
+        traceback.print_exc()
 
 # Export app for Vercel
 __all__ = ['app']
