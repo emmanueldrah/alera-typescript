@@ -73,6 +73,10 @@ class TokenResponse(BaseModel):
     expires_in: int
 
 
+class AuthResponse(TokenResponse):
+    user: "UserResponse"
+
+
 class PasswordChangeRequest(BaseModel):
     old_password: str
     new_password: str = Field(..., min_length=8)

@@ -6,6 +6,7 @@ from sqlalchemy import Column, String, DateTime, Boolean, Integer, Text, Foreign
 from sqlalchemy.orm import relationship
 from datetime import datetime
 import enum
+import sys
 from database import Base
 
 
@@ -53,12 +54,12 @@ class PatientDocument(Base):
             "file_type": self.file_type.value,
             "file_size": self.file_size,
             "mime_type": self.mime_type,
-            "upload_time": self.upload_time.isoformat() if self.upload_time else None,
+            "upload_time": self.upload_time.isoformat() if self.upload_time is not None else None,
             "description": self.description,
             "uploaded_by": self.uploaded_by,
             "is_private": self.is_private,
             "accessed_count": self.accessed_count,
-            "last_accessed": self.last_accessed.isoformat() if self.last_accessed else None,
+            "last_accessed": self.last_accessed.isoformat() if self.last_accessed is not None else None,
         }
 
 
@@ -99,11 +100,11 @@ class PatientConsent(Base):
             "title": self.title,
             "description": self.description,
             "is_accepted": self.is_accepted,
-            "accepted_at": self.accepted_at.isoformat() if self.accepted_at else None,
-            "expires_at": self.expires_at.isoformat() if self.expires_at else None,
+            "accepted_at": self.accepted_at.isoformat() if self.accepted_at is not None else None,
+            "expires_at": self.expires_at.isoformat() if self.expires_at is not None else None,
             "document_file_id": self.document_file_id,
-            "created_at": self.created_at.isoformat() if self.created_at else None,
-            "updated_at": self.updated_at.isoformat() if self.updated_at else None,
+            "created_at": self.created_at.isoformat() if self.created_at is not None else None,
+            "updated_at": self.updated_at.isoformat() if self.updated_at is not None else None,
             "requested_by": self.requested_by,
         }
 
@@ -140,16 +141,16 @@ class AppointmentReminder(Base):
             "id": self.id,
             "appointment_id": self.appointment_id,
             "reminder_type": self.reminder_type,
-            "scheduled_time": self.scheduled_time.isoformat() if self.scheduled_time else None,
+            "scheduled_time": self.scheduled_time.isoformat() if self.scheduled_time is not None else None,
             "is_sent": self.is_sent,
-            "sent_at": self.sent_at.isoformat() if self.sent_at else None,
+            "sent_at": self.sent_at.isoformat() if self.sent_at is not None else None,
             "delivery_status": self.delivery_status,
             "recipient": self.recipient,
             "recipient_id": self.recipient_id,
             "retry_count": self.retry_count,
-            "last_retry_at": self.last_retry_at.isoformat() if self.last_retry_at else None,
+            "last_retry_at": self.last_retry_at.isoformat() if self.last_retry_at is not None else None,
             "error_message": self.error_message,
-            "created_at": self.created_at.isoformat() if self.created_at else None,
+            "created_at": self.created_at.isoformat() if self.created_at is not None else None,
         }
 
 
@@ -188,9 +189,9 @@ class EmailTemplate(Base):
             "is_active": self.is_active,
             "is_system": self.is_system,
             "usage_count": self.usage_count,
-            "last_used": self.last_used.isoformat() if self.last_used else None,
-            "created_at": self.created_at.isoformat() if self.created_at else None,
-            "updated_at": self.updated_at.isoformat() if self.updated_at else None,
+            "last_used": self.last_used.isoformat() if self.last_used is not None else None,
+            "created_at": self.created_at.isoformat() if self.created_at is not None else None,
+            "updated_at": self.updated_at.isoformat() if self.updated_at is not None else None,
         }
 
 
@@ -225,8 +226,11 @@ class SMSTemplate(Base):
             "is_active": self.is_active,
             "is_system": self.is_system,
             "usage_count": self.usage_count,
-            "last_used": self.last_used.isoformat() if self.last_used else None,
-            "created_at": self.created_at.isoformat() if self.created_at else None,
-            "updated_at": self.updated_at.isoformat() if self.updated_at else None,
+            "last_used": self.last_used.isoformat() if self.last_used is not None else None,
+            "created_at": self.created_at.isoformat() if self.created_at is not None else None,
+            "updated_at": self.updated_at.isoformat() if self.updated_at is not None else None,
         }
 
+
+sys.modules.setdefault("app.models.additional_features", sys.modules[__name__])
+sys.modules.setdefault("backend.app.models.additional_features", sys.modules[__name__])

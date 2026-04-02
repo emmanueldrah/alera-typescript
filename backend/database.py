@@ -4,6 +4,7 @@ from sqlalchemy.orm import sessionmaker, Session
 from sqlalchemy.pool import NullPool
 from config import settings
 from typing import Generator
+import sys
 
 # Create engine
 engine = create_engine(
@@ -45,3 +46,8 @@ def receive_connect(dbapi_connection, connection_record):
 def init_db():
     """Initialize database - create all tables"""
     Base.metadata.create_all(bind=engine)
+
+
+# Keep both import styles pointing at the same module.
+sys.modules.setdefault("database", sys.modules[__name__])
+sys.modules.setdefault("backend.database", sys.modules[__name__])

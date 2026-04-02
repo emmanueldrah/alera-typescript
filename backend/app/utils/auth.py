@@ -61,8 +61,8 @@ def decode_token(token: str) -> dict:
             settings.SECRET_KEY,
             algorithms=[settings.ALGORITHM]
         )
-        sub: str = payload.get("sub")
-        if sub is None:
+        raw_sub = payload.get("sub")
+        if not isinstance(raw_sub, (str, int)):
             raise HTTPException(
                 status_code=status.HTTP_401_UNAUTHORIZED,
                 detail="Invalid token"
@@ -75,8 +75,33 @@ def decode_token(token: str) -> dict:
         )
 
 
+def _extract_subject_as_int(payload: dict) -> int:
+    raw_sub = payload.get("sub")
+    if raw_sub is None:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Invalid token"
+        )
+
+    if isinstance(raw_sub, int):
+        return raw_sub
+
+    if isinstance(raw_sub, str):
+        try:
+            return int(raw_sub)
+        except ValueError as exc:
+            raise HTTPException(
+                status_code=status.HTTP_401_UNAUTHORIZED,
+                detail="Invalid token subject"
+            ) from exc
+
+    raise HTTPException(
+        status_code=status.HTTP_401_UNAUTHORIZED,
+        detail="Invalid token subject"
+    )
+
+
 def get_user_id_from_token(token: str) -> int:
     """Extract user ID from token"""
     payload = decode_token(token)
-    user_id = int(payload.get("sub"))
-    return user_id
+    return _extract_subject_as_int(payload)

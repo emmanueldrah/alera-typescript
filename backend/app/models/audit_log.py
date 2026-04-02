@@ -64,5 +64,5 @@ class AuditLog(Base):
             "severity": self.severity,
             "status": self.severity,
             "error_message": self.reason,
-            "timestamp": self.created_at.isoformat() if self.created_at else None,
+            "timestamp": self.created_at.isoformat() if self.created_at is not None else None,
         }

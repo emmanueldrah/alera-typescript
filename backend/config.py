@@ -1,7 +1,7 @@
 from pydantic_settings import BaseSettings
 from pydantic import field_validator
 from typing import List
-import os
+import sys
 
 
 class Settings(BaseSettings):
@@ -72,3 +72,7 @@ class Settings(BaseSettings):
 
 
 settings = Settings()
+
+# Keep both import styles pointing at the same module.
+sys.modules.setdefault("config", sys.modules[__name__])
+sys.modules.setdefault("backend.config", sys.modules[__name__])

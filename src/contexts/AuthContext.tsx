@@ -41,13 +41,14 @@ const isApiUser = (data: unknown): data is ApiUser => {
 
 // Map backend user roles to frontend format if needed
 const mapBackendUser = (data: ApiUser): User => {
-  const [firstName = '', ...lastNameParts] = (data.full_name || '').split(' ');
+  const fullName = data.full_name?.trim() || [data.first_name, data.last_name].filter(Boolean).join(' ').trim();
+  const [firstName = '', ...lastNameParts] = fullName.split(' ');
   return {
     id: data.id,
     email: data.email,
-    name: data.full_name || data.email,
+    name: fullName || data.email,
     role: data.role as UserRole,
-    avatar: data.avatar,
+    avatar: data.avatar || data.profile_image_url,
     createdAt: data.created_at,
     lastLogin: data.last_login,
     profile: {
@@ -60,7 +61,7 @@ const mapBackendUser = (data: ApiUser): User => {
       zipCode: data.zip_code,
       dateOfBirth: data.date_of_birth,
       bio: data.bio,
-      avatar: data.avatar,
+      avatar: data.avatar || data.profile_image_url,
       notificationEmail: true,
       notificationSms: false,
       privacyPublicProfile: false,
@@ -103,6 +104,9 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       const { access_token, refresh_token, user: userData } = response;
       
       setTokens(access_token, refresh_token);
+      if (!isApiUser(userData)) {
+        throw new Error('Login response did not include a valid user');
+      }
       setUser(mapBackendUser(userData));
     } catch (error) {
       clearTokens();

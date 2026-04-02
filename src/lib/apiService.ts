@@ -4,8 +4,11 @@ export interface ApiUser {
   id: string;
   email: string;
   full_name?: string;
+  first_name?: string;
+  last_name?: string;
   role: 'patient' | 'provider' | 'pharmacist' | 'admin';
   avatar?: string;
+  profile_image_url?: string;
   created_at?: string;
   last_login?: string;
   phone?: string;
@@ -20,6 +23,8 @@ export interface ApiUser {
 export interface ApiAuthResponse {
   access_token: string;
   refresh_token?: string;
+  token_type?: string;
+  expires_in?: number;
   user: ApiUser;
 }
 
@@ -46,8 +51,8 @@ export const authApi = {
   },
 
   login: async (email: string, password: string) => {
-    const response = await apiClient.post('/auth/login', { email, password });
-    return response.data; // { access_token, refresh_token, user }
+    const response = await apiClient.post<ApiAuthResponse>('/auth/login', { email, password });
+    return response.data;
   },
 
   getCurrentUser: async () => {
@@ -71,7 +76,7 @@ export const authApi = {
   },
 
   refreshToken: async (refreshToken: string) => {
-    const response = await apiClient.post('/auth/refresh', { refresh_token: refreshToken });
+    const response = await apiClient.post<{ access_token: string; refresh_token?: string; token_type?: string; expires_in?: number }>('/auth/refresh', { refresh_token: refreshToken });
     return response.data;
   },
 

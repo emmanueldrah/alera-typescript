@@ -27,7 +27,7 @@ app.add_middleware(
 # Trusted Host Middleware
 app.add_middleware(
     TrustedHostMiddleware,
-    allowed_hosts=["localhost", "127.0.0.1", "*.vercel.app"]
+    allowed_hosts=["localhost", "127.0.0.1", "testserver", "*.vercel.app"]
 )
 
 # Include routers

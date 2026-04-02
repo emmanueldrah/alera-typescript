@@ -68,8 +68,8 @@ async def create_reminder(
 async def list_reminders(
     skip: int = 0,
     limit: int = 20,
-    appointment_id: str = None,
-    status_filter: str = None,
+    appointment_id: int | None = None,
+    status_filter: str | None = None,
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):

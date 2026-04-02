@@ -244,7 +244,7 @@ async def download_document(
 
 @router.get("/patient/{patient_id}/documents", response_model=DocumentListResponse)
 async def get_patient_documents(
-    patient_id: str,
+    patient_id: int,
     skip: int = 0,
     limit: int = 20,
     db: Session = Depends(get_db),

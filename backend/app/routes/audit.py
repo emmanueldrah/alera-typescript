@@ -6,6 +6,7 @@ from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.orm import Session
 from datetime import datetime, timedelta
 from typing import Optional
+import sys
 
 from database import get_db
 from app.models import AuditLog
@@ -18,6 +19,17 @@ from app.schemas.additional_features import (
 from app.utils.dependencies import get_current_user
 
 router = APIRouter(prefix="/api/audit", tags=["audit"])
+
+
+def _normalize_audit_severity(value: str) -> str:
+    normalized = value.strip().lower()
+    if normalized in {"success", "info", "created", "updated"}:
+        return "info"
+    if normalized in {"warning", "warn"}:
+        return "warning"
+    if normalized in {"error", "failed", "failure", "critical"}:
+        return "critical"
+    return "info"
 
 
 async def log_action(
@@ -48,7 +60,7 @@ async def log_action(
             ip_address=ip_address,
             user_agent=user_agent,
             reason=error_message,
-            severity=status,
+            severity=_normalize_audit_severity(status),
         )
         db.add(audit_log)
         db.commit()
@@ -199,32 +211,11 @@ async def get_data_retention_policy(
     return {
         "policy": "7-year retention for HIPAA compliance",
         "retention_days": 2555,
-        "oldest_record": oldest_log.created_at.isoformat() if oldest_log else None,
-        "oldest_record_days_old": (datetime.utcnow() - oldest_log.created_at).days if oldest_log else 0,
+        "oldest_record": oldest_log.created_at.isoformat() if oldest_log is not None else None,
+        "oldest_record_days_old": (datetime.utcnow() - oldest_log.created_at).days if oldest_log is not None else 0,
         "description": "All audit logs are retained for 7 years as required by HIPAA regulations",
         "gdpr_compliance": "Personal data is deleted upon patient request unless legal hold applies",
     }
-
-
-@router.get("/{log_id}", response_model=AuditLogResponse)
-async def get_audit_log(
-    log_id: int,
-    db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_user),
-):
-    """Get a specific audit log entry (admin only)"""
-    
-    if current_user.role.value != "admin":
-        raise HTTPException(status_code=403, detail="Only admins can view audit logs")
-
-    audit_log = db.query(AuditLog).filter(
-        AuditLog.id == log_id
-    ).first()
-
-    if not audit_log:
-        raise HTTPException(status_code=404, detail="Audit log not found")
-
-    return AuditLogResponse(**audit_log.to_dict())
 
 
 @router.get("/user/{user_id}/history", response_model=AuditLogListResponse)
@@ -278,6 +269,9 @@ async def get_resource_changes(
     if current_user.role.value not in ["provider", "admin"]:
         raise HTTPException(status_code=403, detail="Access denied")
 
+    skip = max(skip, 0)
+    limit = max(1, min(limit, 100))
+
     query = db.query(AuditLog).filter(
         AuditLog.resource_type == resource_type,
         AuditLog.resource_id == resource_id
@@ -290,3 +284,28 @@ async def get_resource_changes(
         total=total,
         items=[AuditLogResponse(**log.to_dict()) for log in items]
     )
+
+
+@router.get("/{log_id}", response_model=AuditLogResponse)
+async def get_audit_log(
+    log_id: int,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """Get a specific audit log entry (admin only)"""
+    
+    if current_user.role.value != "admin":
+        raise HTTPException(status_code=403, detail="Only admins can view audit logs")
+
+    audit_log = db.query(AuditLog).filter(
+        AuditLog.id == log_id
+    ).first()
+
+    if not audit_log:
+        raise HTTPException(status_code=404, detail="Audit log not found")
+
+    return AuditLogResponse(**audit_log.to_dict())
+
+
+sys.modules.setdefault("app.routes.audit", sys.modules[__name__])
+sys.modules.setdefault("backend.app.routes.audit", sys.modules[__name__])

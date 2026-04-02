@@ -31,7 +31,7 @@ class PatientDocumentUpdate(BaseModel):
 
 class PatientDocumentResponse(BaseModel):
     id: str
-    patient_id: str
+    patient_id: int
     file_id: str
     filename: str
     file_type: str
@@ -39,7 +39,7 @@ class PatientDocumentResponse(BaseModel):
     mime_type: str
     upload_time: Optional[str]
     description: Optional[str]
-    uploaded_by: Optional[str]
+    uploaded_by: Optional[int]
     is_private: bool
     accessed_count: int
     last_accessed: Optional[str]
@@ -65,7 +65,7 @@ class PatientConsentUpdate(BaseModel):
 
 class PatientConsentResponse(BaseModel):
     id: str
-    patient_id: str
+    patient_id: int
     consent_type: str
     title: str
     description: Optional[str]
@@ -75,7 +75,7 @@ class PatientConsentResponse(BaseModel):
     document_file_id: Optional[str]
     created_at: Optional[str]
     updated_at: Optional[str]
-    requested_by: Optional[str]
+    requested_by: Optional[int]
 
     class Config:
         from_attributes = True
@@ -84,11 +84,11 @@ class PatientConsentResponse(BaseModel):
 # Reminder Schemas
 
 class AppointmentReminderCreate(BaseModel):
-    appointment_id: str
+    appointment_id: int
     reminder_type: str = Field(..., description="email, sms, or push")
     scheduled_time: datetime
     recipient: str
-    recipient_id: Optional[str] = None
+    recipient_id: Optional[int] = None
 
 
 class AppointmentReminderUpdate(BaseModel):
@@ -99,14 +99,14 @@ class AppointmentReminderUpdate(BaseModel):
 
 class AppointmentReminderResponse(BaseModel):
     id: str
-    appointment_id: str
+    appointment_id: int
     reminder_type: str
     scheduled_time: str
     is_sent: bool
     sent_at: Optional[str]
     delivery_status: str
     recipient: str
-    recipient_id: Optional[str]
+    recipient_id: Optional[int]
     retry_count: int
     last_retry_at: Optional[str]
     error_message: Optional[str]

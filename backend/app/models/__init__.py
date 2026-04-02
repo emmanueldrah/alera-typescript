@@ -32,3 +32,9 @@ __all__ = [
     "SMSTemplate",
     "DocumentType",
 ]
+
+import sys
+
+# Keep package-level imports consistent regardless of path style.
+sys.modules.setdefault("app.models", sys.modules[__name__])
+sys.modules.setdefault("backend.app.models", sys.modules[__name__])

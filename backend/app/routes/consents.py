@@ -24,7 +24,7 @@ router = APIRouter(prefix="/api/consents", tags=["consents"])
 @router.post("", response_model=PatientConsentResponse)
 async def create_consent(
     consent_data: PatientConsentCreate,
-    patient_id: str = None,
+    patient_id: int | None = None,
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
@@ -32,9 +32,6 @@ async def create_consent(
     
     if current_user.role.value not in ["provider", "admin"]:
         raise HTTPException(status_code=403, detail="Only providers and admins can request consents")
-
-    if not patient_id:
-        patient_id = current_user.id if current_user.role.value == "patient" else None
 
     if not patient_id:
         raise HTTPException(status_code=400, detail="patient_id is required")
@@ -65,7 +62,7 @@ async def create_consent(
 async def list_consents(
     skip: int = 0,
     limit: int = 20,
-    patient_id: str = None,
+    patient_id: int | None = None,
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
