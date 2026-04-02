@@ -3,16 +3,7 @@
   "outputDirectory": "dist",
   "framework": "vite",
   "env": {
-    "VITE_APP_ENV": {
-      "description": "Application environment (development/production)",
-      "default": "production"
-    }
-  },
-  "functions": {
-    "api/**/*.ts": {
-      "memory": 1024,
-      "maxDuration": 60
-    }
+    "VITE_APP_ENV": "production"
   },
   "rewrites": [
     {
