@@ -237,11 +237,11 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   }, []);
 
   // Mock functions for backward compatibility - to be replaced by API calls
-  const addUser = useCallback(async () => {
+  const addUser = useCallback(async (name: string, email: string, password: string, role: UserRole): Promise<User> => {
     throw new Error('Use signup instead');
   }, []);
 
-  const getUsers = useCallback(() => {
+  const getUsers = useCallback((): User[] => {
     console.warn('getUsers is deprecated. Use proper API endpoints.');
     return [];
   }, []);
@@ -266,8 +266,8 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         login: async () => {}, 
         signup: async () => {}, 
         logout: async () => {}, 
-        addUser: async () => {}, 
-        getUsers: async () => [], 
+        addUser: async (name, email, password, role) => { throw new Error('Loading'); }, 
+        getUsers: () => [], 
         updateProfile: async () => {}, 
         updateBasicInfo: async () => {}, 
         changePassword: async () => {}, 
