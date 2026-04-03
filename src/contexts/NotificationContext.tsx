@@ -5,6 +5,7 @@ import { getNotificationStorageKey, storageKeys } from '@/lib/storageKeys';
 import { NotificationContext, type NotificationDraft, type NotificationContextType, type RealtimeNotification } from './notification-context';
 import { useAuth } from './useAuth';
 import { createStoredNotification, matchesNotificationRecipient } from '@/lib/notificationUtils';
+import { normalizeUserRole } from '@/lib/roleUtils';
 
 interface NotificationEventPayload {
   sourceId: string;
@@ -51,9 +52,10 @@ export const NotificationProvider: React.FC<{ children: React.ReactNode }> = ({ 
   }, [storageKey]);
 
   const deliverNotification = useCallback((draft: NotificationDraft, options?: { toastEnabled?: boolean }) => {
-    if (!user || !matchesNotificationRecipient(draft, user.email, user.role)) return;
+    const uiRole = normalizeUserRole(user.role) ?? user.role;
+    if (!user || !matchesNotificationRecipient(draft, user.email, uiRole)) return;
 
-    const created = createStoredNotification(draft, user.role);
+    const created = createStoredNotification(draft, uiRole);
     setNotifications((prev) => {
       const next = [created, ...prev].slice(0, MAX_NOTIFICATIONS);
       persistNotifications(next);
@@ -177,7 +179,9 @@ export const NotificationProvider: React.FC<{ children: React.ReactNode }> = ({ 
   }, [storageKey]);
 
   const unreadCount = notifications.filter((notification) => !notification.read && !notification.archived).length;
-  const feedLabel = user ? roleFeedLabels[user.role] : 'Activity';
+  const feedRole = user ? normalizeUserRole(user.role) ?? user.role : null;
+  const feedLabel =
+    feedRole && feedRole in roleFeedLabels ? roleFeedLabels[feedRole as UserRole] : 'Activity';
   const contextValue = useMemo<NotificationContextType>(() => ({
     notifications,
     unreadCount,
