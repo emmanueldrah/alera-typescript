@@ -61,7 +61,7 @@ async def startup_event():
         except Exception as e:
             print(f"Error during startup database initialization: {e}")
 
-@app.get("/health")
+@app.get("/api/health")
 async def health_check():
     """Health check endpoint"""
     return {
@@ -71,13 +71,13 @@ async def health_check():
         "environment": settings.ENVIRONMENT
     }
 
-@app.get("/")
+@app.get("/api")
 async def root():
     """API root endpoint"""
     return {
         "message": "Welcome to ALERA Healthcare API",
         "docs": "/api/docs",
-        "health": "/health"
+        "health": "/api/health"
     }
 
 @app.exception_handler(Exception)
