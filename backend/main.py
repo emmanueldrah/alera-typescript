@@ -7,13 +7,17 @@ from config import settings
 from database import init_db
 from app.routes import auth, users, appointments, prescriptions, allergies, notifications, telemedicine, admin, documents, consents, reminders_templates, audit
 
-# Create FastAPI app
+# Detect if running on Vercel
+IS_VERCEL = os.path.exists('/var/task') or os.environ.get('VERCEL') == '1'
+
+# Create FastAPI app with root_path for Vercel routing
 app = FastAPI(
     title="ALERA Healthcare API",
     description="Backend API for ALERA Healthcare Platform",
     version="1.0.0",
     docs_url="/api/docs",
-    openapi_url="/api/openapi.json"
+    openapi_url="/api/openapi.json",
+    root_path="/api" if IS_VERCEL else ""  # Strip /api prefix on Vercel
 )
 
 # CORS Middleware
