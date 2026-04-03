@@ -2,7 +2,7 @@
   "name": "alera-healthcare",
   "description": "ALERA - Healthcare Management System. A comprehensive healthcare platform for patients, providers, labs, pharmacies, hospitals, and emergency services.",
   "private": true,
-  "version": "1.0.0",
+  "version": "1.0.1",
   "type": "module",
   "license": "MIT",
   "author": {
