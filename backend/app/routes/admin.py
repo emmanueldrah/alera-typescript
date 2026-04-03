@@ -19,6 +19,7 @@ async def get_dashboard_stats(
     db: Session = Depends(get_db)
 ):
     """Get admin dashboard statistics"""
+    from app.models import LabTest, ImagingScan, AmbulanceRequest
     
     # Count users by role
     user_counts = {}
@@ -36,18 +37,41 @@ async def get_dashboard_stats(
     active_prescriptions = db.query(Prescription).filter(
         Prescription.status == "active"
     ).count()
+
+    # Count Lab & Imaging
+    pending_labs = db.query(LabTest).filter(LabTest.status != "completed").count()
+    pending_imaging = db.query(ImagingScan).filter(ImagingScan.status != "completed").count()
+
+    # Emergencies
+    active_emergencies = db.query(AmbulanceRequest).filter(
+        AmbulanceRequest.status != "completed",
+        AmbulanceRequest.priority == "critical"
+    ).count()
     
     return {
         "timestamp": datetime.utcnow(),
-        "users": user_counts,
+        "users": {
+            "total": sum(user_counts.values()),
+            "by_role": user_counts
+        },
         "appointments": {
             "total": total_appointments,
             "today": today_appointments
         },
         "prescriptions": {
             "active": active_prescriptions
+        },
+        "lab_tests": {
+            "pending": pending_labs
+        },
+        "imaging": {
+            "pending": pending_imaging
+        },
+        "emergencies": {
+            "active": active_emergencies
         }
     }
+
 
 
 @router.get("/users/", response_model=list[UserResponse])

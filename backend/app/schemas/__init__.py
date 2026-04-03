@@ -220,3 +220,88 @@ class NotificationResponse(NotificationBase):
     
     class Config:
         from_attributes = True
+
+
+# Lab Test Schemas
+class LabTestBase(BaseModel):
+    test_name: str
+    test_code: Optional[str] = None
+    description: Optional[str] = None
+
+
+class LabTestCreate(LabTestBase):
+    patient_id: int
+    ordered_by: int
+
+
+class LabTestUpdate(BaseModel):
+    status: Optional[str] = None
+    result_value: Optional[str] = None
+    result_unit: Optional[str] = None
+    reference_range: Optional[str] = None
+    result_notes: Optional[str] = None
+    result_file_url: Optional[str] = None
+    collected_at: Optional[datetime] = None
+    completed_at: Optional[datetime] = None
+
+
+class LabTestResponse(LabTestBase):
+    id: int
+    patient_id: int
+    ordered_by: int
+    processed_by: Optional[int] = None
+    status: str
+    result_value: Optional[str] = None
+    result_unit: Optional[str] = None
+    reference_range: Optional[str] = None
+    result_notes: Optional[str] = None
+    result_file_url: Optional[str] = None
+    ordered_at: datetime
+    collected_at: Optional[datetime] = None
+    completed_at: Optional[datetime] = None
+    created_at: datetime
+
+    class Config:
+        from_attributes = True
+
+
+# Imaging Scan Schemas
+class ImagingScanBase(BaseModel):
+    scan_type: str
+    body_part: Optional[str] = None
+    clinical_indication: Optional[str] = None
+
+
+class ImagingScanCreate(ImagingScanBase):
+    patient_id: int
+    ordered_by: int
+
+
+class ImagingScanUpdate(BaseModel):
+    status: Optional[str] = None
+    findings: Optional[str] = None
+    impression: Optional[str] = None
+    report_url: Optional[str] = None
+    image_url: Optional[str] = None
+    scheduled_at: Optional[datetime] = None
+    completed_at: Optional[datetime] = None
+
+
+class ImagingScanResponse(ImagingScanBase):
+    id: int
+    patient_id: int
+    ordered_by: int
+    processed_by: Optional[int] = None
+    status: str
+    findings: Optional[str] = None
+    impression: Optional[str] = None
+    report_url: Optional[str] = None
+    image_url: Optional[str] = None
+    scheduled_at: Optional[datetime] = None
+    ordered_at: datetime
+    completed_at: Optional[datetime] = None
+    created_at: datetime
+
+    class Config:
+        from_attributes = True
+

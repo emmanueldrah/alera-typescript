@@ -6,6 +6,7 @@ from .medical_history import MedicalHistory
 from .notification import Notification
 from .audit_log import AuditLog
 from .telemedicine import VideoCall, Message
+from .lab_imaging import LabTest, ImagingScan, LabTestStatus, ImagingScanStatus
 from .additional_features import (
     PatientDocument,
     PatientConsent,
@@ -25,6 +26,10 @@ __all__ = [
     "AuditLog",
     "VideoCall",
     "Message",
+    "LabTest",
+    "ImagingScan",
+    "LabTestStatus",
+    "ImagingScanStatus",
     "PatientDocument",
     "PatientConsent",
     "AppointmentReminder",

@@ -7,9 +7,13 @@ from database import Base
 
 class UserRole(str, enum.Enum):
     PATIENT = "patient"
-    PROVIDER = "provider"
+    PROVIDER = "provider"  # Doctor
     PHARMACIST = "pharmacist"
     ADMIN = "admin"
+    HOSPITAL = "hospital"
+    LABORATORY = "laboratory"
+    IMAGING = "imaging"
+    AMBULANCE = "ambulance"
 
 
 class User(Base):

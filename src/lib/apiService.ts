@@ -481,6 +481,68 @@ export const adminApi = {
 };
 
 // ============================================================================
+// LAB TEST ENDPOINTS
+// ============================================================================
+
+export const labTestsApi = {
+  createLabTest: async (testData: {
+    patient_id: number;
+    test_name: string;
+    test_code?: string;
+    description?: string;
+  }) => {
+    const response = await apiClient.post('/lab-tests', testData);
+    return response.data;
+  },
+
+  listLabTests: async (skip: number = 0, limit: number = 100) => {
+    const response = await apiClient.get('/lab-tests', { params: { skip, limit } });
+    return response.data;
+  },
+
+  getLabTest: async (id: string | number) => {
+    const response = await apiClient.get(`/lab-tests/${id}`);
+    return response.data;
+  },
+
+  updateLabTest: async (id: string | number, updateData: any) => {
+    const response = await apiClient.put(`/lab-tests/${id}`, updateData);
+    return response.data;
+  },
+};
+
+// ============================================================================
+// IMAGING SCAN ENDPOINTS
+// ============================================================================
+
+export const imagingApi = {
+  orderImagingScan: async (scanData: {
+    patient_id: number;
+    scan_type: string;
+    body_part?: string;
+    clinical_indication?: string;
+  }) => {
+    const response = await apiClient.post('/imaging', scanData);
+    return response.data;
+  },
+
+  listImagingScans: async (skip: number = 0, limit: number = 100) => {
+    const response = await apiClient.get('/imaging', { params: { skip, limit } });
+    return response.data;
+  },
+
+  getImagingScan: async (id: string | number) => {
+    const response = await apiClient.get(`/imaging/${id}`);
+    return response.data;
+  },
+
+  updateImagingScan: async (id: string | number, updateData: any) => {
+    const response = await apiClient.put(`/imaging/${id}`, updateData);
+    return response.data;
+  },
+};
+
+// ============================================================================
 // EXPORT ALL APIS
 // ============================================================================
 
@@ -495,4 +557,7 @@ export const api = {
   videoCalls: videoCallsApi,
   messaging: messagingApi,
   admin: adminApi,
+  labTests: labTestsApi,
+  imaging: imagingApi,
 };
+

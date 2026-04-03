@@ -3,7 +3,7 @@ import type { AmbulanceRequest, Appointment, ImagingScan, LabTest, Prescription,
 import { ambulances as mockAmbulances, inventoryItems as mockInventoryItems, referrals as mockReferrals, providerVerifications as mockVerifications, drugInteractionDatabase as mockDrugInteractions, patientAllergies as mockAllergies, medicalHistories as mockMedicalHistories, patientConsents as mockConsents } from '@/data/mockData';
 import { storageKeys } from '@/lib/storageKeys';
 import { AppDataContext, type AppDataContextType } from './app-data-context';
-import { appointmentsApi, prescriptionsApi, allergiesApi } from '@/lib/apiService';
+import { appointmentsApi, prescriptionsApi, allergiesApi, api } from '@/lib/apiService';
 
 type BackendAppointment = {
   id: string | number;
@@ -30,6 +30,8 @@ type BackendPrescription = {
   patient_id: string | number;
   status?: Prescription['status'];
   refills?: number;
+  prescribed_date?: string;
+  created_at?: string;
 };
 
 type BackendAllergy = {
@@ -40,6 +42,8 @@ type BackendAllergy = {
   severity: PatientAllergy['severity'];
   reaction_description: string;
   treatment?: string;
+  onset_date?: string;
+  created_at?: string;
 };
 
 const getListPayload = <T,>(value: unknown): T[] => {
@@ -137,6 +141,44 @@ const safeParse = (raw: string | null): StoredAppData => {
   }
 };
 
+// No-op - moved import to top
+
+
+type BackendLabTest = {
+  id: number;
+  test_name: string;
+  test_code?: string;
+  description?: string;
+  status: string;
+  result_value?: string;
+  result_unit?: string;
+  reference_range?: string;
+  result_notes?: string;
+  result_file_url?: string;
+  ordered_at: string;
+  collected_at?: string;
+  completed_at?: string;
+  patient_id: number;
+  ordered_by: number;
+};
+
+type BackendImagingScan = {
+  id: number;
+  scan_type: 'X-Ray' | 'MRI' | 'CT Scan' | 'Ultrasound' | 'PET Scan' | 'DEXA Scan';
+  body_part?: string;
+  clinical_indication?: string;
+  status: string;
+  findings?: string;
+  impression?: string;
+  report_url?: string;
+  image_url?: string;
+  ordered_at: string;
+  scheduled_at?: string;
+  completed_at?: string;
+  patient_id: number;
+  ordered_by: number;
+};
+
 // Helper to convert backend appointment to frontend format
 const mapBackendAppointment = (apt: BackendAppointment): Appointment => ({
   id: String(apt.id),
@@ -147,24 +189,26 @@ const mapBackendAppointment = (apt: BackendAppointment): Appointment => ({
   date: new Date(apt.scheduled_time).toISOString().slice(0, 10),
   time: new Date(apt.scheduled_time).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
   type: apt.appointment_type === 'telehealth' ? 'Telehealth' : 'In-Person',
-  status: apt.status || 'pending',
-  reason: apt.title,
-  notes: apt.notes || '',
+  appointmentMode: apt.appointment_type === 'telehealth' ? 'telemedicine' : 'in-person',
+  status: (apt.status || 'scheduled') as Appointment['status'],
+  notes: apt.notes || apt.title,
 });
 
 // Helper to convert backend prescription to frontend format
 const mapBackendPrescription = (presc: BackendPrescription): Prescription => ({
   id: String(presc.id),
-  medicationName: presc.medication_name,
-  dose: [presc.dosage, presc.dosage_unit].filter(Boolean).join(' '),
-  frequency: presc.frequency,
-  duration: presc.quantity ? `${presc.quantity} doses` : 'Ongoing',
-  instructions: presc.instructions || '',
-  doctorId: presc.provider_id ? String(presc.provider_id) : '',
-  doctorName: presc.provider_id ? `Provider #${presc.provider_id}` : 'Unknown',
-  patientId: String(presc.patient_id),
   patientName: `Patient #${presc.patient_id}`,
-  status: presc.status || 'active',
+  patientId: String(presc.patient_id),
+  doctorName: presc.provider_id ? `Provider #${presc.provider_id}` : 'Unknown',
+  doctorId: presc.provider_id ? String(presc.provider_id) : '',
+  date: presc.prescribed_date ? presc.prescribed_date.slice(0, 10) : new Date().toISOString().slice(0, 10),
+  medications: [{
+    name: presc.medication_name,
+    dosage: presc.dosage,
+    frequency: presc.frequency,
+    duration: presc.quantity ? `${presc.quantity} doses` : 'Ongoing'
+  }],
+  status: (presc.status || 'active') as Prescription['status'],
   refillsAllowed: presc.refills || 0,
 });
 
@@ -173,65 +217,113 @@ const mapBackendAllergy = (allergy: BackendAllergy): PatientAllergy => ({
   id: String(allergy.id),
   patientId: String(allergy.patient_id),
   allergen: allergy.allergen,
-  type: allergy.allergen_type,
-  severity: allergy.severity,
+  allergyType: (allergy.allergen_type.toLowerCase() || 'other') as PatientAllergy['allergyType'],
+  severity: (allergy.severity.toLowerCase() || 'mild') as PatientAllergy['severity'],
   reaction: allergy.reaction_description,
+  dateIdentified: allergy.onset_date || allergy.created_at,
+  addedDate: allergy.created_at,
+  status: 'active',
   notes: allergy.treatment || '',
+});
+
+const mapBackendLabTest = (test: BackendLabTest): LabTest => ({
+  id: String(test.id),
+  patientId: String(test.patient_id),
+  patientName: `Patient #${test.patient_id}`,
+  doctorId: String(test.ordered_by),
+  doctorName: `Provider #${test.ordered_by}`,
+  testName: test.test_name,
+  date: test.ordered_at.slice(0, 10),
+  status: (test.status.toLowerCase() || 'requested') as LabTest['status'],
+  results: test.result_value && test.result_unit ? `${test.result_value} ${test.result_unit}` : undefined,
+  referenceRange: test.reference_range,
+  notes: test.result_notes,
+});
+
+const mapBackendImagingScan = (scan: BackendImagingScan): ImagingScan => ({
+  id: String(scan.id),
+  patientId: String(scan.patient_id),
+  patientName: `Patient #${scan.patient_id}`,
+  doctorId: String(scan.ordered_by),
+  doctorName: `Provider #${scan.ordered_by}`,
+  scanType: scan.scan_type,
+  bodyPart: scan.body_part || 'Unspecified',
+  date: scan.ordered_at.slice(0, 10),
+  status: (scan.status.toLowerCase() || 'requested') as ImagingScan['status'],
+  results: scan.findings,
 });
 
 export const AppDataProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const [data, setData] = useState<StoredAppData>(emptyData);
   const [isLoadingAPI, setIsLoadingAPI] = useState(true);
 
-  // Load data from API on mount
-  useEffect(() => {
-    const loadAPIData = async () => {
-      try {
-        const token = localStorage.getItem('access_token');
-        if (!token) {
-          // Not authenticated, use mock data
+  // Load data from API
+  const loadAPIData = useCallback(async (isPolling = false) => {
+    try {
+      const token = localStorage.getItem('access_token');
+      if (!token) {
+        if (!isPolling) {
           setIsLoadingAPI(false);
           setData(safeParse(localStorage.getItem(STORAGE_KEY)));
-          return;
         }
-
-        const [appointmentsRes, prescriptionsRes, allergiesRes] = await Promise.allSettled([
-          appointmentsApi.listAppointments(0, 100),
-          prescriptionsApi.listPrescriptions(0, 100),
-          allergiesApi.listAllergies(0, 100),
-        ]);
-
-        const appointments = appointmentsRes.status === 'fulfilled'
-          ? getListPayload<BackendAppointment>(appointmentsRes.value).map(mapBackendAppointment)
-          : [];
-
-        const prescriptions = prescriptionsRes.status === 'fulfilled'
-          ? getListPayload<BackendPrescription>(prescriptionsRes.value).map(mapBackendPrescription)
-          : [];
-
-        const patientAllergies = allergiesRes.status === 'fulfilled'
-          ? getListPayload<BackendAllergy>(allergiesRes.value).map(mapBackendAllergy)
-          : [];
-
-        setData((current) => ({
-          ...current,
-          appointments,
-          prescriptions,
-          patientAllergies,
-          ambulances: mockAmbulances,
-          inventoryItems: mockInventoryItems,
-          referrals: mockReferrals,
-          providerVerifications: mockVerifications,
-        }));
-      } catch (error) {
-        console.error('Failed to load API data:', error);
-        setData(safeParse(localStorage.getItem(STORAGE_KEY)));
-      } finally {
-        setIsLoadingAPI(false);
+        return;
       }
-    };
 
+      const [appointmentsRes, prescriptionsRes, allergiesRes, labRes, imagingRes] = await Promise.allSettled([
+        appointmentsApi.listAppointments(0, 100),
+        prescriptionsApi.listPrescriptions(0, 100),
+        allergiesApi.listAllergies(0, 100),
+        api.labTests.listLabTests(0, 100),
+        api.imaging.listImagingScans(0, 100),
+      ]);
+
+      const appointments = appointmentsRes.status === 'fulfilled'
+        ? getListPayload<BackendAppointment>(appointmentsRes.value).map(mapBackendAppointment)
+        : [];
+
+      const prescriptions = prescriptionsRes.status === 'fulfilled'
+        ? getListPayload<BackendPrescription>(prescriptionsRes.value).map(mapBackendPrescription)
+        : [];
+
+      const patientAllergies = allergiesRes.status === 'fulfilled'
+        ? getListPayload<BackendAllergy>(allergiesRes.value).map(mapBackendAllergy)
+        : [];
+
+      const labTests = labRes.status === 'fulfilled'
+        ? getListPayload<BackendLabTest>(labRes.value).map(mapBackendLabTest)
+        : [];
+
+      const imagingScans = imagingRes.status === 'fulfilled'
+        ? getListPayload<BackendImagingScan>(imagingRes.value).map(mapBackendImagingScan)
+        : [];
+
+      setData((current) => ({
+        ...current,
+        appointments,
+        prescriptions,
+        patientAllergies,
+        labTests,
+        imagingScans,
+        // These remain mock for now
+        ambulances: mockAmbulances,
+        inventoryItems: mockInventoryItems,
+        referrals: mockReferrals,
+        providerVerifications: mockVerifications,
+      }));
+    } catch (error) {
+      if (!isPolling) console.error('Failed to load API data:', error);
+    } finally {
+      if (!isPolling) setIsLoadingAPI(false);
+    }
+  }, []);
+
+  // Initial load and polling
+  useEffect(() => {
     loadAPIData();
+
+    const interval = setInterval(() => {
+      loadAPIData(true);
+    }, 30000); // Poll every 30 seconds for real-time updates
 
     const handleStorage = (event: StorageEvent) => {
       if (event.key !== 'access_token') return;
@@ -239,8 +331,12 @@ export const AppDataProvider: React.FC<{ children: React.ReactNode }> = ({ child
     };
 
     window.addEventListener('storage', handleStorage);
-    return () => window.removeEventListener('storage', handleStorage);
-  }, []);
+    return () => {
+      clearInterval(interval);
+      window.removeEventListener('storage', handleStorage);
+    };
+  }, [loadAPIData]);
+
 
   const updateData = useCallback((updater: (current: StoredAppData) => StoredAppData) => {
     setData((current) => {
@@ -519,15 +615,18 @@ export const AppDataProvider: React.FC<{ children: React.ReactNode }> = ({ child
         id: `reminder-${Date.now()}-${Math.random()}`,
         appointmentId,
         patientId: appointment.patientId,
+        patientName: appointment.patientName,
         doctorId: appointment.doctorId,
+        doctorName: appointment.doctorName,
         reminderType,
         notificationMethod: 'in-app' as const,
         status: 'pending' as const,
         appointmentDate: appointment.date,
         appointmentTime: appointment.time,
-        location: appointment.location || 'TBD',
-        sentAt: null,
-        acknowledgedAt: null,
+        message: `Reminder: You have an appointment with ${appointment.doctorName} on ${appointment.date} at ${appointment.time}.`,
+        appointmentMode: appointment.appointmentMode,
+        sentAt: undefined,
+        acknowledgedAt: undefined,
         createdAt: new Date().toISOString(),
       }));
       return { ...current, appointmentReminders: [...newReminders, ...current.appointmentReminders] };
