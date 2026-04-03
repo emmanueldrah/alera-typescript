@@ -5,6 +5,7 @@ import { getAppDataStorageKey, storageKeys } from '@/lib/storageKeys';
 import { AppDataContext, type AppDataContextType } from './app-data-context';
 import { appointmentsApi, prescriptionsApi, allergiesApi, api } from '@/lib/apiService';
 import { useAuth } from './useAuth';
+import { buildScheduledIso } from '@/lib/appointmentUtils';
 
 type BackendAppointment = {
   id: string | number;
@@ -13,9 +14,11 @@ type BackendAppointment = {
   title: string;
   description?: string;
   scheduled_time: string;
-  appointment_type?: 'in_person' | 'telehealth' | 'phone';
-  status?: Appointment['status'];
+  appointment_type?: string;
+  status?: string;
   notes?: string;
+  patient_name?: string | null;
+  provider_name?: string | null;
 };
 
 type BackendPrescription = {
@@ -159,20 +162,37 @@ type BackendImagingScan = {
   ordered_by: number;
 };
 
+const mapBackendStatus = (raw?: string): Appointment['status'] => {
+  const s = (raw || 'scheduled').toLowerCase().replace(/_/g, '-');
+  if (s === 'in-progress') return 'in-progress';
+  if (s === 'confirmed') return 'confirmed-by-doctor';
+  if (s === 'rescheduled') return 'rescheduled';
+  if (s === 'completed') return 'completed';
+  if (s === 'cancelled') return 'cancelled';
+  if (s === 'scheduled') return 'scheduled';
+  return 'scheduled';
+};
+
 // Helper to convert backend appointment to frontend format
-const mapBackendAppointment = (apt: BackendAppointment): Appointment => ({
-  id: String(apt.id),
-  patientId: String(apt.patient_id),
-  patientName: `Patient #${apt.patient_id}`,
-  doctorId: String(apt.provider_id),
-  doctorName: `Provider #${apt.provider_id}`,
-  date: new Date(apt.scheduled_time).toISOString().slice(0, 10),
-  time: new Date(apt.scheduled_time).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
-  type: apt.appointment_type === 'telehealth' ? 'Telehealth' : 'In-Person',
-  appointmentMode: apt.appointment_type === 'telehealth' ? 'telemedicine' : 'in-person',
-  status: (apt.status || 'scheduled') as Appointment['status'],
-  notes: apt.notes || apt.title,
-});
+const mapBackendAppointment = (apt: BackendAppointment): Appointment => {
+  const at = (apt.appointment_type || 'telehealth').toLowerCase();
+  const tele = at === 'telehealth' || at === 'phone';
+  const st = new Date(apt.scheduled_time);
+  return {
+    id: String(apt.id),
+    patientId: String(apt.patient_id),
+    patientName: apt.patient_name?.trim() || `Patient #${apt.patient_id}`,
+    doctorId: String(apt.provider_id),
+    doctorName: apt.provider_name?.trim() || `Provider #${apt.provider_id}`,
+    date: st.toISOString().slice(0, 10),
+    time: st.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+    type: apt.title || (tele ? 'Telehealth' : 'In-Person'),
+    appointmentMode: tele ? 'telemedicine' : 'in-person',
+    status: mapBackendStatus(apt.status),
+    notes: apt.notes || apt.description || apt.title,
+    doctorConfirmed: mapBackendStatus(apt.status) === 'confirmed-by-doctor',
+  };
+};
 
 // Helper to convert backend prescription to frontend format
 const mapBackendPrescription = (presc: BackendPrescription): Prescription => ({
@@ -301,6 +321,10 @@ export const AppDataProvider: React.FC<{ children: React.ReactNode }> = ({ child
     }
   }, [storageKey]);
 
+  const refreshAppData = useCallback(async () => {
+    await loadAPIData(true);
+  }, [loadAPIData]);
+
   // Initial load and polling
   useEffect(() => {
     loadAPIData();
@@ -359,40 +383,45 @@ export const AppDataProvider: React.FC<{ children: React.ReactNode }> = ({ child
       ...current,
       appointments: current.appointments.map((appointment) => appointment.id === id ? update(appointment) : appointment),
     })),
-    cancelAppointment: (id, reason, cancelledBy) => updateData((current) => ({
-      ...current,
-      appointments: current.appointments.map((appointment) =>
-        appointment.id === id
-          ? {
-              ...appointment,
-              status: 'cancelled' as const,
-              cancellationReason: reason,
-              cancelledBy,
-              cancellationTime: new Date().toISOString(),
-            }
-          : appointment,
-      ),
-    })),
-    confirmAppointment: (id) => updateData((current) => ({
-      ...current,
-      appointments: current.appointments.map((appointment) =>
-        appointment.id === id
-          ? { ...appointment, status: 'confirmed-by-doctor' as const, doctorConfirmed: true, doctorConfirmationTime: new Date().toISOString() }
-          : appointment,
-      ),
-    })),
-    rescheduleAppointment: (id, newDate, newTime) => updateData((current) => {
-      const originalAppointment = current.appointments.find((apt) => apt.id === id);
-      if (!originalAppointment) return current;
-      return {
-        ...current,
-        appointments: [
-          ...current.appointments.map((appointment) =>
-            appointment.id === id ? { ...appointment, status: 'rescheduled' as const, date: newDate, time: newTime } : appointment,
-          ),
-        ],
-      };
-    }),
+    cancelAppointment: (id, reason, cancelledBy) => {
+      void (async () => {
+        try {
+          await appointmentsApi.updateAppointment(id, {
+            status: 'cancelled',
+            cancellation_reason: reason,
+          });
+          await loadAPIData(true);
+        } catch (error) {
+          console.error('cancelAppointment failed:', error);
+        }
+      })();
+      void cancelledBy;
+    },
+    confirmAppointment: (id) => {
+      void (async () => {
+        try {
+          await appointmentsApi.updateAppointment(id, { status: 'confirmed' });
+          await loadAPIData(true);
+        } catch (error) {
+          console.error('confirmAppointment failed:', error);
+        }
+      })();
+    },
+    rescheduleAppointment: (id, newDate, newTime) => {
+      void (async () => {
+        try {
+          const scheduled_time = buildScheduledIso(newDate, newTime);
+          await appointmentsApi.updateAppointment(id, {
+            scheduled_time,
+            status: 'rescheduled',
+          });
+          await loadAPIData(true);
+        } catch (error) {
+          console.error('rescheduleAppointment failed:', error);
+        }
+      })();
+    },
+    refreshAppData,
     
     addPrescription: (prescription) => updateData((current) => ({ ...current, prescriptions: [prescription, ...current.prescriptions] })),
     updatePrescription: (id, update) => updateData((current) => ({
@@ -644,7 +673,7 @@ export const AppDataProvider: React.FC<{ children: React.ReactNode }> = ({ child
         reminder.id === reminderId ? { ...reminder, status } : reminder,
       ),
     })),
-  }), [data, updateData]);
+  }), [data, updateData, loadAPIData, refreshAppData]);
 
   return (
     <AppDataContext.Provider value={contextValue}>

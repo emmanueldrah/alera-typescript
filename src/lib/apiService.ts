@@ -172,46 +172,50 @@ export const usersApi = {
 // ============================================================================
 
 export const appointmentsApi = {
+  /** Matches FastAPI `AppointmentCreate` (patient is always the authenticated user). */
   createAppointment: async (appointmentData: {
-    patient_id: string;
-    provider_id: string;
-    appointment_date: string;
-    appointment_time: string;
-    appointment_type: 'in-person' | 'telehealth';
-    reason_for_visit: string;
+    provider_id: number;
+    title: string;
+    description?: string;
+    appointment_type: 'in_person' | 'telehealth' | 'phone';
+    scheduled_time: string;
+    duration_minutes?: number;
+    location?: string;
+    notes?: string;
   }) => {
-    const response = await apiClient.post('/appointments', appointmentData);
+    const response = await apiClient.post('/appointments/', appointmentData);
     return response.data;
   },
 
-  listAppointments: async (skip: number = 0, limit: number = 20) => {
-    const response = await apiClient.get('/appointments', { params: { skip, limit } });
+  listAppointments: async (skip: number = 0, limit: number = 100) => {
+    const response = await apiClient.get('/appointments/', { params: { skip, limit } });
     return response.data;
   },
 
-  getAppointment: async (appointmentId: string) => {
+  getAppointment: async (appointmentId: string | number) => {
     const response = await apiClient.get(`/appointments/${appointmentId}`);
     return response.data;
   },
 
   updateAppointment: async (
-    appointmentId: string,
+    appointmentId: string | number,
     updateData: {
-      appointment_date?: string;
-      appointment_time?: string;
-      appointment_type?: 'in-person' | 'telehealth';
-      reason_for_visit?: string;
-      status?: 'scheduled' | 'completed' | 'cancelled' | 'no-show';
-    }
+      title?: string;
+      description?: string;
+      scheduled_time?: string;
+      duration_minutes?: number;
+      location?: string;
+      notes?: string;
+      status?: string;
+      cancellation_reason?: string;
+    },
   ) => {
     const response = await apiClient.put(`/appointments/${appointmentId}`, updateData);
     return response.data;
   },
 
-  cancelAppointment: async (appointmentId: string, reason: string) => {
-    const response = await apiClient.post(`/appointments/${appointmentId}/cancel`, {
-      cancellation_reason: reason,
-    });
+  deleteAppointment: async (appointmentId: string | number) => {
+    const response = await apiClient.delete(`/appointments/${appointmentId}`);
     return response.data;
   },
 };

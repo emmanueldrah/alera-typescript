@@ -5,10 +5,12 @@ import { useSearchParams } from 'react-router-dom';
 import { useAuth } from '@/contexts/useAuth';
 import { useAppData } from '@/contexts/useAppData';
 import { useNotifications } from '@/contexts/useNotifications';
-import { type Appointment, type Doctor } from '@/data/mockData';
+import { type Doctor } from '@/data/mockData';
 import { api, type ApiUser } from '@/lib/apiService';
+import { handleApiError } from '@/lib/errorHandler';
+import { normalizeUserRole } from '@/lib/roleUtils';
 import { getBookableDoctors } from '@/lib/providerDirectory';
-import { getAvailableAppointmentSlots, getVisibleAppointments } from '@/lib/appointmentUtils';
+import { buildScheduledIso, getAvailableAppointmentSlots, getVisibleAppointments } from '@/lib/appointmentUtils';
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
 import { Textarea } from '@/components/ui/textarea';
@@ -16,7 +18,7 @@ import type { User as AuthUser } from '@/contexts/AuthContext';
 
 const AppointmentsPage = () => {
   const { user } = useAuth();
-  const { appointments, addAppointment, cancelAppointment, confirmAppointment, rescheduleAppointment } = useAppData();
+  const { appointments, cancelAppointment, confirmAppointment, rescheduleAppointment, refreshAppData } = useAppData();
   const { addNotification } = useNotifications();
   const [searchParams] = useSearchParams();
   const [showForm, setShowForm] = useState(false);
@@ -30,6 +32,9 @@ const AppointmentsPage = () => {
   const [rescheduleDialogOpen, setRescheduleDialogOpen] = useState<string | null>(null);
   const [rescheduleData, setRescheduleData] = useState({ date: '', time: '' });
   const [cancellationReason, setCancellationReason] = useState('');
+  const [bookingLoading, setBookingLoading] = useState(false);
+  const [bookingError, setBookingError] = useState<string | null>(null);
+  const effectiveRole = normalizeUserRole(user?.role) ?? user?.role;
   const focusId = searchParams.get('focus');
   const selectedDoctorId = searchParams.get('doctor');
   const visibleAppointments = useMemo(() => getVisibleAppointments(appointments, user), [appointments, user]);
@@ -108,42 +113,47 @@ const AppointmentsPage = () => {
     setFormData((current) => ({ ...current, doctorId: doctor.id }));
   };
 
-  const handleBook = () => {
-    if (!selectedDoctor || !formData.date || !formData.time || !formData.type || user?.role !== 'patient') return;
+  const handleBook = async () => {
+    if (!selectedDoctor || !formData.date || !formData.time || !formData.type || effectiveRole !== 'patient') return;
     const doctorEmail = doctorUsers.find((account) => account.id === selectedDoctor.id)?.email;
 
-    const newAppointment: Appointment = {
-      id: `apt-${Date.now()}`,
-      patientName: user?.name || 'Patient',
-      patientId: user?.id || '',
-      doctorName: selectedDoctor.name,
-      doctorId: selectedDoctor.id,
-      date: formData.date,
-      time: formData.time,
-      status: 'scheduled',
-      type: formData.type,
-      appointmentMode: formData.appointmentMode,
-    };
-
-    addAppointment(newAppointment);
-    addNotification({
-      title: 'Appointment Booked',
-      message: `Your ${formData.type} appointment with ${selectedDoctor.name} is confirmed for ${formData.date} at ${formData.time} via ${formData.appointmentMode}.`,
-      type: 'appointment',
-      priority: 'medium',
-      audience: 'personal',
-      actionUrl: `/dashboard/appointments?focus=${newAppointment.id}`,
-      actionLabel: 'Open appointment',
-      targetEmails: [user?.email, doctorEmail].filter((value): value is string => Boolean(value)),
-      excludeEmails: user?.email ? [user.email] : [],
-      actionUrlByRole: {
-        patient: `/dashboard/appointments?focus=${newAppointment.id}`,
-        doctor: `/dashboard/appointments?focus=${newAppointment.id}`,
-      },
-    });
-    setShowForm(false);
-    setSelectedDoctor(null);
-    setFormData({ doctorId: '', date: '', time: '', type: '', appointmentMode: 'telemedicine' });
+    setBookingLoading(true);
+    setBookingError(null);
+    try {
+      const appointment_type = formData.appointmentMode === 'in-person' ? 'in_person' : 'telehealth';
+      const scheduled_time = buildScheduledIso(formData.date, formData.time);
+      const created = (await api.appointments.createAppointment({
+        provider_id: Number(selectedDoctor.id),
+        title: formData.type,
+        appointment_type,
+        scheduled_time,
+        duration_minutes: 30,
+      })) as { id?: number | string };
+      const newId = String(created.id ?? '');
+      await refreshAppData();
+      addNotification({
+        title: 'Appointment Booked',
+        message: `Your ${formData.type} appointment with ${selectedDoctor.name} is confirmed for ${formData.date} at ${formData.time} via ${formData.appointmentMode}.`,
+        type: 'appointment',
+        priority: 'medium',
+        audience: 'personal',
+        actionUrl: `/dashboard/appointments?focus=${newId}`,
+        actionLabel: 'Open appointment',
+        targetEmails: [user?.email, doctorEmail].filter((value): value is string => Boolean(value)),
+        excludeEmails: user?.email ? [user.email] : [],
+        actionUrlByRole: {
+          patient: `/dashboard/appointments?focus=${newId}`,
+          doctor: `/dashboard/appointments?focus=${newId}`,
+        },
+      });
+      setShowForm(false);
+      setSelectedDoctor(null);
+      setFormData({ doctorId: '', date: '', time: '', type: '', appointmentMode: 'telemedicine' });
+    } catch (err) {
+      setBookingError(handleApiError(err));
+    } finally {
+      setBookingLoading(false);
+    }
   };
 
   const availableSlots = selectedDoctor && formData.date
@@ -157,7 +167,7 @@ const AppointmentsPage = () => {
           <h1 className="text-2xl font-display font-bold text-foreground">Appointments</h1>
           <p className="text-muted-foreground mt-1">Book and manage your medical consultations</p>
         </div>
-        {user?.role === 'patient' && (
+        {effectiveRole === 'patient' && (
           <button onClick={() => setShowForm(true)} className="flex items-center gap-2 px-4 py-2.5 rounded-xl bg-gradient-primary text-primary-foreground text-sm font-semibold hover:opacity-90 transition">
             <Plus className="w-4 h-4" /> Book Appointment
           </button>
@@ -295,12 +305,17 @@ const AppointmentsPage = () => {
                 </div>
               </div>
 
+              {bookingError && (
+                <div className="mt-3 text-sm text-destructive bg-destructive/10 border border-destructive/20 rounded-xl p-3">{bookingError}</div>
+              )}
+
               <button
-                onClick={handleBook}
-                disabled={!formData.type || !formData.date || !formData.time}
+                type="button"
+                onClick={() => void handleBook()}
+                disabled={bookingLoading || !formData.type || !formData.date || !formData.time}
                 className="w-full mt-4 px-6 py-2.5 rounded-xl bg-gradient-primary text-primary-foreground text-sm font-semibold hover:opacity-90 transition disabled:opacity-50 disabled:cursor-not-allowed"
               >
-                Confirm Booking
+                {bookingLoading ? 'Booking…' : 'Confirm Booking'}
               </button>
             </div>
           )}
@@ -348,7 +363,7 @@ const AppointmentsPage = () => {
                   </div>
                   <div className="flex-1">
                     <div className="text-base font-medium text-card-foreground">{appointment.type}</div>
-                    <div className="text-sm text-muted-foreground">{user?.role === 'doctor' ? appointment.patientName : appointment.doctorName}</div>
+                    <div className="text-sm text-muted-foreground">{effectiveRole === 'doctor' ? appointment.patientName : appointment.doctorName}</div>
                     <div className="flex items-center gap-4 text-xs text-muted-foreground mt-2 flex-wrap">
                       <div className="flex items-center gap-1">
                         <Clock className="w-3 h-3" /> {appointment.date} at {appointment.time}
@@ -392,7 +407,7 @@ const AppointmentsPage = () => {
               {/* Action buttons */}
               {appointment.status !== 'completed' && appointment.status !== 'cancelled' && (
                 <div className="mt-4 flex flex-wrap gap-2">
-                  {user?.role === 'doctor' && appointment.status === 'scheduled' && (
+                  {effectiveRole === 'doctor' && appointment.status === 'scheduled' && (
                     <Button
                       onClick={() => confirmAppointment(appointment.id)}
                       className="h-8 text-xs gap-1"
@@ -402,7 +417,7 @@ const AppointmentsPage = () => {
                       <Check className="w-3 h-3" /> Confirm
                     </Button>
                   )}
-                  {user?.role === 'patient' && (
+                  {effectiveRole === 'patient' && (
                     <Dialog open={rescheduleDialogOpen === appointment.id} onOpenChange={(open) => setRescheduleDialogOpen(open ? appointment.id : null)}>
                       <DialogTrigger asChild>
                         <Button
@@ -498,7 +513,7 @@ const AppointmentsPage = () => {
                           variant="destructive"
                           size="sm"
                           onClick={() => {
-                            cancelAppointment(appointment.id, cancellationReason || 'No reason provided', user?.role === 'patient' ? 'patient' : 'doctor');
+                            cancelAppointment(appointment.id, cancellationReason || 'No reason provided', effectiveRole === 'patient' ? 'patient' : 'doctor');
                             addNotification({
                               title: 'Appointment Cancelled',
                               message: `Your appointment on ${appointment.date} has been cancelled.`,

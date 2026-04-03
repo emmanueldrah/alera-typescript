@@ -31,6 +31,8 @@ export interface AppDataContextType {
   cancelAppointment: (id: string, reason: string, cancelledBy: 'patient' | 'doctor' | 'admin') => void;
   confirmAppointment: (id: string) => void;
   rescheduleAppointment: (id: string, newDate: string, newTime: string) => void;
+  /** Re-fetch appointments, prescriptions, allergies, labs, and imaging from the API (silent refresh). */
+  refreshAppData: () => Promise<void>;
   
   addPrescription: (prescription: Prescription) => void;
   updatePrescription: (id: string, update: (prescription: Prescription) => Prescription) => void;

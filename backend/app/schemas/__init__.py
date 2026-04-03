@@ -119,6 +119,7 @@ class AppointmentUpdate(BaseModel):
     location: Optional[str] = None
     notes: Optional[str] = None
     status: Optional[str] = None
+    cancellation_reason: Optional[str] = None
 
 
 class AppointmentResponse(AppointmentBase):
@@ -128,7 +129,9 @@ class AppointmentResponse(AppointmentBase):
     status: str
     created_at: datetime
     updated_at: datetime
-    
+    patient_name: Optional[str] = None
+    provider_name: Optional[str] = None
+
     class Config:
         from_attributes = True
 

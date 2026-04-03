@@ -1,14 +1,25 @@
 import type { User } from '@/contexts/AuthContext';
 import type { Appointment, Doctor } from '@/data/mockData';
+import { normalizeUserRole } from '@/lib/roleUtils';
 
 const ONE_HOUR_MS = 60 * 60 * 1000;
 const ONE_DAY_MS = 24 * ONE_HOUR_MS;
 
 export const parseAppointmentDateTime = (date: string, time: string) => new Date(`${date}T${time}:00`);
 
+/** Build ISO UTC string from local date (yyyy-mm-dd) and time (HH:mm). */
+export const buildScheduledIso = (dateStr: string, timeStr: string): string => {
+  const [y, m, d] = dateStr.split('-').map(Number);
+  const [hh, mmRaw] = timeStr.split(':');
+  const mm = mmRaw ?? '0';
+  const dt = new Date(y, (m || 1) - 1, d || 1, Number(hh) || 0, Number(mm) || 0, 0, 0);
+  return dt.toISOString();
+};
+
 export const getVisibleAppointments = (appointments: Appointment[], user?: Pick<User, 'id' | 'role'> | null) => {
   if (!user) return [];
-  if (user.role === 'doctor') {
+  const role = normalizeUserRole(user.role) ?? user.role;
+  if (role === 'doctor') {
     return appointments.filter((appointment) => appointment.doctorId === user.id);
   }
   return appointments.filter((appointment) => appointment.patientId === user.id);
