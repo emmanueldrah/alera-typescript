@@ -87,7 +87,7 @@ def receive_connect(dbapi_connection, connection_record):
 
 
 def init_db():
-    """Initialize database - create all tables"""
+    """Initialize database - create all tables and seed default admin"""
     try:
         Base.metadata.create_all(bind=engine)
         print("✓ Database tables initialized successfully")
@@ -95,7 +95,48 @@ def init_db():
         print(f"ERROR: Failed to initialize database tables: {e}")
         raise
 
+    # Seed default admin account on every startup (idempotent)
+    try:
+        _seed_admin()
+    except Exception as e:
+        print(f"WARNING: Failed to seed admin user: {e}")
+
+
+def _seed_admin():
+    """Create the default admin user if one doesn't exist yet."""
+    from app.models.user import User, UserRole
+    from app.utils.auth import hash_password
+
+    db = SessionLocal()
+    try:
+        admin_email = os.environ.get("ADMIN_EMAIL", "admin@alera.health")
+        admin_password = os.environ.get("ADMIN_PASSWORD", "admin_alera_2026!")
+
+        existing = db.query(User).filter(User.email == admin_email).first()
+        if existing:
+            return  # Already seeded
+
+        admin = User(
+            email=admin_email,
+            username="admin",
+            hashed_password=hash_password(admin_password),
+            first_name="Alera",
+            last_name="Admin",
+            role=UserRole.ADMIN,
+            is_active=True,
+            is_verified=True,
+        )
+        db.add(admin)
+        db.commit()
+        print(f"✓ Default admin seeded: {admin_email}")
+    except Exception as e:
+        db.rollback()
+        print(f"WARNING: Could not seed admin: {e}")
+    finally:
+        db.close()
+
 
 # Keep both import styles pointing at the same module.
 sys.modules.setdefault("database", sys.modules[__name__])
 sys.modules.setdefault("backend.database", sys.modules[__name__])
+

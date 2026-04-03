@@ -10,6 +10,7 @@ import AmbulanceDashboard from '@/pages/dashboards/AmbulanceDashboard';
 import AdminDashboard from '@/pages/dashboards/AdminDashboard';
 
 const dashboardMap: Record<string, React.ComponentType> = {
+  // Frontend role labels
   patient: PatientDashboard,
   doctor: DoctorDashboard,
   hospital: HospitalDashboard,
@@ -18,6 +19,9 @@ const dashboardMap: Record<string, React.ComponentType> = {
   pharmacy: PharmacyDashboard,
   ambulance: AmbulanceDashboard,
   admin: AdminDashboard,
+  // Backend enum values (may differ from frontend labels)
+  provider: DoctorDashboard,    // backend stores doctors as 'provider'
+  pharmacist: PharmacyDashboard, // backend stores pharmacists as 'pharmacist'
 };
 
 const DashboardHome = () => {
