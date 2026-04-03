@@ -1,4 +1,5 @@
 import type { UserRole } from '@/contexts/AuthContext';
+import { normalizeUserRole } from '@/lib/roleUtils';
 
 export const featureAccessMap: Record<string, UserRole[]> = {
   appointments: ['patient', 'doctor'],
@@ -40,5 +41,7 @@ export const featureAccessMap: Record<string, UserRole[]> = {
   'admin-billing': ['admin'],
 };
 
-export const canAccessFeature = (page: string, role?: UserRole) =>
-  Boolean(role && featureAccessMap[page]?.includes(role));
+export const canAccessFeature = (page: string, role?: UserRole | string) => {
+  const normalized = normalizeUserRole(role);
+  return Boolean(normalized && featureAccessMap[page]?.includes(normalized));
+};

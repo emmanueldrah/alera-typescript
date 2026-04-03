@@ -4,6 +4,7 @@ import { useAuth } from '@/contexts/useAuth';
 import { useNotifications } from '@/contexts/useNotifications';
 import NotificationCenter from '@/components/NotificationCenter';
 import ChatWidget from '@/components/ChatWidget';
+import { normalizeUserRole } from '@/lib/roleUtils';
 import {
   Heart, LayoutDashboard, Calendar, FileText, FlaskConical, ScanLine,
   Pill, Ambulance, Users, Building2, ShieldCheck, Activity, Bell,
@@ -95,7 +96,8 @@ const DashboardLayout = ({ children }: DashboardLayoutProps) => {
 
   if (!user) return null;
 
-  const navItems = roleNavItems[user.role] || [];
+  const roleKey = normalizeUserRole(user.role) ?? user.role;
+  const navItems = roleNavItems[roleKey] || [];
   const handleSignOut = () => {
     logout();
     navigate('/login', { replace: true });
@@ -121,11 +123,11 @@ const DashboardLayout = ({ children }: DashboardLayoutProps) => {
           <div className="px-4 mb-4">
             <div className="flex items-center gap-3 p-3 rounded-xl bg-sidebar-accent">
               <div className="w-9 h-9 rounded-lg bg-sidebar-primary/20 flex items-center justify-center text-sidebar-primary">
-                {roleIcons[user.role]}
+                {roleIcons[roleKey]}
               </div>
               <div className="min-w-0">
                 <div className="text-sm font-medium text-sidebar-foreground truncate">{user.name}</div>
-                <div className="text-xs text-sidebar-muted">{roleLabels[user.role]}</div>
+                <div className="text-xs text-sidebar-muted">{roleLabels[roleKey]}</div>
               </div>
             </div>
           </div>

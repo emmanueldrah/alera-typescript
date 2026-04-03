@@ -1,5 +1,6 @@
 import type { User } from '@/contexts/AuthContext';
 import type { Referral } from '@/data/mockData';
+import { normalizeUserRole } from '@/lib/roleUtils';
 
 export const DEFAULT_REFERRAL_DEPARTMENTS = [
   'Cardiology',
@@ -12,10 +13,11 @@ export const DEFAULT_REFERRAL_DEPARTMENTS = [
 
 export const getVisibleReferrals = (referrals: Referral[], user?: Pick<User, 'id' | 'role'> | null) => {
   if (!user) return [];
-  if (user.role === 'doctor') {
+  const role = normalizeUserRole(user.role) ?? user.role;
+  if (role === 'doctor') {
     return referrals.filter((referral) => referral.fromDoctorId === user.id);
   }
-  if (user.role === 'hospital') {
+  if (role === 'hospital') {
     return referrals;
   }
   return [];
@@ -34,11 +36,17 @@ export const getReferralDepartments = (referrals: Referral[]) => {
 export const getReferralDepartmentId = (department: string) =>
   department.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/(^-|-$)/g, '');
 
-export const canAcceptReferral = (referral: Referral, role?: User['role']) =>
-  role === 'hospital' && referral.status === 'pending';
+export const canAcceptReferral = (referral: Referral, role?: User['role'] | string) => {
+  const normalized = normalizeUserRole(role) ?? role;
+  return normalized === 'hospital' && referral.status === 'pending';
+};
 
-export const canCompleteReferral = (referral: Referral, role?: User['role']) =>
-  role === 'hospital' && referral.status === 'accepted';
+export const canCompleteReferral = (referral: Referral, role?: User['role'] | string) => {
+  const normalized = normalizeUserRole(role) ?? role;
+  return normalized === 'hospital' && referral.status === 'accepted';
+};
 
-export const canCancelReferral = (referral: Referral, role?: User['role']) =>
-  role === 'doctor' && referral.status === 'pending';
+export const canCancelReferral = (referral: Referral, role?: User['role'] | string) => {
+  const normalized = normalizeUserRole(role) ?? role;
+  return normalized === 'doctor' && referral.status === 'pending';
+};

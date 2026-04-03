@@ -8,6 +8,7 @@ import { Button } from '@/components/ui/button';
 import { Referral } from '@/data/mockData';
 import { getDoctorPatients } from '@/lib/patientDirectory';
 import { canAcceptReferral, canCancelReferral, canCompleteReferral, getReferralDepartmentId, getReferralDepartments, getVisibleReferrals } from '@/lib/referralUtils';
+import { normalizeUserRole } from '@/lib/roleUtils';
 
 const ReferralsPage = () => {
   const { user, getUsers } = useAuth();
@@ -18,7 +19,11 @@ const ReferralsPage = () => {
   const [formData, setFormData] = useState({ patientId: '', toDepartment: '', reason: '', notes: '' });
 
   const userReferrals = useMemo(() => getVisibleReferrals(referrals, user), [referrals, user]);
-  const patientOptions = useMemo(() => getDoctorPatients(getUsers(), appointments, user?.role === 'doctor' ? user.id : undefined), [appointments, getUsers, user]);
+  const effectiveRole = normalizeUserRole(user?.role) ?? user?.role;
+  const patientOptions = useMemo(
+    () => getDoctorPatients(getUsers(), appointments, effectiveRole === 'doctor' ? user?.id : undefined),
+    [appointments, getUsers, user, effectiveRole],
+  );
   const departmentOptions = useMemo(() => getReferralDepartments(referrals), [referrals]);
 
   const filtered = useMemo(() => {
@@ -99,7 +104,7 @@ const ReferralsPage = () => {
   };
 
   const handleCreateReferral = () => {
-    if (user?.role !== 'doctor' || !formData.patientId || !formData.toDepartment || !formData.reason.trim()) return;
+    if (effectiveRole !== 'doctor' || !formData.patientId || !formData.toDepartment || !formData.reason.trim()) return;
 
     const patient = patientOptions.find((option) => option.id === formData.patientId);
     if (!patient) return;
@@ -156,10 +161,10 @@ const ReferralsPage = () => {
         <div>
           <h1 className="text-2xl font-display font-bold text-foreground">Referrals</h1>
           <p className="text-muted-foreground mt-1">
-            {user?.role === 'doctor' ? 'Manage referrals sent to specialists' : 'Review and manage incoming referrals'}
+        {effectiveRole === 'doctor' ? 'Manage referrals sent to specialists' : 'Review and manage incoming referrals'}
           </p>
         </div>
-        {user?.role === 'doctor' && (
+        {effectiveRole === 'doctor' && (
           <Button className="gap-2" onClick={() => setShowForm(true)}>
             <Plus className="w-4 h-4" />
             New Referral
@@ -167,7 +172,7 @@ const ReferralsPage = () => {
         )}
       </div>
 
-      {showForm && user?.role === 'doctor' && (
+      {showForm && effectiveRole === 'doctor' && (
         <motion.div initial={{ opacity: 0, y: -10 }} animate={{ opacity: 1, y: 0 }} className="bg-card rounded-2xl border border-border p-6 space-y-4">
           <div className="flex items-center justify-between">
             <h2 className="text-lg font-display font-semibold text-card-foreground">Create Referral</h2>
