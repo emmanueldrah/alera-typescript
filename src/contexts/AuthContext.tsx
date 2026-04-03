@@ -41,13 +41,31 @@ const isApiUser = (data: unknown): data is ApiUser => {
 
 // Map backend user roles to frontend format if needed
 const mapBackendUser = (data: ApiUser): User => {
+  const mapBackendRoleToUserRole = (role: ApiUser['role']): UserRole => {
+    // Frontend only supports a reduced set of roles; map the rest into the closest matches.
+    switch (role) {
+      case 'patient':
+      case 'provider':
+      case 'pharmacist':
+      case 'admin':
+        return role;
+      case 'hospital':
+      case 'laboratory':
+      case 'imaging':
+      case 'ambulance':
+        return 'provider';
+      default:
+        return 'patient';
+    }
+  };
+
   const fullName = data.full_name?.trim() || [data.first_name, data.last_name].filter(Boolean).join(' ').trim();
   const [firstName = '', ...lastNameParts] = fullName.split(' ');
   return {
     id: String(data.id),
     email: data.email,
     name: fullName || data.email,
-    role: data.role as UserRole,
+    role: mapBackendRoleToUserRole(data.role),
     avatar: data.avatar || data.profile_image_url,
     createdAt: data.created_at,
     lastLogin: data.last_login,
@@ -75,12 +93,17 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
   // Initialize auth state from stored token
   useEffect(() => {
+    let isMounted = true;
+
     const initializeAuth = async () => {
       try {
         const token = getAccessToken();
         if (token) {
           // Try to fetch current user
           const userData = await authApi.getCurrentUser();
+          // If a signup/login happened while this request was in flight,
+          // ignore the stale initialization result so it can't overwrite state.
+          if (!isMounted || getAccessToken() !== token) return;
           if (isApiUser(userData)) {
             setUser(mapBackendUser(userData));
           } else {
@@ -88,14 +111,20 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
           }
         }
       } catch (error) {
+        // Avoid clearing tokens based on a stale initialization request.
+        const token = getAccessToken();
+        if (!isMounted || !token) return;
         console.error('Failed to initialize auth:', error);
         clearTokens();
       } finally {
-        setIsLoading(false);
+        if (isMounted) setIsLoading(false);
       }
     };
 
     initializeAuth();
+    return () => {
+      isMounted = false;
+    };
   }, []);
 
   const login = useCallback(async (email: string, password: string) => {
