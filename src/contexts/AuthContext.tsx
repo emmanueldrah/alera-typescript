@@ -241,8 +241,9 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     throw new Error('Use signup instead');
   }, []);
 
-  const getUsers = useCallback(async () => {
-    throw new Error('Use admin endpoints instead');
+  const getUsers = useCallback(() => {
+    console.warn('getUsers is deprecated. Use proper API endpoints.');
+    return [];
   }, []);
 
   // Get current user helper (for when needed)
