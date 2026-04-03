@@ -1,7 +1,7 @@
 from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.orm import Session
 from database import get_db
-from app.models.user import User
+from app.models.user import User, UserRole
 from app.schemas import UserResponse, UserUpdate
 from app.utils.dependencies import get_current_user
 
@@ -41,6 +41,19 @@ async def update_current_user(
     db.commit()
     db.refresh(current_user)
     return current_user
+
+
+@router.get("/doctors", response_model=list[UserResponse])
+async def list_doctors(
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    """
+    List registered doctors (backend stores doctors as `provider`).
+    Requires authentication but is not admin-only.
+    """
+    doctors = db.query(User).filter(User.role == UserRole.PROVIDER, User.is_active.is_(True)).all()
+    return doctors
 
 
 @router.get("/{user_id}", response_model=UserResponse)

@@ -6,20 +6,25 @@ import { useAuth } from '@/contexts/useAuth';
 import { useAppData } from '@/contexts/useAppData';
 import { useNotifications } from '@/contexts/useNotifications';
 import { type Appointment, type Doctor } from '@/data/mockData';
+import { api, type ApiUser } from '@/lib/apiService';
 import { getBookableDoctors } from '@/lib/providerDirectory';
 import { getAvailableAppointmentSlots, getVisibleAppointments } from '@/lib/appointmentUtils';
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
 import { Textarea } from '@/components/ui/textarea';
+import type { User as AuthUser } from '@/contexts/AuthContext';
 
 const AppointmentsPage = () => {
-  const { user, getUsers } = useAuth();
+  const { user } = useAuth();
   const { appointments, addAppointment, cancelAppointment, confirmAppointment, rescheduleAppointment } = useAppData();
   const { addNotification } = useNotifications();
   const [searchParams] = useSearchParams();
   const [showForm, setShowForm] = useState(false);
   const [filter, setFilter] = useState<string>('all');
   const [selectedDoctor, setSelectedDoctor] = useState<Doctor | null>(null);
+  const [doctorUsers, setDoctorUsers] = useState<AuthUser[]>([]);
+  const [isLoadingDoctors, setIsLoadingDoctors] = useState(false);
+  const [doctorsLoadError, setDoctorsLoadError] = useState<string | null>(null);
   const [formData, setFormData] = useState({ doctorId: '', date: '', time: '', type: '', appointmentMode: 'telemedicine' as const });
   const [cancelDialogOpen, setCancelDialogOpen] = useState<string | null>(null);
   const [rescheduleDialogOpen, setRescheduleDialogOpen] = useState<string | null>(null);
@@ -32,8 +37,61 @@ const AppointmentsPage = () => {
     () => (filter === 'all' ? visibleAppointments : visibleAppointments.filter((appointment) => appointment.status === filter)),
     [filter, visibleAppointments],
   );
-  const availableDoctors = useMemo(() => getBookableDoctors(getUsers()), [getUsers]);
-  const users = useMemo(() => getUsers(), [getUsers]);
+  const availableDoctors = useMemo(() => getBookableDoctors(doctorUsers, { allowMock: false }), [doctorUsers]);
+
+  const mapApiDoctorToAuthUser = (doc: ApiUser): AuthUser => {
+    const fullName = doc.full_name?.trim() || [doc.first_name, doc.last_name].filter(Boolean).join(' ').trim();
+    const [firstName = '', ...lastNameParts] = (fullName || doc.email).split(' ');
+
+    return {
+      id: String(doc.id),
+      email: doc.email,
+      name: fullName || doc.email,
+      role: 'doctor',
+      avatar: doc.avatar || doc.profile_image_url,
+      profile: {
+        firstName,
+        lastName: lastNameParts.join(' '),
+        phone: doc.phone,
+        address: doc.address,
+        city: doc.city,
+        state: doc.state,
+        zipCode: doc.zip_code,
+        dateOfBirth: doc.date_of_birth ? String(doc.date_of_birth) : undefined,
+        bio: doc.bio,
+        avatar: doc.avatar || doc.profile_image_url,
+        notificationEmail: true,
+        notificationSms: false,
+        privacyPublicProfile: false,
+      },
+    };
+  };
+
+  useEffect(() => {
+    let cancelled = false;
+
+    const loadDoctors = async () => {
+      setIsLoadingDoctors(true);
+      setDoctorsLoadError(null);
+      try {
+        const doctors = await api.users.getDoctors();
+        if (cancelled) return;
+        setDoctorUsers(doctors.map(mapApiDoctorToAuthUser));
+      } catch {
+        if (cancelled) return;
+        setDoctorUsers([]);
+        setDoctorsLoadError('Failed to load doctors.');
+      } finally {
+        if (cancelled) return;
+        setIsLoadingDoctors(false);
+      }
+    };
+
+    void loadDoctors();
+    return () => {
+      cancelled = true;
+    };
+  }, []);
 
   useEffect(() => {
     if (!selectedDoctorId || selectedDoctor) return;
@@ -52,7 +110,7 @@ const AppointmentsPage = () => {
 
   const handleBook = () => {
     if (!selectedDoctor || !formData.date || !formData.time || !formData.type || user?.role !== 'patient') return;
-    const doctorEmail = users.find((account) => account.id === selectedDoctor.id)?.email;
+    const doctorEmail = doctorUsers.find((account) => account.id === selectedDoctor.id)?.email;
 
     const newAppointment: Appointment = {
       id: `apt-${Date.now()}`,
@@ -116,7 +174,24 @@ const AppointmentsPage = () => {
           {!selectedDoctor ? (
             <div className="space-y-4">
               <p className="text-sm text-muted-foreground mb-4">Select a doctor to view their availability</p>
-              <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-4 max-h-96 overflow-y-auto">
+              {isLoadingDoctors ? (
+                <div className="flex flex-col items-center justify-center py-10 text-muted-foreground bg-card rounded-xl border border-border">
+                  <Inbox className="w-8 h-8 mb-2" />
+                  <p className="text-sm">Loading doctors...</p>
+                </div>
+              ) : doctorsLoadError ? (
+                <div className="flex flex-col items-center justify-center py-10 text-destructive bg-card rounded-xl border border-border">
+                  <Inbox className="w-8 h-8 mb-2" />
+                  <p className="text-sm">{doctorsLoadError}</p>
+                </div>
+              ) : availableDoctors.length === 0 ? (
+                <div className="flex flex-col items-center justify-center py-10 text-muted-foreground bg-card rounded-xl border border-border">
+                  <Inbox className="w-8 h-8 mb-2" />
+                  <p className="text-sm">No registered doctors available.</p>
+                  <p className="text-xs mt-1">Please try again later or contact support.</p>
+                </div>
+              ) : (
+                <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-4 max-h-96 overflow-y-auto">
                 {availableDoctors.map((doctor) => (
                   <motion.button
                     key={doctor.id}
@@ -136,7 +211,8 @@ const AppointmentsPage = () => {
                     <div className="text-sm font-semibold text-primary mt-2">${doctor.consultationFee}</div>
                   </motion.button>
                 ))}
-              </div>
+                </div>
+              )}
             </div>
           ) : (
             <div className="space-y-4">

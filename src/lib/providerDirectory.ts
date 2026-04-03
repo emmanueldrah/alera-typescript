@@ -9,11 +9,16 @@ const defaultAvailability: Doctor['availableHours'] = [
   { dayOfWeek: 'Friday', startTime: '09:00', endTime: '14:00' },
 ];
 
-export const getBookableDoctors = (users: User[]): Doctor[] => {
-  const registeredDoctors = users.filter((candidate) => candidate.role === 'doctor');
-  if (registeredDoctors.length === 0) {
-    return mockDoctors;
+export const getBookableDoctors = (
+  users: User[],
+  options?: {
+    allowMock?: boolean;
   }
+): Doctor[] => {
+  const registeredDoctors = users.filter((candidate) => candidate.role === 'doctor');
+  const allowMock = options?.allowMock ?? true;
+
+  if (registeredDoctors.length === 0) return allowMock ? mockDoctors : [];
 
   return registeredDoctors.map((doctor, index) => ({
     id: doctor.id,

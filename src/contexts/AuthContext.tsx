@@ -308,7 +308,10 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     return (
       <AuthContext.Provider value={{
         user,
-        isAuthenticated: !!user,
+        // During initialization `user` may still be null, but we can still consider
+        // the session authenticated if we have a token. This prevents ProtectedRoute
+        // from bouncing feature routes through /login.
+        isAuthenticated: Boolean(getAccessToken()),
         login,
         signup,
         logout,

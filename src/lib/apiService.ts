@@ -110,6 +110,11 @@ export const usersApi = {
     return response.data;
   },
 
+  getDoctors: async () => {
+    const response = await apiClient.get<ApiUser[]>('/users/doctors');
+    return response.data;
+  },
+
   updateProfile: async (userData: {
     first_name?: string;
     last_name?: string;
