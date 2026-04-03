@@ -260,11 +260,12 @@ export const AppDataProvider: React.FC<{ children: React.ReactNode }> = ({ child
   // Load data from API
   const loadAPIData = useCallback(async (isPolling = false) => {
     try {
+      const stored = safeParse(localStorage.getItem(STORAGE_KEY));
       const token = localStorage.getItem('access_token');
       if (!token) {
         if (!isPolling) {
           setIsLoadingAPI(false);
-          setData(safeParse(localStorage.getItem(STORAGE_KEY)));
+          setData(stored);
         }
         return;
       }
@@ -305,10 +306,10 @@ export const AppDataProvider: React.FC<{ children: React.ReactNode }> = ({ child
         labTests,
         imagingScans,
         // These remain mock for now
-        ambulances: mockAmbulances,
-        inventoryItems: mockInventoryItems,
-        referrals: mockReferrals,
-        providerVerifications: mockVerifications,
+        ambulances: stored.ambulances,
+        inventoryItems: stored.inventoryItems,
+        referrals: stored.referrals,
+        providerVerifications: stored.providerVerifications,
       }));
     } catch (error) {
       if (!isPolling) console.error('Failed to load API data:', error);

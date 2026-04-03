@@ -4,7 +4,15 @@ import { AuthContext } from './auth-context';
 import { authApi, type ApiUser } from '@/lib/apiService';
 import { setTokens, getAccessToken, clearTokens } from '@/lib/apiClient';
 
-export type UserRole = 'patient' | 'provider' | 'pharmacist' | 'admin';
+export type UserRole =
+  | 'patient'
+  | 'doctor'
+  | 'hospital'
+  | 'laboratory'
+  | 'imaging'
+  | 'pharmacy'
+  | 'ambulance'
+  | 'admin';
 
 export interface UserProfile {
   firstName: string;
@@ -33,29 +41,34 @@ export interface User {
   lastLogin?: string;
 }
 
-type SignupRole = UserRole | 'doctor' | 'hospital' | 'laboratory' | 'imaging' | 'pharmacy' | 'ambulance';
+type SignupRole = UserRole;
 
 const isApiUser = (data: unknown): data is ApiUser => {
   return typeof data === 'object' && data !== null && 'id' in data && 'email' in data;
 };
 
-// Map backend user roles to frontend format if needed
+type BackendRole = ApiUser['role'];
+
+// Map backend user roles to frontend format
 const mapBackendUser = (data: ApiUser): User => {
-  const mapBackendRoleToUserRole = (role: ApiUser['role'] | string): UserRole => {
-    // Frontend only supports a reduced set of roles; map the rest into the closest matches.
+  const mapBackendRoleToUserRole = (role: BackendRole | string): UserRole => {
     switch (role) {
       case 'patient':
+        return 'patient';
       case 'provider':
-      case 'admin':
-        return role;
+        return 'doctor';
       case 'pharmacist':
-      case 'pharmacy':
-        return 'pharmacist';
+        return 'pharmacy';
       case 'hospital':
+        return 'hospital';
       case 'laboratory':
+        return 'laboratory';
       case 'imaging':
+        return 'imaging';
       case 'ambulance':
-        return 'provider';
+        return 'ambulance';
+      case 'admin':
+        return 'admin';
       default:
         return 'patient';
     }
@@ -150,14 +163,15 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       const lastName = lastNameParts.join(' ') || 'User';
       
       // Map frontend roles to backend roles
-      const roleMap: Record<string, UserRole> = {
-        'patient': 'patient',
-        'doctor': 'provider',
-        'hospital': 'provider',
-        'laboratory': 'provider',
-        'imaging': 'provider',
-        'pharmacy': 'pharmacist',
-        'ambulance': 'provider'
+      const roleMap: Record<UserRole, BackendRole> = {
+        patient: 'patient',
+        doctor: 'provider',
+        hospital: 'hospital',
+        laboratory: 'laboratory',
+        imaging: 'imaging',
+        pharmacy: 'pharmacist',
+        ambulance: 'ambulance',
+        admin: 'admin'
       };
       const backendRole = roleMap[role] || 'patient';
       
