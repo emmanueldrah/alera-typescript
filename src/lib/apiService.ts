@@ -6,7 +6,7 @@ export interface ApiUser {
   full_name?: string;
   first_name?: string;
   last_name?: string;
-  role: 'patient' | 'provider' | 'pharmacist' | 'admin';
+  role: 'patient' | 'provider' | 'pharmacist' | 'admin' | 'hospital' | 'laboratory' | 'imaging' | 'ambulance';
   avatar?: string;
   profile_image_url?: string;
   created_at?: string;
@@ -44,7 +44,7 @@ export const authApi = {
     username: string;
     first_name: string;
     last_name: string;
-    role: 'patient' | 'provider' | 'pharmacist' | 'admin';
+    role: 'patient' | 'provider' | 'pharmacist' | 'admin' | 'hospital' | 'laboratory' | 'imaging' | 'ambulance';
     phone?: string;
   }) => {
     const response = await apiClient.post('/auth/register', userData);

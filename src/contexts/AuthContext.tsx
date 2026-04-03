@@ -259,22 +259,24 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   }, [user]);
 
   if (isLoading) {
+    // Don't mock auth methods during initialization; we still need signup/login to work
+    // (especially right after page load).
     return (
-      <AuthContext.Provider value={{ 
-        user: null, 
-        isAuthenticated: false, 
-        login: async () => {}, 
-        signup: async () => {}, 
-        logout: async () => {}, 
-        addUser: async (name, email, password, role) => { throw new Error('Loading'); }, 
-        getUsers: () => [], 
-        updateProfile: async () => {}, 
-        updateBasicInfo: async () => {}, 
-        changePassword: async () => {}, 
-        updateNotificationPreferences: async () => {}, 
-        updatePrivacySettings: async () => {}, 
-        deleteAccount: async () => {}, 
-        clearCache: () => {} 
+      <AuthContext.Provider value={{
+        user,
+        isAuthenticated: !!user,
+        login,
+        signup,
+        logout,
+        addUser,
+        getUsers,
+        updateProfile,
+        updateBasicInfo,
+        changePassword,
+        updateNotificationPreferences,
+        updatePrivacySettings,
+        deleteAccount,
+        clearCache
       }}>
         {children}
       </AuthContext.Provider>
