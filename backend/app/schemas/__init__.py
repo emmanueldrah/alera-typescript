@@ -9,6 +9,10 @@ class UserRole(str, Enum):
     PROVIDER = "provider"
     PHARMACIST = "pharmacist"
     ADMIN = "admin"
+    HOSPITAL = "hospital"
+    LABORATORY = "laboratory"
+    IMAGING = "imaging"
+    AMBULANCE = "ambulance"
 
 
 # User Schemas
@@ -301,6 +305,39 @@ class ImagingScanResponse(ImagingScanBase):
     ordered_at: datetime
     completed_at: Optional[datetime] = None
     created_at: datetime
+
+    class Config:
+        from_attributes = True
+
+
+# Ambulance Request Schemas
+class AmbulanceRequestBase(BaseModel):
+    location_name: str
+    address: Optional[str] = None
+    latitude: Optional[float] = None
+    longitude: Optional[float] = None
+    description: Optional[str] = None
+    priority: Optional[str] = "medium"
+
+
+class AmbulanceRequestCreate(AmbulanceRequestBase):
+    patient_id: Optional[int] = None
+
+
+class AmbulanceRequestUpdate(BaseModel):
+    status: Optional[str] = None
+    priority: Optional[str] = None
+    dispatched_at: Optional[datetime] = None
+    completed_at: Optional[datetime] = None
+
+
+class AmbulanceRequestResponse(AmbulanceRequestBase):
+    id: int
+    patient_id: Optional[int] = None
+    status: str
+    requested_at: datetime
+    dispatched_at: Optional[datetime] = None
+    completed_at: Optional[datetime] = None
 
     class Config:
         from_attributes = True

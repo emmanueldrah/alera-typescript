@@ -7,6 +7,7 @@ from .notification import Notification
 from .audit_log import AuditLog
 from .telemedicine import VideoCall, Message
 from .lab_imaging import LabTest, ImagingScan, LabTestStatus, ImagingScanStatus
+from .ambulance import AmbulanceRequest, AmbulanceRequestStatus, EmergencyPriority
 from .additional_features import (
     PatientDocument,
     PatientConsent,
@@ -30,6 +31,9 @@ __all__ = [
     "ImagingScan",
     "LabTestStatus",
     "ImagingScanStatus",
+    "AmbulanceRequest",
+    "AmbulanceRequestStatus",
+    "EmergencyPriority",
     "PatientDocument",
     "PatientConsent",
     "AppointmentReminder",
