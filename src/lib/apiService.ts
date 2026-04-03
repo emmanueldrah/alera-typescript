@@ -276,47 +276,53 @@ export const prescriptionsApi = {
 
 export const allergiesApi = {
   createAllergy: async (allergyData: {
-    patient_id: string;
-    allergen_name: string;
+    patient_id?: number;
+    allergen: string;
     allergen_type: string;
-    severity: 'mild' | 'moderate' | 'severe';
+    severity: string;
     reaction_description: string;
-    notes?: string;
+    onset_date?: string;
+    treatment?: string;
   }) => {
-    const response = await apiClient.post('/allergies', allergyData);
+    const response = await apiClient.post('/allergies/', allergyData);
     return response.data;
   },
 
-  listAllergies: async (skip: number = 0, limit: number = 20) => {
-    const response = await apiClient.get('/allergies', { params: { skip, limit } });
+  listAllergies: async (params?: { skip?: number; limit?: number; patient_id?: number }) => {
+    const response = await apiClient.get('/allergies/', {
+      params: {
+        skip: params?.skip ?? 0,
+        limit: params?.limit ?? 100,
+        patient_id: params?.patient_id,
+      },
+    });
     return response.data;
   },
 
-  getAllergy: async (allergyId: string) => {
+  getAllergy: async (allergyId: string | number) => {
     const response = await apiClient.get(`/allergies/${allergyId}`);
     return response.data;
   },
 
   updateAllergy: async (
-    allergyId: string,
+    allergyId: string | number,
     updateData: {
-      allergen_name?: string;
-      allergen_type?: string;
-      severity?: 'mild' | 'moderate' | 'severe';
+      allergen?: string;
       reaction_description?: string;
-      notes?: string;
-    }
+      severity?: string;
+      treatment?: string;
+    },
   ) => {
     const response = await apiClient.put(`/allergies/${allergyId}`, updateData);
     return response.data;
   },
 
-  deleteAllergy: async (allergyId: string) => {
+  deleteAllergy: async (allergyId: string | number) => {
     const response = await apiClient.delete(`/allergies/${allergyId}`);
     return response.data;
   },
 
-  getPatientAllergies: async (patientId: string) => {
+  getPatientAllergies: async (patientId: string | number) => {
     const response = await apiClient.get(`/allergies/patient/${patientId}`);
     return response.data;
   },
@@ -534,12 +540,12 @@ export const labTestsApi = {
     test_code?: string;
     description?: string;
   }) => {
-    const response = await apiClient.post('/lab-tests', testData);
+    const response = await apiClient.post('/lab-tests/', testData);
     return response.data;
   },
 
   listLabTests: async (skip: number = 0, limit: number = 100) => {
-    const response = await apiClient.get('/lab-tests', { params: { skip, limit } });
+    const response = await apiClient.get('/lab-tests/', { params: { skip, limit } });
     return response.data;
   },
 
@@ -548,7 +554,7 @@ export const labTestsApi = {
     return response.data;
   },
 
-  updateLabTest: async (id: string | number, updateData: any) => {
+  updateLabTest: async (id: string | number, updateData: Record<string, unknown>) => {
     const response = await apiClient.put(`/lab-tests/${id}`, updateData);
     return response.data;
   },
@@ -565,12 +571,12 @@ export const imagingApi = {
     body_part?: string;
     clinical_indication?: string;
   }) => {
-    const response = await apiClient.post('/imaging', scanData);
+    const response = await apiClient.post('/imaging/', scanData);
     return response.data;
   },
 
   listImagingScans: async (skip: number = 0, limit: number = 100) => {
-    const response = await apiClient.get('/imaging', { params: { skip, limit } });
+    const response = await apiClient.get('/imaging/', { params: { skip, limit } });
     return response.data;
   },
 
@@ -579,8 +585,31 @@ export const imagingApi = {
     return response.data;
   },
 
-  updateImagingScan: async (id: string | number, updateData: any) => {
+  updateImagingScan: async (id: string | number, updateData: Record<string, unknown>) => {
     const response = await apiClient.put(`/imaging/${id}`, updateData);
+    return response.data;
+  },
+};
+
+export const referralsApi = {
+  listReferrals: async (skip: number = 0, limit: number = 200) => {
+    const response = await apiClient.get('/referrals/', { params: { skip, limit } });
+    return response.data;
+  },
+
+  createReferral: async (body: {
+    patient_id: number;
+    to_department: string;
+    to_department_id?: string;
+    reason: string;
+    notes?: string;
+  }) => {
+    const response = await apiClient.post('/referrals/', body);
+    return response.data;
+  },
+
+  updateReferral: async (referralId: string | number, body: { status?: string; notes?: string }) => {
+    const response = await apiClient.put(`/referrals/${referralId}`, body);
     return response.data;
   },
 };
@@ -602,5 +631,6 @@ export const api = {
   admin: adminApi,
   labTests: labTestsApi,
   imaging: imagingApi,
+  referrals: referralsApi,
 };
 

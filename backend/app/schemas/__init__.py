@@ -193,7 +193,8 @@ class AllergyBase(BaseModel):
 
 
 class AllergyCreate(AllergyBase):
-    pass
+    """When set by a provider/admin, creates an allergy for that patient; patients omit this."""
+    patient_id: Optional[int] = None
 
 
 class AllergyUpdate(BaseModel):
@@ -208,7 +209,8 @@ class AllergyResponse(AllergyBase):
     patient_id: int
     confirmed: str
     created_at: datetime
-    
+    patient_name: Optional[str] = None
+
     class Config:
         from_attributes = True
 
@@ -245,7 +247,6 @@ class LabTestBase(BaseModel):
 
 class LabTestCreate(LabTestBase):
     patient_id: int
-    ordered_by: int
 
 
 class LabTestUpdate(BaseModel):
@@ -274,6 +275,8 @@ class LabTestResponse(LabTestBase):
     collected_at: Optional[datetime] = None
     completed_at: Optional[datetime] = None
     created_at: datetime
+    patient_name: Optional[str] = None
+    ordered_by_name: Optional[str] = None
 
     class Config:
         from_attributes = True
@@ -288,7 +291,6 @@ class ImagingScanBase(BaseModel):
 
 class ImagingScanCreate(ImagingScanBase):
     patient_id: int
-    ordered_by: int
 
 
 class ImagingScanUpdate(BaseModel):
@@ -315,6 +317,40 @@ class ImagingScanResponse(ImagingScanBase):
     ordered_at: datetime
     completed_at: Optional[datetime] = None
     created_at: datetime
+    patient_name: Optional[str] = None
+    ordered_by_name: Optional[str] = None
+
+    class Config:
+        from_attributes = True
+
+
+# Referral schemas
+class ReferralCreate(BaseModel):
+    patient_id: int
+    to_department: str
+    to_department_id: Optional[str] = None
+    reason: str
+    notes: Optional[str] = None
+
+
+class ReferralUpdate(BaseModel):
+    status: Optional[str] = None
+    notes: Optional[str] = None
+
+
+class ReferralResponse(BaseModel):
+    id: int
+    patient_id: int
+    from_doctor_id: int
+    to_department: str
+    to_department_id: Optional[str] = None
+    reason: str
+    notes: Optional[str] = None
+    status: str
+    created_at: datetime
+    updated_at: datetime
+    patient_name: Optional[str] = None
+    from_doctor_name: Optional[str] = None
 
     class Config:
         from_attributes = True

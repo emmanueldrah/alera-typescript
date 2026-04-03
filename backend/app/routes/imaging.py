@@ -1,5 +1,5 @@
 from fastapi import APIRouter, Depends, HTTPException, status
-from sqlalchemy.orm import Session
+from sqlalchemy.orm import Session, joinedload
 from database import get_db
 from app.models import ImagingScan, User, UserRole, ImagingScanStatus
 from app.schemas import ImagingScanResponse, ImagingScanCreate, ImagingScanUpdate
@@ -8,42 +8,82 @@ from app.utils.dependencies import get_current_user
 router = APIRouter(prefix="/api/imaging", tags=["imaging"])
 
 
+def _display_name(user: User | None) -> str | None:
+    if not user:
+        return None
+    name = f"{user.first_name or ''} {user.last_name or ''}".strip()
+    return name or None
+
+
+def imaging_to_response(scan: ImagingScan) -> ImagingScanResponse:
+    return ImagingScanResponse(
+        id=scan.id,
+        patient_id=scan.patient_id,
+        ordered_by=scan.ordered_by,
+        processed_by=scan.processed_by,
+        scan_type=scan.scan_type,
+        body_part=scan.body_part,
+        clinical_indication=scan.clinical_indication,
+        status=scan.status.value if scan.status else ImagingScanStatus.ORDERED.value,
+        findings=scan.findings,
+        impression=scan.impression,
+        report_url=scan.report_url,
+        image_url=scan.image_url,
+        scheduled_at=scan.scheduled_at,
+        ordered_at=scan.ordered_at,
+        completed_at=scan.completed_at,
+        created_at=scan.created_at,
+        patient_name=_display_name(scan.patient),
+        ordered_by_name=_display_name(scan.doctor),
+    )
+
+
+def _load_scan_with_users(db: Session, scan_id: int) -> ImagingScan | None:
+    return (
+        db.query(ImagingScan)
+        .options(joinedload(ImagingScan.patient), joinedload(ImagingScan.doctor))
+        .filter(ImagingScan.id == scan_id)
+        .first()
+    )
+
+
 @router.post("/", response_model=ImagingScanResponse, status_code=status.HTTP_201_CREATED)
 async def order_imaging_scan(
     imaging_scan: ImagingScanCreate,
     current_user: User = Depends(get_current_user),
-    db: Session = Depends(get_db)
+    db: Session = Depends(get_db),
 ):
-    """Order a new imaging scan (provider only)"""
-    
-    if current_user.role not in [UserRole.PROVIDER, UserRole.ADMIN]:
+    """Order a new imaging scan (provider or admin)."""
+
+    if current_user.role not in (UserRole.PROVIDER, UserRole.ADMIN):
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
-            detail="Only providers can order imaging scans"
+            detail="Only providers can order imaging scans",
         )
-    
-    # Verify patient exists
+
     patient = db.query(User).filter(User.id == imaging_scan.patient_id).first()
     if not patient:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
-            detail="Patient not found"
+            detail="Patient not found",
         )
-    
+
     db_imaging_scan = ImagingScan(
         patient_id=imaging_scan.patient_id,
         ordered_by=current_user.id,
         scan_type=imaging_scan.scan_type,
         body_part=imaging_scan.body_part,
         clinical_indication=imaging_scan.clinical_indication,
-        status=ImagingScanStatus.ORDERED
+        status=ImagingScanStatus.ORDERED,
     )
-    
+
     db.add(db_imaging_scan)
     db.commit()
-    db.refresh(db_imaging_scan)
-    
-    return db_imaging_scan
+
+    loaded = _load_scan_with_users(db, db_imaging_scan.id)
+    if not loaded:
+        raise HTTPException(status_code=500, detail="Failed to load created imaging scan")
+    return imaging_to_response(loaded)
 
 
 @router.get("/", response_model=list[ImagingScanResponse])
@@ -51,49 +91,61 @@ async def list_imaging_scans(
     current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db),
     skip: int = 0,
-    limit: int = 100
+    limit: int = 100,
 ):
-    """List imaging scans for current user"""
-    
+    """List imaging scans visible to the current user."""
+
     if current_user.role == UserRole.PATIENT:
         query = db.query(ImagingScan).filter(ImagingScan.patient_id == current_user.id)
     elif current_user.role == UserRole.IMAGING:
         query = db.query(ImagingScan)
-    elif current_user.role in [UserRole.PROVIDER, UserRole.ADMIN]:
+    elif current_user.role == UserRole.PROVIDER:
+        query = db.query(ImagingScan).filter(ImagingScan.ordered_by == current_user.id)
+    elif current_user.role == UserRole.ADMIN:
         query = db.query(ImagingScan)
     else:
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
-            detail="Not authorized"
+            detail="Not authorized",
         )
-    
-    return query.offset(skip).limit(limit).all()
+
+    rows = (
+        query.options(joinedload(ImagingScan.patient), joinedload(ImagingScan.doctor))
+        .order_by(ImagingScan.ordered_at.desc())
+        .offset(skip)
+        .limit(limit)
+        .all()
+    )
+    return [imaging_to_response(s) for s in rows]
 
 
 @router.get("/{scan_id}", response_model=ImagingScanResponse)
 async def get_imaging_scan(
     scan_id: int,
     current_user: User = Depends(get_current_user),
-    db: Session = Depends(get_db)
+    db: Session = Depends(get_db),
 ):
-    """Get imaging scan details"""
-    
-    db_imaging_scan = db.query(ImagingScan).filter(ImagingScan.id == scan_id).first()
-    
+    """Get imaging scan details."""
+
+    db_imaging_scan = _load_scan_with_users(db, scan_id)
     if not db_imaging_scan:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
-            detail="Imaging scan not found"
+            detail="Imaging scan not found",
         )
-    
-    # Verify access
+
     if current_user.role == UserRole.PATIENT and db_imaging_scan.patient_id != current_user.id:
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
-            detail="Not authorized"
+            detail="Not authorized",
         )
-    
-    return db_imaging_scan
+    if current_user.role == UserRole.PROVIDER and db_imaging_scan.ordered_by != current_user.id:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Not authorized",
+        )
+
+    return imaging_to_response(db_imaging_scan)
 
 
 @router.put("/{scan_id}", response_model=ImagingScanResponse)
@@ -101,33 +153,48 @@ async def update_imaging_scan(
     scan_id: int,
     imaging_scan_update: ImagingScanUpdate,
     current_user: User = Depends(get_current_user),
-    db: Session = Depends(get_db)
+    db: Session = Depends(get_db),
 ):
-    """Update imaging scan (imaging/provider/admin only)"""
-    
+    """Update imaging scan (imaging staff, ordering provider for own orders, or admin)."""
+
     db_imaging_scan = db.query(ImagingScan).filter(ImagingScan.id == scan_id).first()
-    
     if not db_imaging_scan:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
-            detail="Imaging scan not found"
+            detail="Imaging scan not found",
         )
-    
-    # Verify authorization
-    if current_user.role not in [UserRole.IMAGING, UserRole.PROVIDER, UserRole.ADMIN]:
+
+    if current_user.role not in (UserRole.IMAGING, UserRole.PROVIDER, UserRole.ADMIN):
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
-            detail="Not authorized to update imaging scans"
+            detail="Not authorized to update imaging scans",
         )
-    
-    update_data = imaging_scan_update.dict(exclude_unset=True)
+    if current_user.role == UserRole.PROVIDER and db_imaging_scan.ordered_by != current_user.id:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Not authorized to update this imaging scan",
+        )
+
+    update_data = imaging_scan_update.model_dump(exclude_unset=True)
+    if "status" in update_data and update_data["status"] is not None:
+        try:
+            db_imaging_scan.status = ImagingScanStatus(str(update_data["status"]))
+        except ValueError:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="Invalid imaging scan status",
+            ) from None
+        del update_data["status"]
+
     for field, value in update_data.items():
         setattr(db_imaging_scan, field, value)
-    
+
     if current_user.role == UserRole.IMAGING:
         db_imaging_scan.processed_by = current_user.id
-        
+
     db.commit()
-    db.refresh(db_imaging_scan)
-    
-    return db_imaging_scan
+
+    loaded = _load_scan_with_users(db, scan_id)
+    if not loaded:
+        raise HTTPException(status_code=500, detail="Failed to load imaging scan")
+    return imaging_to_response(loaded)

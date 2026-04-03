@@ -8,6 +8,7 @@ import { useNotifications } from '@/contexts/useNotifications';
 import { type ImagingScan, imagingCenters } from '@/data/mockData';
 import { getDoctorPatients } from '@/lib/patientDirectory';
 import { getVisibleImagingScans } from '@/lib/recordVisibility';
+import { normalizeUserRole } from '@/lib/roleUtils';
 
 const SCAN_TYPES: ImagingScan['scanType'][] = ['X-Ray', 'MRI', 'CT Scan', 'Ultrasound', 'PET Scan', 'DEXA Scan'];
 
@@ -21,7 +22,8 @@ const ImagingPage = () => {
   const [uploadResult, setUploadResult] = useState('');
   const [orderForm, setOrderForm] = useState({ patientId: '', scanType: '' as ImagingScan['scanType'] | '', bodyPart: '' });
   const focusId = searchParams.get('focus');
-  const currentPage = user?.role === 'imaging' ? 'scan-requests' : user?.role === 'doctor' ? 'imaging-referrals' : 'imaging';
+  const effectiveRole = normalizeUserRole(user?.role) ?? user?.role;
+  const currentPage = user?.role === 'imaging' ? 'scan-requests' : effectiveRole === 'doctor' ? 'imaging-referrals' : 'imaging';
   const users = getUsers();
   const patientOptions = useMemo(() => getDoctorPatients(users, appointments, user?.id), [appointments, user?.id, users]);
 
@@ -102,13 +104,13 @@ const ImagingPage = () => {
       <div className="flex items-center justify-between">
         <div>
           <h1 className="text-2xl font-display font-bold text-foreground">
-            {user?.role === 'imaging' ? 'Scan Requests' : user?.role === 'doctor' ? 'Imaging Referrals' : 'Imaging Results'}
+            {user?.role === 'imaging' ? 'Scan Requests' : effectiveRole === 'doctor' ? 'Imaging Referrals' : 'Imaging Results'}
           </h1>
           <p className="text-muted-foreground mt-1">
-            {user?.role === 'imaging' ? 'Process and upload scan results' : user?.role === 'doctor' ? 'Order imaging scans' : 'View your imaging results'}
+            {user?.role === 'imaging' ? 'Process and upload scan results' : effectiveRole === 'doctor' ? 'Order imaging scans' : 'View your imaging results'}
           </p>
         </div>
-        {user?.role === 'doctor' && (
+        {effectiveRole === 'doctor' && (
           <button onClick={() => setShowOrder(true)} className="flex items-center gap-2 px-4 py-2.5 rounded-xl bg-gradient-primary text-primary-foreground text-sm font-semibold hover:opacity-90 transition">
             <Plus className="w-4 h-4" /> Order Scan
           </button>
@@ -221,12 +223,20 @@ const ImagingPage = () => {
                         ? 'bg-warning/10 text-warning'
                         : scan.status === 'in-progress'
                           ? 'bg-info/10 text-info'
-                          : 'bg-success/10 text-success'
+                          : scan.status === 'cancelled'
+                            ? 'bg-muted text-muted-foreground'
+                            : 'bg-success/10 text-success'
                     }`}
                   >
-                    {scan.status === 'requested' ? 'Pending' : scan.status === 'in-progress' ? 'In Progress' : 'Completed'}
+                    {scan.status === 'requested'
+                      ? 'Pending'
+                      : scan.status === 'in-progress'
+                        ? 'In Progress'
+                        : scan.status === 'cancelled'
+                          ? 'Cancelled'
+                          : 'Completed'}
                   </span>
-                  {user?.role === 'imaging' && scan.status !== 'completed' && (
+                  {user?.role === 'imaging' && scan.status !== 'completed' && scan.status !== 'cancelled' && (
                     <button
                       onClick={() => setShowUpload(scan.id)}
                       className="flex items-center gap-1 px-3 py-1.5 rounded-lg bg-primary/10 text-primary text-xs font-medium hover:bg-primary/20 transition"

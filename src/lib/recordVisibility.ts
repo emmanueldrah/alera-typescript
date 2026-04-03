@@ -13,16 +13,18 @@ export const getVisiblePrescriptions = (prescriptions: Prescription[], user?: Pi
 
 export const getVisibleLabTests = (labTests: LabTest[], user?: Pick<User, 'id' | 'role'> | null) => {
   if (!user) return [];
-  if (user.role === 'laboratory') return labTests;
-  if (user.role === 'doctor') return labTests.filter((test) => test.doctorId === user.id);
-  if (user.role === 'patient') return labTests.filter((test) => test.patientId === user.id);
+  const role = normalizeUserRole(user.role) ?? user.role;
+  if (role === 'laboratory' || user.role === 'laboratory') return labTests;
+  if (role === 'doctor') return labTests.filter((test) => test.doctorId === user.id);
+  if (role === 'patient') return labTests.filter((test) => test.patientId === user.id);
   return [];
 };
 
 export const getVisibleImagingScans = (imagingScans: ImagingScan[], user?: Pick<User, 'id' | 'role'> | null) => {
   if (!user) return [];
-  if (user.role === 'imaging') return imagingScans;
-  if (user.role === 'doctor') return imagingScans.filter((scan) => scan.doctorId === user.id);
-  if (user.role === 'patient') return imagingScans.filter((scan) => scan.patientId === user.id);
+  const role = normalizeUserRole(user.role) ?? user.role;
+  if (role === 'imaging' || user.role === 'imaging') return imagingScans;
+  if (role === 'doctor') return imagingScans.filter((scan) => scan.doctorId === user.id);
+  if (role === 'patient') return imagingScans.filter((scan) => scan.patientId === user.id);
   return [];
 };

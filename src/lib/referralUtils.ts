@@ -20,6 +20,9 @@ export const getVisibleReferrals = (referrals: Referral[], user?: Pick<User, 'id
   if (role === 'hospital') {
     return referrals;
   }
+  if (role === 'patient') {
+    return referrals.filter((referral) => referral.patientId === user.id);
+  }
   return [];
 };
 

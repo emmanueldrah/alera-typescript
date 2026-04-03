@@ -46,6 +46,7 @@ export interface Prescription {
 export interface PatientAllergy {
   id: string;
   patientId: string;
+  patientName?: string;
   allergen: string; // e.g. "Penicillin", "Shellfish", "Latex"
   allergyType: 'medication' | 'food' | 'environmental' | 'latex' | 'other';
   severity: 'mild' | 'moderate' | 'severe' | 'life-threatening';
@@ -272,7 +273,7 @@ export interface LabTest {
   doctorId: string;
   testName: string;
   date: string;
-  status: 'requested' | 'in-progress' | 'completed';
+  status: 'requested' | 'in-progress' | 'completed' | 'cancelled';
   results?: string;
   labId?: string;
   // New fields for document management
@@ -289,7 +290,7 @@ export interface ImagingScan {
   doctorId: string;
   scanType: 'X-Ray' | 'MRI' | 'CT Scan' | 'Ultrasound' | 'PET Scan' | 'DEXA Scan';
   date: string;
-  status: 'requested' | 'in-progress' | 'completed';
+  status: 'requested' | 'in-progress' | 'completed' | 'cancelled';
   results?: string;
   centerId?: string;
   bodyPart?: string;

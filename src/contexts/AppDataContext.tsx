@@ -1,11 +1,12 @@
-import React, { useCallback, useEffect, useMemo, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import type { AmbulanceRequest, Appointment, ImagingScan, LabTest, Prescription, VitalSigns, HealthMetric, InventoryItem, AmbulanceVehicle, Referral, ProviderVerification, PatientAllergy, PatientMedicalHistory, PatientConsent, DrugInteraction, ClinicalNote, PatientProblem, MedicationAdherence, ProviderPricing, ServiceCharge, Invoice, BillingRecord, AppointmentReminder } from '@/data/mockData';
 import { ambulances as mockAmbulances, inventoryItems as mockInventoryItems, referrals as mockReferrals, providerVerifications as mockVerifications, drugInteractionDatabase as mockDrugInteractions, patientAllergies as mockAllergies, medicalHistories as mockMedicalHistories, patientConsents as mockConsents } from '@/data/mockData';
 import { getAppDataStorageKey, storageKeys } from '@/lib/storageKeys';
 import { AppDataContext, type AppDataContextType } from './app-data-context';
-import { appointmentsApi, prescriptionsApi, allergiesApi, api } from '@/lib/apiService';
+import { appointmentsApi, prescriptionsApi, allergiesApi, api, referralsApi } from '@/lib/apiService';
 import { useAuth } from './useAuth';
 import { buildScheduledIso } from '@/lib/appointmentUtils';
+import { getReferralDepartmentId } from '@/lib/referralUtils';
 
 type BackendAppointment = {
   id: string | number;
@@ -46,11 +47,12 @@ type BackendAllergy = {
   patient_id: string | number;
   allergen: string;
   allergen_type: string;
-  severity: PatientAllergy['severity'];
+  severity: string;
   reaction_description: string;
   treatment?: string;
   onset_date?: string;
   created_at?: string;
+  patient_name?: string | null;
 };
 
 const getListPayload = <T,>(value: unknown): T[] => {
@@ -146,11 +148,13 @@ type BackendLabTest = {
   completed_at?: string;
   patient_id: number;
   ordered_by: number;
+  patient_name?: string | null;
+  ordered_by_name?: string | null;
 };
 
 type BackendImagingScan = {
   id: number;
-  scan_type: 'X-Ray' | 'MRI' | 'CT Scan' | 'Ultrasound' | 'PET Scan' | 'DEXA Scan';
+  scan_type: string;
   body_part?: string;
   clinical_indication?: string;
   status: string;
@@ -163,6 +167,23 @@ type BackendImagingScan = {
   completed_at?: string;
   patient_id: number;
   ordered_by: number;
+  patient_name?: string | null;
+  ordered_by_name?: string | null;
+};
+
+type BackendReferral = {
+  id: number;
+  patient_id: number;
+  from_doctor_id: number;
+  to_department: string;
+  to_department_id?: string | null;
+  reason: string;
+  notes?: string | null;
+  status: string;
+  created_at: string;
+  updated_at: string;
+  patient_name?: string | null;
+  from_doctor_name?: string | null;
 };
 
 const mapBackendStatus = (raw?: string): Appointment['status'] => {
@@ -240,9 +261,16 @@ const mapBackendPrescription = (presc: BackendPrescription): Prescription => {
 const mapBackendAllergy = (allergy: BackendAllergy): PatientAllergy => ({
   id: String(allergy.id),
   patientId: String(allergy.patient_id),
+  patientName: allergy.patient_name?.trim() || undefined,
   allergen: allergy.allergen,
   allergyType: (allergy.allergen_type.toLowerCase() || 'other') as PatientAllergy['allergyType'],
-  severity: (allergy.severity.toLowerCase() || 'mild') as PatientAllergy['severity'],
+  severity: (() => {
+    const sev = (allergy.severity || 'mild').toLowerCase();
+    if (sev === 'life-threatening') return 'life-threatening' as const;
+    if (sev === 'severe') return 'severe' as const;
+    if (sev === 'moderate') return 'moderate' as const;
+    return 'mild' as const;
+  })(),
   reaction: allergy.reaction_description,
   dateIdentified: allergy.onset_date || allergy.created_at,
   addedDate: allergy.created_at,
@@ -250,32 +278,106 @@ const mapBackendAllergy = (allergy: BackendAllergy): PatientAllergy => ({
   notes: allergy.treatment || '',
 });
 
+const mapBackendLabStatus = (raw: string): LabTest['status'] => {
+  const s = raw.toLowerCase();
+  if (s === 'completed') return 'completed';
+  if (s === 'cancelled') return 'cancelled';
+  if (s === 'processing' || s === 'sample_collected') return 'in-progress';
+  return 'requested';
+};
+
+const mapBackendImagingStatus = (raw: string): ImagingScan['status'] => {
+  const s = raw.toLowerCase();
+  if (s === 'completed') return 'completed';
+  if (s === 'cancelled') return 'cancelled';
+  if (s === 'in_progress' || s === 'scheduled') return 'in-progress';
+  return 'requested';
+};
+
 const mapBackendLabTest = (test: BackendLabTest): LabTest => ({
   id: String(test.id),
   patientId: String(test.patient_id),
-  patientName: `Patient #${test.patient_id}`,
+  patientName: test.patient_name?.trim() || `Patient #${test.patient_id}`,
   doctorId: String(test.ordered_by),
-  doctorName: `Provider #${test.ordered_by}`,
+  doctorName: test.ordered_by_name?.trim() || `Provider #${test.ordered_by}`,
   testName: test.test_name,
   date: test.ordered_at.slice(0, 10),
-  status: (test.status.toLowerCase() || 'requested') as LabTest['status'],
-  results: test.result_value && test.result_unit ? `${test.result_value} ${test.result_unit}` : undefined,
+  status: mapBackendLabStatus(test.status),
+  results:
+    test.result_value && test.result_unit
+      ? `${test.result_value} ${test.result_unit}`
+      : test.result_notes || undefined,
   referenceRange: test.reference_range,
   notes: test.result_notes,
+  documentUrl: test.result_file_url || undefined,
 });
 
 const mapBackendImagingScan = (scan: BackendImagingScan): ImagingScan => ({
   id: String(scan.id),
   patientId: String(scan.patient_id),
-  patientName: `Patient #${scan.patient_id}`,
+  patientName: scan.patient_name?.trim() || `Patient #${scan.patient_id}`,
   doctorId: String(scan.ordered_by),
-  doctorName: `Provider #${scan.ordered_by}`,
-  scanType: scan.scan_type,
+  doctorName: scan.ordered_by_name?.trim() || `Provider #${scan.ordered_by}`,
+  scanType: scan.scan_type as ImagingScan['scanType'],
   bodyPart: scan.body_part || 'Unspecified',
   date: scan.ordered_at.slice(0, 10),
-  status: (scan.status.toLowerCase() || 'requested') as ImagingScan['status'],
+  status: mapBackendImagingStatus(scan.status),
   results: scan.findings,
 });
+
+const mapBackendReferral = (r: BackendReferral): Referral => ({
+  id: String(r.id),
+  patientId: String(r.patient_id),
+  patientName: r.patient_name?.trim() || `Patient #${r.patient_id}`,
+  fromDoctorId: String(r.from_doctor_id),
+  fromDoctorName: r.from_doctor_name?.trim() || `Provider #${r.from_doctor_id}`,
+  toDepartmentId: r.to_department_id || getReferralDepartmentId(r.to_department),
+  toDepartment: r.to_department,
+  reason: r.reason,
+  date: (r.created_at || '').slice(0, 10),
+  status: r.status as Referral['status'],
+  lastUpdated: (r.updated_at || r.created_at || '').slice(0, 10),
+  notes: r.notes || undefined,
+});
+
+const labStatusToApi = (s: LabTest['status']): string => {
+  if (s === 'requested') return 'ordered';
+  if (s === 'in-progress') return 'processing';
+  if (s === 'completed') return 'completed';
+  return 'cancelled';
+};
+
+const imagingStatusToApi = (s: ImagingScan['status']): string => {
+  if (s === 'requested') return 'ordered';
+  if (s === 'in-progress') return 'in_progress';
+  if (s === 'completed') return 'completed';
+  return 'cancelled';
+};
+
+const labPayloadFromDelta = (prev: LabTest, next: LabTest): Record<string, unknown> => {
+  const p: Record<string, unknown> = {};
+  if (prev.status !== next.status) p.status = labStatusToApi(next.status);
+  if (prev.results !== next.results) {
+    if (next.results != null && next.results !== '') p.result_notes = next.results;
+  }
+  if (prev.referenceRange !== next.referenceRange) p.reference_range = next.referenceRange ?? null;
+  if (prev.notes !== next.notes) p.result_notes = next.notes ?? null;
+  if (prev.documentUrl !== next.documentUrl) p.result_file_url = next.documentUrl ?? null;
+  if (next.status === 'completed' && prev.status !== 'completed') {
+    p.completed_at = new Date().toISOString();
+  }
+  return p;
+};
+
+const imagingPayloadFromDelta = (prev: ImagingScan, next: ImagingScan): Record<string, unknown> => {
+  const p: Record<string, unknown> = {};
+  if (prev.status !== next.status) p.status = imagingStatusToApi(next.status);
+  if (prev.results !== next.results && next.results != null && next.results !== '') p.findings = next.results;
+  if (next.status === 'completed' && prev.status !== 'completed') {
+    p.completed_at = new Date().toISOString();
+  }
+  return p;
+};
 
 export const AppDataProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const { user } = useAuth();
@@ -283,6 +385,10 @@ export const AppDataProvider: React.FC<{ children: React.ReactNode }> = ({ child
 
   const [data, setData] = useState<StoredAppData>(emptyData);
   const [isLoadingAPI, setIsLoadingAPI] = useState(true);
+  const dataRef = useRef(data);
+  useEffect(() => {
+    dataRef.current = data;
+  }, [data]);
 
   // Load data from API
   const loadAPIData = useCallback(async (isPolling = false) => {
@@ -297,12 +403,13 @@ export const AppDataProvider: React.FC<{ children: React.ReactNode }> = ({ child
         return;
       }
 
-      const [appointmentsRes, prescriptionsRes, allergiesRes, labRes, imagingRes] = await Promise.allSettled([
+      const [appointmentsRes, prescriptionsRes, allergiesRes, labRes, imagingRes, referralsRes] = await Promise.allSettled([
         appointmentsApi.listAppointments(0, 100),
         prescriptionsApi.listPrescriptions(0, 100),
-        allergiesApi.listAllergies(0, 100),
+        allergiesApi.listAllergies({ skip: 0, limit: 200 }),
         api.labTests.listLabTests(0, 100),
         api.imaging.listImagingScans(0, 100),
+        referralsApi.listReferrals(0, 200),
       ]);
 
       const appointments = appointmentsRes.status === 'fulfilled'
@@ -325,6 +432,10 @@ export const AppDataProvider: React.FC<{ children: React.ReactNode }> = ({ child
         ? getListPayload<BackendImagingScan>(imagingRes.value).map(mapBackendImagingScan)
         : [];
 
+      const referrals = referralsRes.status === 'fulfilled'
+        ? getListPayload<BackendReferral>(referralsRes.value).map(mapBackendReferral)
+        : stored.referrals;
+
       setData((current) => ({
         ...current,
         appointments,
@@ -332,10 +443,10 @@ export const AppDataProvider: React.FC<{ children: React.ReactNode }> = ({ child
         patientAllergies,
         labTests,
         imagingScans,
+        referrals,
         // These may be local-only for now; keep what we already had cached for this user.
         ambulances: stored.ambulances,
         inventoryItems: stored.inventoryItems,
-        referrals: stored.referrals,
         providerVerifications: stored.providerVerifications,
       }));
     } catch (error) {
@@ -462,16 +573,67 @@ export const AppDataProvider: React.FC<{ children: React.ReactNode }> = ({ child
       }),
     })),
     
-    addLabTest: (test) => updateData((current) => ({ ...current, labTests: [test, ...current.labTests] })),
-    updateLabTest: (id, update) => updateData((current) => ({
-      ...current,
-      labTests: current.labTests.map((test) => test.id === id ? update(test) : test),
-    })),
-    addImagingScan: (scan) => updateData((current) => ({ ...current, imagingScans: [scan, ...current.imagingScans] })),
-    updateImagingScan: (id, update) => updateData((current) => ({
-      ...current,
-      imagingScans: current.imagingScans.map((scan) => scan.id === id ? update(scan) : scan),
-    })),
+    addLabTest: (test) => {
+      void (async () => {
+        try {
+          await api.labTests.createLabTest({
+            patient_id: Number(test.patientId),
+            test_name: test.testName,
+            test_code: test.testName,
+          });
+          await loadAPIData(true);
+        } catch (e) {
+          console.error('addLabTest failed:', e);
+        }
+      })();
+    },
+    updateLabTest: (id, update) => {
+      void (async () => {
+        const prev = dataRef.current.labTests.find((t) => t.id === id);
+        if (!prev) return;
+        const next = update(prev);
+        const payload = labPayloadFromDelta(prev, next);
+        try {
+          if (Object.keys(payload).length > 0) {
+            await api.labTests.updateLabTest(Number(id), payload);
+          }
+          await loadAPIData(true);
+        } catch (e) {
+          console.error('updateLabTest failed:', e);
+        }
+      })();
+    },
+    addImagingScan: (scan) => {
+      void (async () => {
+        try {
+          await api.imaging.orderImagingScan({
+            patient_id: Number(scan.patientId),
+            scan_type: scan.scanType,
+            body_part: scan.bodyPart || undefined,
+            clinical_indication: undefined,
+          });
+          await loadAPIData(true);
+        } catch (e) {
+          console.error('addImagingScan failed:', e);
+        }
+      })();
+    },
+    updateImagingScan: (id, update) => {
+      void (async () => {
+        const prev = dataRef.current.imagingScans.find((s) => s.id === id);
+        if (!prev) return;
+        const next = update(prev);
+        const payload = imagingPayloadFromDelta(prev, next);
+        try {
+          if (Object.keys(payload).length > 0) {
+            await api.imaging.updateImagingScan(Number(id), payload);
+          }
+          await loadAPIData(true);
+        } catch (e) {
+          console.error('updateImagingScan failed:', e);
+        }
+      })();
+    },
     addAmbulanceRequest: (request) => updateData((current) => ({ ...current, ambulanceRequests: [request, ...current.ambulanceRequests] })),
     updateAmbulanceRequest: (id, update) => updateData((current) => ({
       ...current,
@@ -487,11 +649,40 @@ export const AppDataProvider: React.FC<{ children: React.ReactNode }> = ({ child
       ...current,
       ambulances: current.ambulances.map((ambulance) => ambulance.id === id ? update(ambulance) : ambulance),
     })),
-    addReferral: (referral) => updateData((current) => ({ ...current, referrals: [referral, ...current.referrals] })),
-    updateReferral: (id, update) => updateData((current) => ({
-      ...current,
-      referrals: current.referrals.map((referral) => referral.id === id ? update(referral) : referral),
-    })),
+    addReferral: (referral) => {
+      void (async () => {
+        try {
+          await referralsApi.createReferral({
+            patient_id: Number(referral.patientId),
+            to_department: referral.toDepartment,
+            to_department_id: referral.toDepartmentId || undefined,
+            reason: referral.reason,
+            notes: referral.notes,
+          });
+          await loadAPIData(true);
+        } catch (e) {
+          console.error('addReferral failed:', e);
+        }
+      })();
+    },
+    updateReferral: (id, update) => {
+      void (async () => {
+        const prev = dataRef.current.referrals.find((r) => r.id === id);
+        if (!prev) return;
+        const next = update(prev);
+        const payload: { status?: string; notes?: string } = {};
+        if (next.status !== prev.status) payload.status = next.status;
+        if (next.notes !== prev.notes) payload.notes = next.notes;
+        try {
+          if (Object.keys(payload).length > 0) {
+            await referralsApi.updateReferral(Number(id), payload);
+          }
+          await loadAPIData(true);
+        } catch (e) {
+          console.error('updateReferral failed:', e);
+        }
+      })();
+    },
     addProviderVerification: (verification) => updateData((current) => ({ ...current, providerVerifications: [verification, ...current.providerVerifications] })),
     updateProviderVerification: (id, update) => updateData((current) => ({
       ...current,
@@ -499,11 +690,35 @@ export const AppDataProvider: React.FC<{ children: React.ReactNode }> = ({ child
     })),
     
     // Allergy and drug interaction management
-    addAllergy: (allergy) => updateData((current) => ({ ...current, patientAllergies: [allergy, ...current.patientAllergies] })),
-    removeAllergy: (allergyId) => updateData((current) => ({
-      ...current,
-      patientAllergies: current.patientAllergies.filter((allergy) => allergy.id !== allergyId),
-    })),
+    addAllergy: (allergy) => {
+      void (async () => {
+        try {
+          const severity =
+            allergy.severity === 'life-threatening' ? 'severe' : allergy.severity;
+          await allergiesApi.createAllergy({
+            ...(user && user.role !== 'patient' ? { patient_id: Number(allergy.patientId) } : {}),
+            allergen: allergy.allergen,
+            allergen_type: allergy.allergyType,
+            reaction_description: allergy.reaction,
+            severity,
+            treatment: allergy.notes,
+          });
+          await loadAPIData(true);
+        } catch (e) {
+          console.error('addAllergy failed:', e);
+        }
+      })();
+    },
+    removeAllergy: (allergyId) => {
+      void (async () => {
+        try {
+          await allergiesApi.deleteAllergy(allergyId);
+          await loadAPIData(true);
+        } catch (e) {
+          console.error('removeAllergy failed:', e);
+        }
+      })();
+    },
     addMedicalHistory: (history) => updateData((current) => ({ ...current, medicalHistories: [history, ...current.medicalHistories] })),
     updateMedicalHistory: (id, update) => updateData((current) => ({
       ...current,
@@ -697,7 +912,7 @@ export const AppDataProvider: React.FC<{ children: React.ReactNode }> = ({ child
         reminder.id === reminderId ? { ...reminder, status } : reminder,
       ),
     })),
-  }), [data, updateData, loadAPIData, refreshAppData]);
+  }), [data, user, updateData, loadAPIData, refreshAppData]);
 
   return (
     <AppDataContext.Provider value={contextValue}>

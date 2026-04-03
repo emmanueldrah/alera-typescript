@@ -3,6 +3,8 @@ import { motion } from 'framer-motion';
 import { AlertTriangle, Plus, X, AlertCircle, CheckCircle, Pill, Heart } from 'lucide-react';
 import { useAuth } from '@/contexts/useAuth';
 import { useAppData } from '@/contexts/useAppData';
+import { getDoctorPatients } from '@/lib/patientDirectory';
+import { normalizeUserRole } from '@/lib/roleUtils';
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -24,16 +26,24 @@ const isSeverityLevel = (value: unknown): value is SeverityLevel => {
 };
 
 const AllergyManagementPage = () => {
-  const { user } = useAuth();
-  const { patientAllergies, prescriptions, addAllergy, removeAllergy, checkDrugInteractions } = useAppData();
+  const { user, getUsers } = useAuth();
+  const { patientAllergies, prescriptions, appointments, addAllergy, removeAllergy, checkDrugInteractions } = useAppData();
   const [showForm, setShowForm] = useState(false);
+  const effectiveRole = normalizeUserRole(user?.role) ?? user?.role;
+  const patientOptions = useMemo(
+    () => getDoctorPatients(getUsers(), appointments, user?.id),
+    [appointments, getUsers, user?.id],
+  );
+
   const [formData, setFormData] = useState<{
+    patientId: string;
     allergen: string;
     allergyType: AllergyType;
     severity: SeverityLevel;
     reaction: string;
     notes: string;
   }>({
+    patientId: '',
     allergen: '',
     allergyType: 'medication',
     severity: 'moderate',
@@ -41,10 +51,15 @@ const AllergyManagementPage = () => {
     notes: '',
   });
 
-  const userAllergies = useMemo(
-    () => patientAllergies.filter((allergy) => allergy.patientId === user?.id && allergy.status === 'active'),
-    [patientAllergies, user?.id],
-  );
+  const userAllergies = useMemo(() => {
+    if (effectiveRole === 'patient') {
+      return patientAllergies.filter((allergy) => allergy.patientId === user?.id && allergy.status === 'active');
+    }
+    if (effectiveRole === 'doctor') {
+      return patientAllergies.filter((allergy) => allergy.status === 'active');
+    }
+    return [];
+  }, [patientAllergies, user?.id, effectiveRole]);
 
   // Get current medications from prescriptions
   const currentMedications = useMemo(() => {
@@ -71,11 +86,14 @@ const AllergyManagementPage = () => {
 
   const handleAddAllergy = () => {
     if (!formData.allergen || !formData.reaction) return;
+    if (effectiveRole === 'doctor' && !formData.patientId) return;
+
+    const targetPatientId = effectiveRole === 'doctor' ? formData.patientId : (user?.id || '');
 
     const newAllergy: PatientAllergy = {
       id: `allergy-${Date.now()}`,
-      patientId: user?.id || '',
-      allergen: formData.allergen,                                  
+      patientId: targetPatientId,
+      allergen: formData.allergen,
       allergyType: formData.allergyType,
       severity: formData.severity,
       reaction: formData.reaction,
@@ -87,6 +105,7 @@ const AllergyManagementPage = () => {
 
     addAllergy(newAllergy);
     setFormData({
+      patientId: '',
       allergen: '',
       allergyType: 'medication',
       severity: 'moderate',
@@ -116,7 +135,11 @@ const AllergyManagementPage = () => {
       <div className="flex items-center justify-between">
         <div>
           <h1 className="text-2xl font-display font-bold text-foreground">Allergy Management</h1>
-          <p className="text-muted-foreground mt-1">Manage your allergies and check for medication interactions</p>
+          <p className="text-muted-foreground mt-1">
+            {effectiveRole === 'doctor'
+              ? 'Record allergies for patients on your panel and review interaction risks'
+              : 'Manage your allergies and check for medication interactions'}
+          </p>
         </div>
         <Dialog open={showForm} onOpenChange={setShowForm}>
           <DialogTrigger asChild>
@@ -130,6 +153,23 @@ const AllergyManagementPage = () => {
               <DialogDescription>Document your allergies to ensure safe treatment</DialogDescription>
             </DialogHeader>
             <div className="grid gap-4 py-4">
+              {effectiveRole === 'doctor' && (
+                <div>
+                  <label className="text-sm font-medium">Patient</label>
+                  <select
+                    value={formData.patientId}
+                    onChange={(e) => setFormData({ ...formData, patientId: e.target.value })}
+                    className="w-full h-9 px-3 rounded-md border border-input mt-2"
+                  >
+                    <option value="">Select patient</option>
+                    {patientOptions.map((p) => (
+                      <option key={p.id} value={p.id}>
+                        {p.name}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+              )}
               <div>
                 <label className="text-sm font-medium">Allergen Name</label>
                 <Input
@@ -198,7 +238,14 @@ const AllergyManagementPage = () => {
               <Button variant="outline" onClick={() => setShowForm(false)}>
                 Cancel
               </Button>
-              <Button onClick={handleAddAllergy} disabled={!formData.allergen || !formData.reaction}>
+              <Button
+                onClick={handleAddAllergy}
+                disabled={
+                  !formData.allergen ||
+                  !formData.reaction ||
+                  (effectiveRole === 'doctor' && !formData.patientId)
+                }
+              >
                 Add Allergy
               </Button>
             </div>
@@ -234,7 +281,9 @@ const AllergyManagementPage = () => {
 
       {/* Current Allergies */}
       <div>
-        <h2 className="text-lg font-semibold mb-4">Your Allergies</h2>
+        <h2 className="text-lg font-semibold mb-4">
+          {effectiveRole === 'doctor' ? 'Patient allergies (your panel)' : 'Your Allergies'}
+        </h2>
         {userAllergies.length === 0 ? (
           <div className="flex flex-col items-center justify-center py-12 text-muted-foreground rounded-xl border border-border p-6">
             <Heart className="w-10 h-10 mb-3 opacity-50" />
@@ -254,6 +303,9 @@ const AllergyManagementPage = () => {
                   <div className="flex-1">
                     <div className="flex items-center gap-2 mb-1">
                       <Pill className="w-4 h-4" />
+                      {effectiveRole === 'doctor' && allergy.patientName && (
+                        <span className="text-xs font-medium text-muted-foreground">{allergy.patientName} · </span>
+                      )}
                       <span className="font-semibold">{allergy.allergen}</span>
                       <span className="text-xs px-2 py-1 rounded-full bg-white bg-opacity-60">
                         {allergy.allergyType}

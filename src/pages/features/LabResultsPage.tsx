@@ -8,6 +8,7 @@ import { useNotifications } from '@/contexts/useNotifications';
 import { type LabTest } from '@/data/mockData';
 import { getDoctorPatients } from '@/lib/patientDirectory';
 import { getVisibleLabTests } from '@/lib/recordVisibility';
+import { normalizeUserRole } from '@/lib/roleUtils';
 
 const LabResultsPage = () => {
   const { user, getUsers } = useAuth();
@@ -19,7 +20,8 @@ const LabResultsPage = () => {
   const [uploadResult, setUploadResult] = useState('');
   const [orderForm, setOrderForm] = useState({ patientId: '', testName: '' });
   const focusId = searchParams.get('focus');
-  const currentPage = user?.role === 'laboratory' ? 'test-requests' : user?.role === 'doctor' ? 'lab-referrals' : 'lab-results';
+  const effectiveRole = normalizeUserRole(user?.role) ?? user?.role;
+  const currentPage = user?.role === 'laboratory' ? 'test-requests' : effectiveRole === 'doctor' ? 'lab-referrals' : 'lab-results';
   const users = getUsers();
   const patientOptions = useMemo(() => getDoctorPatients(users, appointments, user?.id), [appointments, user?.id, users]);
   const visibleLabTests = useMemo(
@@ -93,8 +95,8 @@ const LabResultsPage = () => {
   return (
     <div className="space-y-6">
       <div className="flex items-center justify-between">
-        <div><h1 className="text-2xl font-display font-bold text-foreground">{user?.role === 'laboratory' ? 'Test Requests' : user?.role === 'doctor' ? 'Lab Referrals' : 'Lab Results'}</h1><p className="text-muted-foreground mt-1">{user?.role === 'laboratory' ? 'Process and upload results' : user?.role === 'doctor' ? 'Order lab tests' : 'View your test results'}</p></div>
-        {user?.role === 'doctor' && <button onClick={() => setShowOrder(true)} className="flex items-center gap-2 px-4 py-2.5 rounded-xl bg-gradient-primary text-primary-foreground text-sm font-semibold hover:opacity-90 transition"><Plus className="w-4 h-4" /> Order Test</button>}
+        <div><h1 className="text-2xl font-display font-bold text-foreground">{user?.role === 'laboratory' ? 'Test Requests' : effectiveRole === 'doctor' ? 'Lab Referrals' : 'Lab Results'}</h1><p className="text-muted-foreground mt-1">{user?.role === 'laboratory' ? 'Process and upload results' : effectiveRole === 'doctor' ? 'Order lab tests' : 'View your test results'}</p></div>
+        {effectiveRole === 'doctor' && <button onClick={() => setShowOrder(true)} className="flex items-center gap-2 px-4 py-2.5 rounded-xl bg-gradient-primary text-primary-foreground text-sm font-semibold hover:opacity-90 transition"><Plus className="w-4 h-4" /> Order Test</button>}
       </div>
       {showOrder && (
         <motion.div initial={{ opacity: 0, y: -10 }} animate={{ opacity: 1, y: 0 }} className="bg-card rounded-2xl border border-border p-6">
@@ -126,8 +128,8 @@ const LabResultsPage = () => {
                   </div>
                 </div>
                 <div className="flex flex-col items-end gap-2">
-                  <span className={`px-3 py-1 rounded-lg text-xs font-medium ${test.status === 'requested' ? 'bg-warning/10 text-warning' : test.status === 'in-progress' ? 'bg-info/10 text-info' : 'bg-success/10 text-success'}`}>{test.status}</span>
-                  {user?.role === 'laboratory' && test.status !== 'completed' && <button onClick={() => setShowUpload(test.id)} className="flex items-center gap-1 px-3 py-1 rounded-lg bg-primary/10 text-primary text-xs font-medium hover:bg-primary/20"><Upload className="w-3 h-3" /> Upload</button>}
+                  <span className={`px-3 py-1 rounded-lg text-xs font-medium ${test.status === 'requested' ? 'bg-warning/10 text-warning' : test.status === 'in-progress' ? 'bg-info/10 text-info' : test.status === 'cancelled' ? 'bg-muted text-muted-foreground' : 'bg-success/10 text-success'}`}>{test.status === 'cancelled' ? 'cancelled' : test.status}</span>
+                  {user?.role === 'laboratory' && test.status !== 'completed' && test.status !== 'cancelled' && <button onClick={() => setShowUpload(test.id)} className="flex items-center gap-1 px-3 py-1 rounded-lg bg-primary/10 text-primary text-xs font-medium hover:bg-primary/20"><Upload className="w-3 h-3" /> Upload</button>}
                 </div>
               </div>
               {showUpload === test.id && (
