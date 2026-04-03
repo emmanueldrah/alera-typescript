@@ -4,6 +4,7 @@ import { Users, ShieldCheck, Activity, Building2, FlaskConical, Pill, Ambulance,
 import { Link } from 'react-router-dom';
 import { useAuth } from '@/contexts/useAuth';
 import { api } from '@/lib/apiService';
+import { handleApiError } from '@/lib/errorHandler';
 
 const card = (i: number) => ({ initial: { opacity: 0, y: 15 }, animate: { opacity: 1, y: 0 }, transition: { delay: i * 0.08 } });
 
@@ -34,6 +35,7 @@ interface DashboardStats {
 const AdminDashboard = () => {
   const { user } = useAuth();
   const [stats, setStats] = useState<DashboardStats | null>(null);
+  const [loadError, setLoadError] = useState('');
   const [isLoading, setIsLoading] = useState(true);
   const [isRefreshing, setIsRefreshing] = useState(false);
   const [isExporting, setIsExporting] = useState(false);
@@ -44,8 +46,10 @@ const AdminDashboard = () => {
     try {
       const data = await api.admin.getDashboardStats();
       setStats(data);
+      setLoadError('');
     } catch (error) {
       console.error('Failed to fetch admin stats:', error);
+      setLoadError(handleApiError(error));
     } finally {
       setIsLoading(false);
       setIsRefreshing(false);
@@ -88,16 +92,34 @@ const AdminDashboard = () => {
   }
 
   const userCounts = stats?.users.by_role || {};
+  const hasStats = Boolean(stats);
+  const showTraffic = hasStats && (stats!.users.total > 0 || stats!.appointments.total > 0 || stats!.prescriptions.active > 0);
 
   return (
     <div className="space-y-6">
+      {loadError && (
+        <div className="rounded-xl border border-destructive/30 bg-destructive/10 text-destructive text-sm p-4 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
+          <span>Could not load live metrics: {loadError}</span>
+          <button
+            type="button"
+            onClick={() => void fetchStats()}
+            className="shrink-0 px-3 py-1.5 rounded-lg bg-destructive/15 hover:bg-destructive/25 font-medium"
+          >
+            Retry
+          </button>
+        </div>
+      )}
+
       <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
         <div>
           <h1 className="text-2xl font-display font-bold text-foreground flex items-center gap-2">
             Admin Real-time Dashboard
             {isRefreshing && <RefreshCcw className="w-4 h-4 text-primary animate-spin" />}
           </h1>
-          <p className="text-muted-foreground mt-1">Live metrics for {user?.name} • Last sync: {new Date(stats?.timestamp || '').toLocaleTimeString()}</p>
+          <p className="text-muted-foreground mt-1">
+            Live metrics for {user?.name}
+            {stats?.timestamp ? ` • Last sync: ${new Date(stats.timestamp).toLocaleTimeString()}` : ''}
+          </p>
         </div>
         <div className="flex items-center gap-3">
           <button 
@@ -119,11 +141,11 @@ const AdminDashboard = () => {
       </div>
 
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
-        {[
-          { icon: <Users className="w-5 h-5" />, label: 'Total Ecosystem', value: stats?.users.total || 0, color: 'text-primary', bg: 'bg-primary/10' },
-          { icon: <Activity className="w-5 h-5" />, label: 'Today\'s Activity', value: stats?.appointments.today || 0, color: 'text-info', bg: 'bg-info/10' },
-          { icon: <AlertCircle className="w-5 h-5" />, label: 'Pending Labs/Imaging', value: (stats?.lab_tests.pending || 0) + (stats?.imaging.pending || 0), color: 'text-warning', bg: 'bg-warning/10' },
-          { icon: <Ambulance className="w-5 h-5" />, label: 'Active Criticals', value: stats?.emergencies.active || 0, color: 'text-destructive', bg: 'bg-destructive/10' },
+          {[
+          { icon: <Users className="w-5 h-5" />, label: 'Total Ecosystem', value: stats?.users.total ?? '—', color: 'text-primary', bg: 'bg-primary/10' },
+          { icon: <Activity className="w-5 h-5" />, label: 'Today\'s Activity', value: stats?.appointments.today ?? '—', color: 'text-info', bg: 'bg-info/10' },
+          { icon: <AlertCircle className="w-5 h-5" />, label: 'Pending Labs/Imaging', value: stats ? (stats.lab_tests.pending || 0) + (stats.imaging.pending || 0) : '—', color: 'text-warning', bg: 'bg-warning/10' },
+          { icon: <Ambulance className="w-5 h-5" />, label: 'Active Criticals', value: stats?.emergencies.active ?? '—', color: 'text-destructive', bg: 'bg-destructive/10' },
         ].map((s, i) => (
           <motion.div key={i} {...card(i)} className="p-5 rounded-2xl bg-card border border-border shadow-sm hover:shadow-md transition-shadow">
             <div className={`w-10 h-10 rounded-xl ${s.bg} ${s.color} flex items-center justify-center mb-3`}>{s.icon}</div>
@@ -210,7 +232,7 @@ const AdminDashboard = () => {
           </div>
           
           <div className="space-y-4">
-            {stats && stats.appointments.total > 0 ? (
+            {showTraffic ? (
               <div className="flex flex-col gap-3">
                 <div className="text-sm text-balance text-muted-foreground mb-2">Monitor system-wide health events as they happen.</div>
                 {[
@@ -230,17 +252,17 @@ const AdminDashboard = () => {
                   </div>
                 ))}
               </div>
+            ) : !stats ? (
+              <div className="flex flex-col items-center justify-center py-12 text-muted-foreground text-center px-4">
+                <Inbox className="w-10 h-10 mb-3 opacity-50" />
+                <p className="text-sm font-medium">No metrics loaded yet.</p>
+                <p className="text-xs mt-1">Use Refresh above after fixing the connection issue.</p>
+              </div>
             ) : (
-              <div className="flex flex-col items-center justify-center py-12 text-muted-foreground">
-                <div className="w-16 h-16 rounded-full bg-secondary flex items-center justify-center mb-4">
-                  <RefreshCcw className="w-8 h-8 animate-spin-slow opacity-20" />
-                </div>
-                <p className="text-sm font-medium tracking-wide">Syncing real-time event stream...</p>
-                <div className="mt-4 flex gap-1">
-                  {[0, 1, 2].map(i => (
-                    <div key={i} className="w-1.5 h-1.5 rounded-full bg-primary/20 animate-pulse" style={{ animationDelay: `${i * 0.2}s` }} />
-                  ))}
-                </div>
+              <div className="flex flex-col items-center justify-center py-12 text-muted-foreground text-center px-4">
+                <Inbox className="w-10 h-10 mb-3 opacity-50" />
+                <p className="text-sm font-medium">No appointments or prescriptions in the database yet.</p>
+                <p className="text-xs mt-1">User and visit counts above still reflect registered accounts.</p>
               </div>
             )}
           </div>

@@ -33,6 +33,28 @@ export interface ApiListResponse<T> {
   items?: T[];
 }
 
+/** Row from `GET /api/admin/users/` (matches backend UserResponse). */
+export interface AdminUserRow {
+  id: number;
+  email: string;
+  username: string;
+  first_name: string;
+  last_name: string;
+  role: string;
+  is_active: boolean;
+  is_verified: boolean;
+  phone?: string | null;
+  date_of_birth?: string | null;
+  city?: string | null;
+  state?: string | null;
+  zip_code?: string | null;
+  bio?: string | null;
+  profile_image_url?: string | null;
+  address?: string | null;
+  created_at: string;
+  last_login?: string | null;
+}
+
 // ============================================================================
 // AUTH ENDPOINTS
 // ============================================================================
@@ -450,21 +472,26 @@ export const adminApi = {
     return response.data;
   },
 
-  listAllUsers: async (skip: number = 0, limit: number = 100) => {
-    const response = await apiClient.get('/admin/users', { params: { skip, limit } });
+  listAllUsers: async (skip: number = 0, limit: number = 500) => {
+    // Trailing slash matches FastAPI route and avoids redirect quirks with auth headers.
+    const response = await apiClient.get<AdminUserRow[]>('/admin/users/', { params: { skip, limit } });
     return response.data;
   },
 
-  deactivateUser: async (userId: string, reason: string) => {
-    const response = await apiClient.put(`/admin/users/${userId}/deactivate`, {
-      deactivation_reason: reason,
-    });
+  deactivateUser: async (userId: string | number) => {
+    const response = await apiClient.put(`/admin/users/${userId}/deactivate`);
     return response.data;
   },
 
-  changeUserRole: async (userId: string, newRole: string) => {
-    const response = await apiClient.put(`/admin/users/${userId}/change-role`, {
-      new_role: newRole,
+  reactivateUser: async (userId: string | number) => {
+    const response = await apiClient.put(`/admin/users/${userId}/reactivate`);
+    return response.data;
+  },
+
+  /** `newRole` is backend role string, e.g. `patient`, `provider`, `pharmacist` (passed as query param). */
+  changeUserRole: async (userId: string | number, newRole: string) => {
+    const response = await apiClient.put(`/admin/users/${userId}/change-role`, undefined, {
+      params: { new_role: newRole },
     });
     return response.data;
   },
