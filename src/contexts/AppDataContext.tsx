@@ -28,14 +28,17 @@ type BackendPrescription = {
   dosage_unit?: string;
   frequency: string;
   route?: string;
-  instructions?: string;
-  quantity?: number;
-  provider_id?: string | number;
+  instructions?: string | null;
+  quantity?: number | null;
+  provider_id: string | number;
   patient_id: string | number;
-  status?: Prescription['status'];
+  status?: string;
   refills?: number;
+  refills_remaining?: number;
   prescribed_date?: string;
   created_at?: string;
+  patient_name?: string | null;
+  provider_name?: string | null;
 };
 
 type BackendAllergy = {
@@ -194,23 +197,44 @@ const mapBackendAppointment = (apt: BackendAppointment): Appointment => {
   };
 };
 
+const mapBackendPrescriptionStatus = (raw?: string): Prescription['status'] => {
+  const s = (raw || 'active').toLowerCase();
+  if (s === 'dispensed') return 'dispensed';
+  if (s === 'expired' || s === 'discontinued') return 'expired';
+  return 'active';
+};
+
 // Helper to convert backend prescription to frontend format
-const mapBackendPrescription = (presc: BackendPrescription): Prescription => ({
-  id: String(presc.id),
-  patientName: `Patient #${presc.patient_id}`,
-  patientId: String(presc.patient_id),
-  doctorName: presc.provider_id ? `Provider #${presc.provider_id}` : 'Unknown',
-  doctorId: presc.provider_id ? String(presc.provider_id) : '',
-  date: presc.prescribed_date ? presc.prescribed_date.slice(0, 10) : new Date().toISOString().slice(0, 10),
-  medications: [{
-    name: presc.medication_name,
-    dosage: presc.dosage,
-    frequency: presc.frequency,
-    duration: presc.quantity ? `${presc.quantity} doses` : 'Ongoing'
-  }],
-  status: (presc.status || 'active') as Prescription['status'],
-  refillsAllowed: presc.refills || 0,
-});
+const mapBackendPrescription = (presc: BackendPrescription): Prescription => {
+  const total = presc.refills ?? 0;
+  const remaining = presc.refills_remaining ?? total;
+  const refillsUsed = Math.max(0, total - remaining);
+  const duration =
+    presc.quantity != null && presc.quantity > 0
+      ? `${presc.quantity} units`
+      : presc.instructions?.trim()
+        ? presc.instructions
+        : 'As directed';
+  const dosageLabel = [presc.dosage, presc.dosage_unit].filter(Boolean).join(' ').trim() || presc.dosage;
+
+  return {
+    id: String(presc.id),
+    patientName: presc.patient_name?.trim() || `Patient #${presc.patient_id}`,
+    patientId: String(presc.patient_id),
+    doctorName: presc.provider_name?.trim() || `Provider #${presc.provider_id}`,
+    doctorId: String(presc.provider_id),
+    date: presc.prescribed_date ? presc.prescribed_date.slice(0, 10) : new Date().toISOString().slice(0, 10),
+    medications: [{
+      name: presc.medication_name,
+      dosage: dosageLabel,
+      frequency: presc.frequency,
+      duration,
+    }],
+    status: mapBackendPrescriptionStatus(presc.status),
+    refillsAllowed: total,
+    refillsUsed,
+  };
+};
 
 // Helper to convert backend allergy to frontend format
 const mapBackendAllergy = (allergy: BackendAllergy): PatientAllergy => ({

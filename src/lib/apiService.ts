@@ -226,37 +226,44 @@ export const appointmentsApi = {
 
 export const prescriptionsApi = {
   createPrescription: async (prescriptionData: {
-    patient_id: string;
+    patient_id: number;
     medication_name: string;
     dosage: string;
+    dosage_unit: string;
     frequency: string;
-    duration_days: number;
-    refills_allowed: number;
-    notes?: string;
+    route: string;
+    instructions?: string;
+    quantity?: number;
+    refills?: number;
+    start_date: string;
+    end_date?: string | null;
   }) => {
-    const response = await apiClient.post('/prescriptions', prescriptionData);
+    const response = await apiClient.post('/prescriptions/', prescriptionData);
     return response.data;
   },
 
-  listPrescriptions: async (skip: number = 0, limit: number = 20) => {
-    const response = await apiClient.get('/prescriptions', { params: { skip, limit } });
+  listPrescriptions: async (skip: number = 0, limit: number = 100) => {
+    const response = await apiClient.get('/prescriptions/', { params: { skip, limit } });
     return response.data;
   },
 
-  getPrescription: async (prescriptionId: string) => {
+  getPrescription: async (prescriptionId: string | number) => {
     const response = await apiClient.get(`/prescriptions/${prescriptionId}`);
     return response.data;
   },
 
   updatePrescription: async (
-    prescriptionId: string,
+    prescriptionId: string | number,
     updateData: {
+      medication_name?: string;
       dosage?: string;
+      dosage_unit?: string;
       frequency?: string;
-      duration_days?: number;
-      refills_allowed?: number;
-      notes?: string;
-    }
+      route?: string;
+      instructions?: string;
+      status?: string;
+      refills_remaining?: number;
+    },
   ) => {
     const response = await apiClient.put(`/prescriptions/${prescriptionId}`, updateData);
     return response.data;

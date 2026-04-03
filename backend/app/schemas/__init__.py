@@ -151,13 +151,17 @@ class PrescriptionBase(BaseModel):
 
 
 class PrescriptionCreate(PrescriptionBase):
-    provider_id: int
+    """Patient receiving the prescription; prescriber is always the authenticated provider."""
+
+    patient_id: int
 
 
 class PrescriptionUpdate(BaseModel):
     medication_name: Optional[str] = None
     dosage: Optional[str] = None
+    dosage_unit: Optional[str] = None
     frequency: Optional[str] = None
+    route: Optional[str] = None
     instructions: Optional[str] = None
     status: Optional[str] = None
     refills_remaining: Optional[int] = None
@@ -170,7 +174,10 @@ class PrescriptionResponse(PrescriptionBase):
     status: str
     prescribed_date: datetime
     created_at: datetime
-    
+    refills_remaining: int = 0
+    patient_name: Optional[str] = None
+    provider_name: Optional[str] = None
+
     class Config:
         from_attributes = True
 

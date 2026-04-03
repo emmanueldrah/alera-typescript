@@ -1,11 +1,13 @@
 import type { User } from '@/contexts/AuthContext';
 import type { ImagingScan, LabTest, Prescription } from '@/data/mockData';
+import { normalizeUserRole } from '@/lib/roleUtils';
 
 export const getVisiblePrescriptions = (prescriptions: Prescription[], user?: Pick<User, 'id' | 'role'> | null) => {
   if (!user) return [];
-  if (user.role === 'doctor') return prescriptions.filter((prescription) => prescription.doctorId === user.id);
-  if (user.role === 'patient') return prescriptions.filter((prescription) => prescription.patientId === user.id);
-  if (user.role === 'pharmacy') return prescriptions;
+  const role = normalizeUserRole(user.role) ?? user.role;
+  if (role === 'doctor') return prescriptions.filter((prescription) => prescription.doctorId === user.id);
+  if (role === 'patient') return prescriptions.filter((prescription) => prescription.patientId === user.id);
+  if (role === 'pharmacy') return prescriptions;
   return [];
 };
 
