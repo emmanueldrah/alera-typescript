@@ -16,6 +16,7 @@ import AnalyticsPage from '@/pages/features/AnalyticsPage';
 import PatientsPage from '@/pages/features/PatientsPage';
 import DoctorsPage from '@/pages/features/DoctorsPage';
 import ReferralsPage from '@/pages/features/ReferralsPage';
+import type { ReferralKind } from '@/lib/referralUtils';
 import MessagesPage from '@/pages/features/MessagesPage';
 import HealthMetricsPage from '@/pages/features/HealthMetricsPage';
 import NotificationCenterPage from '@/pages/features/NotificationCenterPage';
@@ -39,16 +40,18 @@ interface FeatureWrapperProps {
 
 interface FeatureConfig {
   component: React.ComponentType;
+  /** Passed to pages that need route-specific props (e.g. referral queue). */
+  props?: Record<string, unknown>;
 }
 
 const pageMap: Record<string, FeatureConfig> = {
   appointments: { component: AppointmentsPage },
   prescriptions: { component: PrescriptionsPage },
   'lab-results': { component: LabResultsPage },
-  'lab-referrals': { component: ReferralsPage },
+  'lab-referrals': { component: ReferralsPage, props: { referralKind: 'laboratory' as ReferralKind } },
   'test-requests': { component: LabResultsPage },
   imaging: { component: ImagingPage },
-  'imaging-referrals': { component: ReferralsPage },
+  'imaging-referrals': { component: ReferralsPage, props: { referralKind: 'imaging' as ReferralKind } },
   'scan-requests': { component: ImagingPage },
   ambulance: { component: AmbulancePage },
   requests: { component: AmbulancePage },
@@ -61,7 +64,8 @@ const pageMap: Record<string, FeatureConfig> = {
   analytics: { component: AnalyticsPage },
   patients: { component: PatientsPage },
   doctors: { component: DoctorsPage },
-  referrals: { component: ReferralsPage },
+  referrals: { component: ReferralsPage, props: { referralKind: 'hospital' as ReferralKind } },
+  'pharmacy-referrals': { component: ReferralsPage, props: { referralKind: 'pharmacy' as ReferralKind } },
   results: { component: LabResultsPage },
   messages: { component: MessagesPage },
   'health-metrics': { component: HealthMetricsPage },
@@ -96,7 +100,7 @@ const FeatureWrapper = ({ page }: FeatureWrapperProps) => {
   }
   return (
     <DashboardLayout>
-      <Page />
+      <Page {...(config.props ?? {})} />
     </DashboardLayout>
   );
 };

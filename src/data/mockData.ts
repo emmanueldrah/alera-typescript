@@ -616,9 +616,12 @@ export interface AmbulanceVehicle {
   equipment: string[];
 }
 
-// PHASE 2: Referrals between providers
+export type ReferralType = 'hospital' | 'laboratory' | 'imaging' | 'pharmacy';
+
+// PHASE 2: Referrals — distinct queues (hospital/specialist, lab, imaging, pharmacy)
 export interface Referral {
   id: string;
+  referralType: ReferralType;
   patientId: string;
   patientName: string;
   fromDoctorId: string;
@@ -719,6 +722,7 @@ export const ambulances: AmbulanceVehicle[] = [
 export const referrals: Referral[] = [
   {
     id: 'ref-001',
+    referralType: 'hospital',
     patientId: 'pat-001',
     patientName: 'John Doe',
     fromDoctorId: 'd-001',
@@ -733,6 +737,7 @@ export const referrals: Referral[] = [
   },
   {
     id: 'ref-002',
+    referralType: 'hospital',
     patientId: 'pat-002',
     patientName: 'Jane Smith',
     fromDoctorId: 'd-003',
@@ -747,6 +752,7 @@ export const referrals: Referral[] = [
   },
   {
     id: 'ref-003',
+    referralType: 'hospital',
     patientId: 'pat-003',
     patientName: 'Robert Johnson',
     fromDoctorId: 'd-001',

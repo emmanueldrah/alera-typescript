@@ -175,6 +175,7 @@ type BackendReferral = {
   id: number;
   patient_id: number;
   from_doctor_id: number;
+  referral_type?: string | null;
   to_department: string;
   to_department_id?: string | null;
   reason: string;
@@ -325,20 +326,26 @@ const mapBackendImagingScan = (scan: BackendImagingScan): ImagingScan => ({
   results: scan.findings,
 });
 
-const mapBackendReferral = (r: BackendReferral): Referral => ({
-  id: String(r.id),
-  patientId: String(r.patient_id),
-  patientName: r.patient_name?.trim() || `Patient #${r.patient_id}`,
-  fromDoctorId: String(r.from_doctor_id),
-  fromDoctorName: r.from_doctor_name?.trim() || `Provider #${r.from_doctor_id}`,
-  toDepartmentId: r.to_department_id || getReferralDepartmentId(r.to_department),
-  toDepartment: r.to_department,
-  reason: r.reason,
-  date: (r.created_at || '').slice(0, 10),
-  status: r.status as Referral['status'],
-  lastUpdated: (r.updated_at || r.created_at || '').slice(0, 10),
-  notes: r.notes || undefined,
-});
+const mapBackendReferral = (r: BackendReferral): Referral => {
+  const rt = (r.referral_type || 'hospital').toLowerCase();
+  const referralType: Referral['referralType'] =
+    rt === 'laboratory' || rt === 'imaging' || rt === 'pharmacy' ? rt : 'hospital';
+  return {
+    id: String(r.id),
+    referralType,
+    patientId: String(r.patient_id),
+    patientName: r.patient_name?.trim() || `Patient #${r.patient_id}`,
+    fromDoctorId: String(r.from_doctor_id),
+    fromDoctorName: r.from_doctor_name?.trim() || `Provider #${r.from_doctor_id}`,
+    toDepartmentId: r.to_department_id || getReferralDepartmentId(r.to_department),
+    toDepartment: r.to_department,
+    reason: r.reason,
+    date: (r.created_at || '').slice(0, 10),
+    status: r.status as Referral['status'],
+    lastUpdated: (r.updated_at || r.created_at || '').slice(0, 10),
+    notes: r.notes || undefined,
+  };
+};
 
 const labStatusToApi = (s: LabTest['status']): string => {
   if (s === 'requested') return 'ordered';
@@ -654,6 +661,7 @@ export const AppDataProvider: React.FC<{ children: React.ReactNode }> = ({ child
         try {
           await referralsApi.createReferral({
             patient_id: Number(referral.patientId),
+            referral_type: referral.referralType,
             to_department: referral.toDepartment,
             to_department_id: referral.toDepartmentId || undefined,
             reason: referral.reason,

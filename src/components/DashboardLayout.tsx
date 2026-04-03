@@ -32,6 +32,8 @@ const roleNavItems: Record<string, { label: string; icon: React.ReactNode; path:
     { label: 'Prescriptions', icon: <FileText className="w-5 h-5" />, path: '/dashboard/prescriptions' },
     { label: 'Lab Referrals', icon: <FlaskConical className="w-5 h-5" />, path: '/dashboard/lab-referrals' },
     { label: 'Imaging Referrals', icon: <ScanLine className="w-5 h-5" />, path: '/dashboard/imaging-referrals' },
+    { label: 'Pharmacy Referrals', icon: <Pill className="w-5 h-5" />, path: '/dashboard/pharmacy-referrals' },
+    { label: 'Specialist Referrals', icon: <FileText className="w-5 h-5" />, path: '/dashboard/referrals' },
     { label: 'Patient Timeline', icon: <Clock className="w-5 h-5" />, path: '/dashboard/timeline' },
     { label: 'Messages', icon: <MessageSquare className="w-5 h-5" />, path: '/dashboard/messages' },
   ],
@@ -54,6 +56,7 @@ const roleNavItems: Record<string, { label: string; icon: React.ReactNode; path:
   pharmacy: [
     { label: 'Dashboard', icon: <LayoutDashboard className="w-5 h-5" />, path: '/dashboard' },
     { label: 'Prescriptions', icon: <Pill className="w-5 h-5" />, path: '/dashboard/prescriptions' },
+    { label: 'Referral requests', icon: <FileText className="w-5 h-5" />, path: '/dashboard/pharmacy-referrals' },
     { label: 'Inventory', icon: <Activity className="w-5 h-5" />, path: '/dashboard/inventory' },
   ],
   ambulance: [

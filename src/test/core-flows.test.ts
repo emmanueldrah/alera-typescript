@@ -245,6 +245,7 @@ describe('referral workflow helpers', () => {
   const referrals: Referral[] = [
     {
       id: 'ref-1',
+      referralType: 'hospital',
       patientId: 'patient-1',
       patientName: 'Jane Roe',
       fromDoctorId: 'doctor-1',

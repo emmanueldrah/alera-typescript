@@ -86,10 +86,28 @@ def receive_connect(dbapi_connection, connection_record):
         cursor.close()
 
 
+def _patch_referrals_referral_type_column():
+    """SQLite: add referral_type if missing (create_all does not ALTER existing tables)."""
+    if not str(engine.url).startswith("sqlite"):
+        return
+    from sqlalchemy import text
+
+    try:
+        with engine.begin() as conn:
+            conn.execute(
+                text(
+                    "ALTER TABLE referrals ADD COLUMN referral_type VARCHAR(32) NOT NULL DEFAULT 'hospital'"
+                )
+            )
+    except Exception:
+        pass
+
+
 def init_db():
     """Initialize database - create all tables and seed default admin"""
     try:
         Base.metadata.create_all(bind=engine)
+        _patch_referrals_referral_type_column()
         print("✓ Database tables initialized successfully")
     except Exception as e:
         print(f"ERROR: Failed to initialize database tables: {e}")

@@ -1,6 +1,6 @@
 from pydantic import BaseModel, EmailStr, Field
 from datetime import datetime
-from typing import Optional, List
+from typing import Optional, List, Literal
 from enum import Enum
 
 
@@ -325,8 +325,13 @@ class ImagingScanResponse(ImagingScanBase):
 
 
 # Referral schemas
+REFERRAL_TYPE_VALUES = ("hospital", "laboratory", "imaging", "pharmacy")
+ReferralTypeLiteral = Literal["hospital", "laboratory", "imaging", "pharmacy"]
+
+
 class ReferralCreate(BaseModel):
     patient_id: int
+    referral_type: ReferralTypeLiteral = "hospital"
     to_department: str
     to_department_id: Optional[str] = None
     reason: str
@@ -342,6 +347,7 @@ class ReferralResponse(BaseModel):
     id: int
     patient_id: int
     from_doctor_id: int
+    referral_type: str
     to_department: str
     to_department_id: Optional[str] = None
     reason: str

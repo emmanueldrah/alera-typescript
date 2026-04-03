@@ -22,6 +22,7 @@ export const featureAccessMap: Record<string, UserRole[]> = {
   patients: ['doctor', 'hospital', 'admin'],
   doctors: ['patient', 'hospital', 'admin'],
   referrals: ['doctor', 'hospital'],
+  'pharmacy-referrals': ['doctor', 'pharmacy'],
   results: ['laboratory', 'imaging'],
   messages: ['patient', 'doctor'],
   'health-metrics': ['patient'],

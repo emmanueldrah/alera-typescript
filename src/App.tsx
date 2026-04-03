@@ -33,7 +33,7 @@ const featureRoutes = [
   'appointments', 'prescriptions', 'lab-results', 'lab-referrals', 'test-requests', 'lab-results-management',
   'imaging', 'imaging-referrals', 'scan-requests', 'ambulance', 'requests',
   'timeline', 'inventory', 'vehicles', 'users', 'verifications', 'analytics',
-  'patients', 'doctors', 'referrals', 'results', 'messages', 'profile',
+  'patients', 'doctors', 'referrals', 'pharmacy-referrals', 'results', 'messages', 'profile',
   'health-metrics', 'notifications', 'appointment-reminders', 'smart-appointment-reminders',
   'allergies', 'prescription-refills', 'medical-history', 'consent',
   'clinical-notes', 'problem-list', 'medication-adherence',
