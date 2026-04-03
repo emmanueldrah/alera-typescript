@@ -14,6 +14,7 @@ import LandingHome from "./pages/Landing/Home";
 import LandingHowItWorks from "./pages/Landing/HowItWorks";
 import LandingFeatures from "./pages/Landing/Features";
 import LandingTrust from "./pages/Landing/Trust";
+import LandingWhoWeServe from "./pages/Landing/WhoWeServe";
 import Login from "./pages/Login";
 import Signup from "./pages/Signup";
 import DashboardHome from "./pages/DashboardHome";
@@ -58,6 +59,7 @@ const App = () => {
                         <Route path="/how-it-works" element={<LandingHowItWorks />} />
                         <Route path="/features" element={<LandingFeatures />} />
                         <Route path="/trust" element={<LandingTrust />} />
+                        <Route path="/who-we-serve" element={<LandingWhoWeServe />} />
                       </Route>
                       <Route path="/login" element={<AuthRedirect><Login /></AuthRedirect>} />
                       <Route path="/signup" element={<AuthRedirect><Signup /></AuthRedirect>} />
