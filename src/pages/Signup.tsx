@@ -3,6 +3,7 @@ import { useNavigate, Link } from 'react-router-dom';
 import { useAuth } from '@/contexts/useAuth';
 import { motion } from 'framer-motion';
 import { Heart, User, Building2, FlaskConical, ScanLine, Pill, Ambulance, ArrowRight, Eye, EyeOff } from 'lucide-react';
+import { handleApiError } from '@/lib/errorHandler';
 
 type SignupRole = 'patient' | 'doctor' | 'hospital' | 'laboratory' | 'imaging' | 'pharmacy' | 'ambulance';
 
@@ -31,13 +32,14 @@ const Signup = () => {
     e.preventDefault();
     if (!selectedRole) { setError('Please select a role'); return; }
     if (!name.trim() || !email.trim() || !password.trim()) { setError('All fields are required'); return; }
+    if (password.trim().length < 8) { setError('Password must be at least 8 characters.'); return; }
     setLoading(true);
     setError('');
     try {
       await signup(name, email, password, selectedRole);
       navigate('/dashboard');
-    } catch {
-      setError('Signup failed. Please try again.');
+    } catch (error) {
+      setError(handleApiError(error));
     } finally {
       setLoading(false);
     }
