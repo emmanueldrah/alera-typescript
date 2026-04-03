@@ -41,14 +41,16 @@ const isApiUser = (data: unknown): data is ApiUser => {
 
 // Map backend user roles to frontend format if needed
 const mapBackendUser = (data: ApiUser): User => {
-  const mapBackendRoleToUserRole = (role: ApiUser['role']): UserRole => {
+  const mapBackendRoleToUserRole = (role: ApiUser['role'] | string): UserRole => {
     // Frontend only supports a reduced set of roles; map the rest into the closest matches.
     switch (role) {
       case 'patient':
       case 'provider':
-      case 'pharmacist':
       case 'admin':
         return role;
+      case 'pharmacist':
+      case 'pharmacy':
+        return 'pharmacist';
       case 'hospital':
       case 'laboratory':
       case 'imaging':
@@ -96,14 +98,14 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     let isMounted = true;
 
     const initializeAuth = async () => {
+      const initToken = getAccessToken();
       try {
-        const token = getAccessToken();
-        if (token) {
+        if (initToken) {
           // Try to fetch current user
           const userData = await authApi.getCurrentUser();
           // If a signup/login happened while this request was in flight,
           // ignore the stale initialization result so it can't overwrite state.
-          if (!isMounted || getAccessToken() !== token) return;
+          if (!isMounted || getAccessToken() !== initToken) return;
           if (isApiUser(userData)) {
             setUser(mapBackendUser(userData));
           } else {
@@ -112,8 +114,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         }
       } catch (error) {
         // Avoid clearing tokens based on a stale initialization request.
-        const token = getAccessToken();
-        if (!isMounted || !token) return;
+        if (!isMounted || !initToken || getAccessToken() !== initToken) return;
         console.error('Failed to initialize auth:', error);
         clearTokens();
       } finally {
