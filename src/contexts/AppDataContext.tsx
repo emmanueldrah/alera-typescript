@@ -1,9 +1,10 @@
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import type { AmbulanceRequest, Appointment, ImagingScan, LabTest, Prescription, VitalSigns, HealthMetric, InventoryItem, AmbulanceVehicle, Referral, ProviderVerification, PatientAllergy, PatientMedicalHistory, PatientConsent, DrugInteraction, ClinicalNote, PatientProblem, MedicationAdherence, ProviderPricing, ServiceCharge, Invoice, BillingRecord, AppointmentReminder } from '@/data/mockData';
 import { ambulances as mockAmbulances, inventoryItems as mockInventoryItems, referrals as mockReferrals, providerVerifications as mockVerifications, drugInteractionDatabase as mockDrugInteractions, patientAllergies as mockAllergies, medicalHistories as mockMedicalHistories, patientConsents as mockConsents } from '@/data/mockData';
-import { storageKeys } from '@/lib/storageKeys';
+import { getAppDataStorageKey, storageKeys } from '@/lib/storageKeys';
 import { AppDataContext, type AppDataContextType } from './app-data-context';
 import { appointmentsApi, prescriptionsApi, allergiesApi, api } from '@/lib/apiService';
+import { useAuth } from './useAuth';
 
 type BackendAppointment = {
   id: string | number;
@@ -108,36 +109,15 @@ const emptyData: StoredAppData = {
   appointmentReminders: [],
 };
 
-const STORAGE_KEY = storageKeys.appData;
-
 const safeParse = (raw: string | null): StoredAppData => {
   if (!raw) {
-    return {
-      ...emptyData,
-      ambulances: mockAmbulances,
-      inventoryItems: mockInventoryItems,
-      referrals: mockReferrals,
-      providerVerifications: mockVerifications,
-    };
+    return { ...emptyData };
   }
   try {
     const parsed = JSON.parse(raw) as StoredAppData;
-    return {
-      ...emptyData,
-      ...parsed,
-      ambulances: parsed.ambulances && parsed.ambulances.length > 0 ? parsed.ambulances : mockAmbulances,
-      inventoryItems: parsed.inventoryItems && parsed.inventoryItems.length > 0 ? parsed.inventoryItems : mockInventoryItems,
-      referrals: parsed.referrals && parsed.referrals.length > 0 ? parsed.referrals : mockReferrals,
-      providerVerifications: parsed.providerVerifications && parsed.providerVerifications.length > 0 ? parsed.providerVerifications : mockVerifications,
-    };
+    return { ...emptyData, ...parsed };
   } catch {
-    return {
-      ...emptyData,
-      ambulances: mockAmbulances,
-      inventoryItems: mockInventoryItems,
-      referrals: mockReferrals,
-      providerVerifications: mockVerifications,
-    };
+    return { ...emptyData };
   }
 };
 
@@ -254,13 +234,16 @@ const mapBackendImagingScan = (scan: BackendImagingScan): ImagingScan => ({
 });
 
 export const AppDataProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
+  const { user } = useAuth();
+  const storageKey = user ? getAppDataStorageKey(user.email) : storageKeys.appData;
+
   const [data, setData] = useState<StoredAppData>(emptyData);
   const [isLoadingAPI, setIsLoadingAPI] = useState(true);
 
   // Load data from API
   const loadAPIData = useCallback(async (isPolling = false) => {
     try {
-      const stored = safeParse(localStorage.getItem(STORAGE_KEY));
+      const stored = safeParse(localStorage.getItem(storageKey));
       const token = localStorage.getItem('access_token');
       if (!token) {
         if (!isPolling) {
@@ -305,7 +288,7 @@ export const AppDataProvider: React.FC<{ children: React.ReactNode }> = ({ child
         patientAllergies,
         labTests,
         imagingScans,
-        // These remain mock for now
+        // These may be local-only for now; keep what we already had cached for this user.
         ambulances: stored.ambulances,
         inventoryItems: stored.inventoryItems,
         referrals: stored.referrals,
@@ -316,7 +299,7 @@ export const AppDataProvider: React.FC<{ children: React.ReactNode }> = ({ child
     } finally {
       if (!isPolling) setIsLoadingAPI(false);
     }
-  }, []);
+  }, [storageKey]);
 
   // Initial load and polling
   useEffect(() => {
@@ -342,10 +325,10 @@ export const AppDataProvider: React.FC<{ children: React.ReactNode }> = ({ child
   const updateData = useCallback((updater: (current: StoredAppData) => StoredAppData) => {
     setData((current) => {
       const next = updater(current);
-      localStorage.setItem(STORAGE_KEY, JSON.stringify(next));
+      localStorage.setItem(storageKey, JSON.stringify(next));
       return next;
     });
-  }, []);
+  }, [storageKey]);
 
   const contextValue = useMemo<AppDataContextType>(() => ({
     appointments: data.appointments,

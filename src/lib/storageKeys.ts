@@ -14,6 +14,11 @@ export const storageKeys = {
   notificationPrefix: NOTIFICATION_STORAGE_PREFIX,
 } as const;
 
+export const getAppDataStorageKey = (email: string) => {
+  // Per-user cache prevents one user's mock/default data from leaking into another user's dashboard.
+  return `alera_app_data:${encodeURIComponent(email.toLowerCase())}`;
+};
+
 export const getNotificationStorageKey = (email: string) =>
   `${NOTIFICATION_STORAGE_PREFIX}${email.toLowerCase()}`;
 
