@@ -1,5 +1,5 @@
-from .user import User
-from .appointment import Appointment
+from .user import User, UserRole
+from .appointment import Appointment, AppointmentStatus
 from .prescription import Prescription
 from .allergy import Allergy
 from .medical_history import MedicalHistory
@@ -19,7 +19,9 @@ from .additional_features import (
 
 __all__ = [
     "User",
+    "UserRole",
     "Appointment",
+    "AppointmentStatus",
     "Prescription",
     "Allergy",
     "MedicalHistory",
