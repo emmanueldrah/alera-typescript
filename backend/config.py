@@ -38,8 +38,20 @@ class Settings(BaseSettings):
     CORS_ORIGIN_REGEX: str = r"https://.*\.vercel\.app"
 
     # Email
+    EMAIL_PROVIDER: str = "auto"
+    EMAIL_FROM_NAME: str = "ALERA Healthcare"
+    EMAIL_FROM_EMAIL: str = "noreply@alera.health"
+    EMAIL_TIMEOUT_SECONDS: int = 10
+    RESEND_API_KEY: str = ""
+    RESEND_FROM_EMAIL: str = "noreply@alera.health"
     SENDGRID_API_KEY: str = ""
     SENDGRID_FROM_EMAIL: str = "noreply@alera.health"
+    SMTP_HOST: str = ""
+    SMTP_PORT: int = 587
+    SMTP_USERNAME: str = ""
+    SMTP_PASSWORD: str = ""
+    SMTP_USE_TLS: bool = True
+    SMTP_USE_SSL: bool = False
     FRONTEND_URL: str = Field(default="http://localhost:5173", description="Frontend application base URL")
 
     # SMS

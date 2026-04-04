@@ -27,6 +27,7 @@ from app.routes.auth import (
     reset_password,
     verify_email,
 )
+from app.services.email_service import EmailService
 from app.routes.consents import create_consent
 from app.routes.documents import get_document, list_documents
 from app.routes.reminders_templates import create_reminder, list_reminders
@@ -139,6 +140,38 @@ def test_public_registration_rejects_admin_and_verifies_patients_by_default(db_s
     assert user.role == "patient"
     assert user.is_verified is True
     assert user.is_active is True
+
+
+def test_verification_email_hits_sendgrid_api_when_configured(monkeypatch):
+    captured: dict[str, object] = {}
+
+    class FakeResponse:
+        def raise_for_status(self) -> None:
+            return None
+
+    async def fake_post(self, url, headers=None, json=None):
+        captured["url"] = url
+        captured["headers"] = headers
+        captured["json"] = json
+        return FakeResponse()
+
+    monkeypatch.setattr("app.services.email_service.settings.EMAIL_PROVIDER", "sendgrid")
+    monkeypatch.setattr("app.services.email_service.settings.SENDGRID_API_KEY", "sg-test-key")
+    monkeypatch.setattr("app.services.email_service.settings.SENDGRID_FROM_EMAIL", "noreply@alera.health")
+    monkeypatch.setattr("app.services.email_service.httpx.AsyncClient.post", fake_post)
+
+    run(
+        EmailService.send_verification_email(
+            recipient_email="provider@example.com",
+            recipient_name="Dr Example",
+            verification_link="https://alera.example/verify-email?token=test-token",
+        )
+    )
+
+    assert captured["url"] == "https://api.sendgrid.com/v3/mail/send"
+    assert captured["headers"]["Authorization"] == "Bearer sg-test-key"
+    assert captured["json"]["personalizations"][0]["to"][0]["email"] == "provider@example.com"
+    assert captured["json"]["subject"] == "ALERA - Verify Your Email"
 
 
 def test_sqlalchemy_enums_persist_lowercase_values():

@@ -49,8 +49,6 @@ def _issue_email_verification_token(user: User, db: Session) -> str:
     token = generate_secure_token()
     user.email_verification_token_hash = hash_token(token)
     user.email_verification_expires_at = utcnow() + timedelta(hours=24)
-    db.commit()
-    db.refresh(user)
     return token
 
 
@@ -58,8 +56,6 @@ def _issue_password_reset_token(user: User, db: Session) -> str:
     token = generate_secure_token()
     user.password_reset_token_hash = hash_token(token)
     user.password_reset_expires_at = utcnow() + timedelta(hours=24)
-    db.commit()
-    db.refresh(user)
     return token
 
 
@@ -126,16 +122,26 @@ async def register(user_data: UserCreate, db: Session = Depends(get_db)):
     )
 
     db.add(db_user)
-    db.commit()
-    db.refresh(db_user)
+    db.flush()
 
     if not db_user.email_verified:
         verification_token = _issue_email_verification_token(db_user, db)
-        await EmailService.send_verification_email(
-            recipient_email=db_user.email,
-            recipient_name=f"{db_user.first_name} {db_user.last_name}".strip(),
-            verification_link=_frontend_link("/verify-email", verification_token),
-        )
+        try:
+            await EmailService.send_verification_email(
+                recipient_email=db_user.email,
+                recipient_name=f"{db_user.first_name} {db_user.last_name}".strip(),
+                verification_link=_frontend_link("/verify-email", verification_token),
+            )
+        except HTTPException:
+            db.rollback()
+            raise
+
+    try:
+        db.commit()
+        db.refresh(db_user)
+    except Exception:
+        db.rollback()
+        raise
 
     access_token, refresh_token = _build_token_pair(db_user)
 
@@ -218,11 +224,21 @@ async def request_password_reset(
         return {"message": "If an account with that email exists, a reset link has been sent."}
 
     reset_token = _issue_password_reset_token(user, db)
-    await EmailService.send_password_reset(
-        recipient_email=user.email,
-        recipient_name=f"{user.first_name} {user.last_name}".strip(),
-        reset_link=_frontend_link("/reset-password", reset_token),
-    )
+    try:
+        await EmailService.send_password_reset(
+            recipient_email=user.email,
+            recipient_name=f"{user.first_name} {user.last_name}".strip(),
+            reset_link=_frontend_link("/reset-password", reset_token),
+        )
+    except HTTPException:
+        db.rollback()
+        raise
+
+    try:
+        db.commit()
+    except Exception:
+        db.rollback()
+        raise
     return {"message": "If an account with that email exists, a reset link has been sent."}
 
 
@@ -256,7 +272,11 @@ async def reset_password(
     user.password_reset_token_hash = None
     user.password_reset_expires_at = None
     user.session_version = int(user.session_version or 0) + 1
-    db.commit()
+    try:
+        db.commit()
+    except Exception:
+        db.rollback()
+        raise
 
     from app.routes.audit import log_action
 
@@ -325,11 +345,17 @@ async def resend_email_verification(
         return {"message": "Email is already verified"}
 
     verification_token = _issue_email_verification_token(current_user, db)
-    await EmailService.send_verification_email(
-        recipient_email=current_user.email,
-        recipient_name=f"{current_user.first_name} {current_user.last_name}".strip(),
-        verification_link=_frontend_link("/verify-email", verification_token),
-    )
+    try:
+        await EmailService.send_verification_email(
+            recipient_email=current_user.email,
+            recipient_name=f"{current_user.first_name} {current_user.last_name}".strip(),
+            verification_link=_frontend_link("/verify-email", verification_token),
+        )
+    except HTTPException:
+        db.rollback()
+        raise
+
+    db.commit()
 
     from app.routes.audit import log_action
 
