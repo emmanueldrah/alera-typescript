@@ -8,6 +8,7 @@ from datetime import datetime
 import enum
 import sys
 from database import Base
+from app.utils.db_types import enum_values
 from app.utils.time import utcnow
 
 
@@ -28,7 +29,7 @@ class PatientDocument(Base):
     patient_id = Column(Integer, ForeignKey("users.id"), nullable=False, index=True)
     file_id = Column(String, unique=True, index=True)
     filename = Column(String, nullable=False)
-    file_type = Column(SQLEnum(DocumentType), default=DocumentType.OTHER)
+    file_type = Column(SQLEnum(DocumentType, values_callable=enum_values), default=DocumentType.OTHER)
     file_size = Column(Integer)  # bytes
     mime_type = Column(String)
     upload_time = Column(DateTime, default=utcnow)

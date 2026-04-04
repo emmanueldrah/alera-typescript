@@ -8,6 +8,7 @@ from datetime import datetime
 import enum
 import sys
 from database import Base
+from app.utils.db_types import enum_values
 from app.utils.time import utcnow
 
 
@@ -38,7 +39,7 @@ class LabTest(Base):
     test_name = Column(String, nullable=False)
     test_code = Column(String, nullable=True)
     description = Column(Text, nullable=True)
-    status = Column(SQLEnum(LabTestStatus), default=LabTestStatus.ORDERED)
+    status = Column(SQLEnum(LabTestStatus, values_callable=enum_values), default=LabTestStatus.ORDERED)
 
     # Results
     result_value = Column(String, nullable=True)
@@ -90,7 +91,7 @@ class ImagingScan(Base):
     scan_type = Column(String, nullable=False)  # X-Ray, MRI, CT, Ultrasound
     body_part = Column(String, nullable=True)
     clinical_indication = Column(Text, nullable=True)
-    status = Column(SQLEnum(ImagingScanStatus), default=ImagingScanStatus.ORDERED)
+    status = Column(SQLEnum(ImagingScanStatus, values_callable=enum_values), default=ImagingScanStatus.ORDERED)
 
     # Results
     findings = Column(Text, nullable=True)

@@ -11,7 +11,10 @@ from pydantic import ValidationError
 
 from app.models import PatientDocument
 from app.models.additional_features import DocumentType
-from app.models.user import User
+from app.models.ambulance import AmbulanceRequest, AmbulanceRequestStatus, EmergencyPriority
+from app.models.appointment import Appointment, AppointmentStatus, AppointmentType
+from app.models.lab_imaging import ImagingScan, ImagingScanStatus, LabTest, LabTestStatus
+from app.models.user import User, UserRole
 from app.routes.admin import approve_provider, deactivate_user
 from app.routes.appointments import create_appointment
 from app.routes.auth import (
@@ -136,6 +139,22 @@ def test_public_registration_rejects_admin_and_verifies_patients_by_default(db_s
     assert user.role == "patient"
     assert user.is_verified is True
     assert user.is_active is True
+
+
+def test_sqlalchemy_enums_persist_lowercase_values():
+    cases = [
+        (User.__table__.c.role.type, [member.value for member in UserRole]),
+        (Appointment.__table__.c.appointment_type.type, [member.value for member in AppointmentType]),
+        (Appointment.__table__.c.status.type, [member.value for member in AppointmentStatus]),
+        (LabTest.__table__.c.status.type, [member.value for member in LabTestStatus]),
+        (ImagingScan.__table__.c.status.type, [member.value for member in ImagingScanStatus]),
+        (AmbulanceRequest.__table__.c.status.type, [member.value for member in AmbulanceRequestStatus]),
+        (AmbulanceRequest.__table__.c.priority.type, [member.value for member in EmergencyPriority]),
+        (PatientDocument.__table__.c.file_type.type, [member.value for member in DocumentType]),
+    ]
+
+    for column_type, expected in cases:
+        assert list(column_type.enums) == expected
 
 
 def test_professional_registration_requires_license_and_starts_pending(db_session):

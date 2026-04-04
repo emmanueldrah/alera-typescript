@@ -1,8 +1,9 @@
-from sqlalchemy import Column, Integer, String, Enum, DateTime, Boolean, Text, Index
+from sqlalchemy import Column, Integer, String, Enum as SQLEnum, DateTime, Boolean, Text, Index
 from sqlalchemy.orm import relationship
 from datetime import datetime
 import enum
 from database import Base
+from app.utils.db_types import enum_values
 from app.utils.time import utcnow
 
 
@@ -36,7 +37,7 @@ class User(Base):
     zip_code = Column(String(20), nullable=True)
     
     # Account Information
-    role = Column(Enum(UserRole), default=UserRole.PATIENT, nullable=False)
+    role = Column(SQLEnum(UserRole, values_callable=enum_values), default=UserRole.PATIENT, nullable=False)
     is_active = Column(Boolean, default=True)
     is_verified = Column(Boolean, default=False)
     email_verified = Column(Boolean, default=False, nullable=False)

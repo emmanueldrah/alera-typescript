@@ -1,8 +1,9 @@
-from sqlalchemy import Column, Integer, String, DateTime, Enum, ForeignKey, Text, Index
+from sqlalchemy import Column, Integer, String, DateTime, Enum as SQLEnum, ForeignKey, Text, Index
 from sqlalchemy.orm import relationship
 from datetime import datetime
 import enum
 from database import Base
+from app.utils.db_types import enum_values
 from app.utils.time import utcnow
 
 
@@ -33,8 +34,8 @@ class Appointment(Base):
     # Appointment Details
     title = Column(String(255), nullable=False)
     description = Column(Text, nullable=True)
-    appointment_type = Column(Enum(AppointmentType), default=AppointmentType.TELEHEALTH, nullable=False)
-    status = Column(Enum(AppointmentStatus), default=AppointmentStatus.SCHEDULED, nullable=False)
+    appointment_type = Column(SQLEnum(AppointmentType, values_callable=enum_values), default=AppointmentType.TELEHEALTH, nullable=False)
+    status = Column(SQLEnum(AppointmentStatus, values_callable=enum_values), default=AppointmentStatus.SCHEDULED, nullable=False)
     
     # Date/Time
     scheduled_time = Column(DateTime, nullable=False, index=True)
