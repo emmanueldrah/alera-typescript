@@ -20,86 +20,96 @@ async def get_dashboard_stats(
     current_user: User = Depends(get_current_admin),
     db: Session = Depends(get_db)
 ):
-    """Get admin dashboard statistics with accurate integration"""
+    """Get admin dashboard statistics with resilient integration"""
     
+    # Initialize default values
+    user_counts = {role.value: 0 for role in UserRole}
+    total_users = 0
+    total_appointments = 0
+    today_appointments = 0
+    active_prescriptions = 0
+    pending_labs = 0
+    pending_imaging = 0
+    active_emergencies = 0
+    
+    # 1. User counts - usually the most stable
     try:
-        # Count users by role - using .value for multi-DB compatibility
-        user_counts = {}
         for role in UserRole:
             count = db.query(User).filter(User.role == role.value).count()
             user_counts[role.value] = count
-        
-        # Total ecosystem count
         total_users = sum(user_counts.values())
-        
-        # Robust date range for "today"
+    except Exception as e:
+        print(f"Warning: Failed to fetch user counts: {e}")
+
+    # 2. Appointments
+    try:
         today = datetime.utcnow().date()
         start_of_today = datetime.combine(today, time.min)
         end_of_today = datetime.combine(today, time.max)
 
-        # Count appointments
         total_appointments = db.query(Appointment).count()
         today_appointments = db.query(Appointment).filter(
             Appointment.scheduled_time >= start_of_today,
             Appointment.scheduled_time <= end_of_today
         ).count()
-        
-        # Count prescriptions
+    except Exception as e:
+        print(f"Warning: Failed to fetch appointment counts: {e}")
+
+    # 3. Prescriptions
+    try:
         active_prescriptions = db.query(Prescription).filter(
             Prescription.status == "active"
         ).count()
+    except Exception as e:
+        print(f"Warning: Failed to fetch prescription counts: {e}")
 
-        # Count Lab & Imaging - filter for anything NOT completed
+    # 4. Lab & Imaging
+    try:
         pending_labs = db.query(LabTest).filter(
             LabTest.status != LabTestStatus.COMPLETED.value
         ).count()
-        
         pending_imaging = db.query(ImagingScan).filter(
             ImagingScan.status != ImagingScanStatus.COMPLETED.value
         ).count()
+    except Exception as e:
+        print(f"Warning: Failed to fetch lab/imaging counts: {e}")
 
-        # Emergencies - Critical and not completed/cancelled
+    # 5. Emergencies
+    try:
         active_emergencies = db.query(AmbulanceRequest).filter(
             AmbulanceRequest.status != AmbulanceRequestStatus.COMPLETED.value,
             AmbulanceRequest.status != AmbulanceRequestStatus.CANCELLED.value,
             AmbulanceRequest.priority == EmergencyPriority.CRITICAL.value
         ).count()
-        
-        return {
-            "timestamp": datetime.utcnow(),
-            "users": {
-                "total": total_users,
-                "by_role": user_counts
-            },
-            "appointments": {
-                "total": total_appointments,
-                "today": today_appointments
-            },
-            "prescriptions": {
-                "active": active_prescriptions
-            },
-            "lab_tests": {
-                "pending": pending_labs
-            },
-            "imaging": {
-                "pending": pending_imaging
-            },
-            "emergencies": {
-                "active": active_emergencies
-            }
-        }
     except Exception as e:
-        import traceback
-        error_msg = f"Dashboard statistics integration error: {str(e)}"
-        print(error_msg)
-        traceback.print_exc()
-        
-        # If we hit an error, we should still return a response that doesn't break the UI
-        # but now we'll include the error detail for the user to see if the UI renders it
-        raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=error_msg
-        )
+        print(f"Warning: Failed to fetch emergency counts: {e}")
+    
+    return {
+        "timestamp": datetime.utcnow(),
+        "users": {
+            "total": total_users,
+            "by_role": user_counts
+        },
+        "appointments": {
+            "total": total_appointments,
+            "today": today_appointments
+        },
+        "prescriptions": {
+            "active": active_prescriptions
+        },
+        "lab_tests": {
+            "pending": pending_labs
+        },
+        "imaging": {
+            "pending": pending_imaging
+        },
+        "emergencies": {
+            "active": active_emergencies
+        },
+        "system": {
+            "db_status": "partially_online" if total_users == 0 else "operational"
+        }
+    }
 
 
 
