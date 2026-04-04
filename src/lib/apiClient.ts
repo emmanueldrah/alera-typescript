@@ -25,52 +25,51 @@ export const apiClient: AxiosInstance = axios.create({
   },
 });
 
-// Token management
+// Token management - Now using httpOnly cookies instead of localStorage
 const getAccessToken = (): string | null => {
-  return localStorage.getItem('access_token');
+  // Tokens are now stored in httpOnly cookies, not accessible to JavaScript
+  // The browser will automatically send them with requests
+  return null;
 };
 
 const getRefreshToken = (): string | null => {
-  return localStorage.getItem('refresh_token');
+  // Refresh token is also in httpOnly cookie
+  return null;
 };
 
 const setTokens = (accessToken: string, refreshToken?: string): void => {
-  localStorage.setItem('access_token', accessToken);
-  if (refreshToken) {
-    localStorage.setItem('refresh_token', refreshToken);
-  }
+  // Tokens are now set by the backend as httpOnly cookies
+  // No longer storing in localStorage for security
 };
 
 const clearTokens = (): void => {
-  localStorage.removeItem('access_token');
-  localStorage.removeItem('refresh_token');
+  // Tokens are cleared by the backend when logging out
+  // No longer clearing localStorage
 };
 
-// Request interceptor - Add token to headers
+// Request interceptor - Cookies are sent automatically, no need to add Authorization header
 apiClient.interceptors.request.use(
   (config) => {
-    const token = getAccessToken();
-    if (token) {
-      config.headers.Authorization = `Bearer ${token}`;
-    }
+    // Cookies with tokens are sent automatically by the browser
+    // No need to manually add Authorization header
     return config;
   },
   (error) => Promise.reject(error)
 );
 
-// Response interceptor - Handle token refresh
+// Response interceptor - Handle token refresh with cookies
 let isRefreshing = false;
 let failedQueue: Array<{
-  resolve: (token: string) => void;
+  resolve: (config: any) => void;
   reject: (error: AxiosError) => void;
 }> = [];
 
-const processQueue = (error: AxiosError | null, token: string | null = null) => {
+const processQueue = (error: AxiosError | null, config: any = null) => {
   failedQueue.forEach((prom) => {
     if (error) {
       prom.reject(error);
-    } else if (token) {
-      prom.resolve(token);
+    } else if (config) {
+      prom.resolve(config);
     }
   });
   failedQueue = [];
@@ -87,15 +86,15 @@ apiClient.interceptors.response.use(
     const requestUrl = originalRequest.url || '';
     const isLoginOrRegisterRequest = requestUrl.includes('/auth/login') || requestUrl.includes('/auth/register');
     const isRefreshRequest = requestUrl.includes('/auth/refresh');
+    const isLogoutRequest = requestUrl.includes('/auth/logout');
 
     // Handle 401 Unauthorized - attempt token refresh for protected endpoints only.
-    if (error.response?.status === 401 && !originalRequest._retry && !isLoginOrRegisterRequest) {
+    if (error.response?.status === 401 && !originalRequest._retry && !isLoginOrRegisterRequest && !isRefreshRequest && !isLogoutRequest) {
       if (isRefreshing) {
         return new Promise((resolve, reject) => {
           failedQueue.push({ resolve, reject });
         })
-          .then((token) => {
-            originalRequest.headers.Authorization = `Bearer ${token}`;
+          .then(() => {
             return apiClient(originalRequest);
           })
           .catch((err) => Promise.reject(err));
@@ -104,24 +103,13 @@ apiClient.interceptors.response.use(
       originalRequest._retry = true;
       isRefreshing = true;
 
-      const refreshToken = getRefreshToken();
-      if (!refreshToken) {
-        clearTokens();
-        window.location.href = '/login';
-        return Promise.reject(error);
-      }
-
       try {
-        const response = await axios.post(`${API_BASE_URL}/auth/refresh`, {
-          refresh_token: refreshToken,
+        // Call refresh endpoint - it will set new cookies
+        await axios.post(`${API_BASE_URL}/auth/refresh`, {}, {
+          withCredentials: true, // Ensure cookies are sent
         });
 
-        const { access_token: accessToken, refresh_token: newRefreshToken } = response.data;
-        setTokens(accessToken, newRefreshToken);
-
-        processQueue(null, accessToken);
-        originalRequest.headers.Authorization = `Bearer ${accessToken}`;
-
+        processQueue(null, originalRequest);
         return apiClient(originalRequest);
       } catch (refreshError) {
         clearTokens();
@@ -133,13 +121,7 @@ apiClient.interceptors.response.use(
       }
     }
 
-    if (error.response?.status === 401 && isLoginOrRegisterRequest) {
-      return Promise.reject(error);
-    }
-
-    if (error.response?.status === 401 && isRefreshRequest) {
-      clearTokens();
-      window.location.href = '/login';
+    if (error.response?.status === 401 && (isLoginOrRegisterRequest || isRefreshRequest || isLogoutRequest)) {
       return Promise.reject(error);
     }
 

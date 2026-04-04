@@ -149,6 +149,29 @@ def _patch_users_account_recovery_columns():
             print(f"WARNING: Could not patch users.{column_name} column: {e}")
 
 
+def _patch_users_notification_preferences_columns():
+    """Add notification preference and privacy fields when upgrading an existing database."""
+    try:
+        columns = {column["name"] for column in inspect(engine).get_columns("users")}
+    except Exception:
+        return
+
+    patches = {
+        "notification_email": "BOOLEAN NOT NULL DEFAULT TRUE",
+        "notification_sms": "BOOLEAN NOT NULL DEFAULT FALSE",
+        "privacy_public_profile": "BOOLEAN NOT NULL DEFAULT FALSE",
+    }
+
+    for column_name, ddl in patches.items():
+        if column_name in columns:
+            continue
+        try:
+            with engine.begin() as conn:
+                conn.execute(text(f"ALTER TABLE users ADD COLUMN {column_name} {ddl}"))
+        except Exception as e:
+            print(f"WARNING: Could not patch users.{column_name} column: {e}")
+
+
 def _patch_admin_accounts_email_verified():
     """Backfill seeded/admin accounts so they never get stuck behind email verification."""
     try:
@@ -256,6 +279,7 @@ def init_db():
         _patch_referrals_referral_type_column()
         _patch_users_session_version_column()
         _patch_users_account_recovery_columns()
+        _patch_users_notification_preferences_columns()
         _patch_postgres_enum_values()
         _patch_admin_accounts_email_verified()
         print("✓ Database tables initialized successfully")

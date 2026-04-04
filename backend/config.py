@@ -25,7 +25,16 @@ class Settings(BaseSettings):
     ALGORITHM: str = "HS256"
     ACCESS_TOKEN_EXPIRE_MINUTES: int = 30
     REFRESH_TOKEN_EXPIRE_DAYS: int = 7
-    JWT_ALGORITHM: str = "HS256"
+    COOKIE_SECURE: bool = Field(default=True, description="Use secure cookies (HTTPS only) in production")
+
+    @field_validator("COOKIE_SECURE", mode="before")
+    @classmethod
+    def set_cookie_secure(cls, value):
+        if isinstance(value, bool):
+            return value
+        # In development, allow non-secure cookies for localhost
+        return cls().ENVIRONMENT in ["production", "staging"]
+
     JWT_EXPIRE_HOURS: int = 24
 
     # CORS

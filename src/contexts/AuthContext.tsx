@@ -133,30 +133,24 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     }
   }, []);
 
-  // Initialize auth state from stored token
+  // Initialize auth state - cookies are sent automatically with requests
   useEffect(() => {
     let isMounted = true;
 
     const initializeAuth = async () => {
-      const initToken = getAccessToken();
       try {
-        if (initToken) {
-          // Try to fetch current user
-          const userData = await authApi.getCurrentUser();
-          // If a signup/login happened while this request was in flight,
-          // ignore the stale initialization result so it can't overwrite state.
-          if (!isMounted || getAccessToken() !== initToken) return;
-          if (isApiUser(userData)) {
-            setUser(mapBackendUser(userData));
-          } else {
-            clearTokens();
-          }
+        // Try to fetch current user - cookies will be sent automatically
+        const userData = await authApi.getCurrentUser();
+        if (!isMounted) return;
+        if (isApiUser(userData)) {
+          setUser(mapBackendUser(userData));
+        } else {
+          setUser(null);
         }
       } catch (error) {
-        // Avoid clearing tokens based on a stale initialization request.
-        if (!isMounted || !initToken || getAccessToken() !== initToken) return;
-        console.error('Failed to initialize auth:', error);
-        clearTokens();
+        // If we can't get current user, user is not authenticated
+        if (!isMounted) return;
+        setUser(null);
       } finally {
         if (isMounted) setIsLoading(false);
       }
@@ -171,16 +165,13 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const login = useCallback(async (email: string, password: string) => {
     try {
       const response = await authApi.login(email, password);
-      const { access_token, refresh_token, user: userData } = response;
-      
-      setTokens(access_token, refresh_token);
-      if (!isApiUser(userData)) {
+      // Backend now sets cookies automatically, no tokens in response
+      if (!isApiUser(response.user)) {
         throw new Error('Login response did not include a valid user');
       }
-      setUser(mapBackendUser(userData));
+      setUser(mapBackendUser(response.user));
       void loadAccessibleUsers();
     } catch (error) {
-      clearTokens();
       throw error;
     }
   }, [loadAccessibleUsers]);
@@ -235,14 +226,12 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         specialty: role === 'patient' ? undefined : specialty,
       });
       
-      const { access_token, refresh_token, user: userData } = response;
-      setTokens(access_token, refresh_token);
-      if (isApiUser(userData)) {
-        setUser(mapBackendUser(userData));
+      // Backend now sets cookies automatically, no tokens in response
+      if (isApiUser(response.user)) {
+        setUser(mapBackendUser(response.user));
         void loadAccessibleUsers();
       }
     } catch (error) {
-      clearTokens();
       throw error;
     }
   }, [loadAccessibleUsers]);
@@ -253,9 +242,10 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     } catch (error) {
       console.error('Logout error:', error);
     } finally {
-      clearTokens();
+      // Clear local state regardless of API call success
       setUser(null);
       setUsers([]);
+      clearTokens();
     }
   }, []);
 

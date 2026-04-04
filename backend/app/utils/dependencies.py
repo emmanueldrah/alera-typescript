@@ -1,23 +1,26 @@
-from fastapi import Depends, HTTPException, status
-from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
+from fastapi import Depends, HTTPException, status, Request
 from sqlalchemy.orm import Session
 from database import get_db
 from app.models.user import User
 from app.utils.auth import decode_token, get_user_id_from_payload
 from app.utils.access import require_verified_workforce_member
 
-security = HTTPBearer()
-
 
 async def get_current_user(
-    credentials: HTTPAuthorizationCredentials = Depends(security),
+    request: Request,
     db: Session = Depends(get_db)
 ) -> User:
-    """Get current authenticated user from JWT token"""
-    token = credentials.credentials
+    """Get current authenticated user from JWT token in cookie"""
+    token = request.cookies.get("access_token")
+    if not token:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Access token not found"
+        )
+
     payload = decode_token(token)
     user_id = get_user_id_from_payload(payload)
-    
+
     user = db.query(User).filter(User.id == user_id).first()
     if not user:
         raise HTTPException(

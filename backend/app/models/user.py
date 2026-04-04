@@ -45,6 +45,9 @@ class User(Base):
     session_version = Column(Integer, default=0, nullable=False)
     profile_image_url = Column(String(500), nullable=True)
     bio = Column(Text, nullable=True)
+    notification_email = Column(Boolean, default=True, nullable=False)
+    notification_sms = Column(Boolean, default=False, nullable=False)
+    privacy_public_profile = Column(Boolean, default=False, nullable=False)
 
     # Account recovery / verification
     email_verification_token_hash = Column(String(255), nullable=True)

@@ -22,6 +22,9 @@ export interface ApiUser {
   zip_code?: string;
   date_of_birth?: string;
   bio?: string;
+  notification_email?: boolean;
+  notification_sms?: boolean;
+  privacy_public_profile?: boolean;
   license_number?: string;
   license_state?: string;
   specialty?: string;

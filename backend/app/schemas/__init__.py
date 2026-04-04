@@ -58,6 +58,9 @@ class UserUpdate(BaseModel):
     bio: Optional[str] = None
     profile_image_url: Optional[str] = None
     specialization: Optional[str] = None
+    notification_email: Optional[bool] = None
+    notification_sms: Optional[bool] = None
+    privacy_public_profile: Optional[bool] = None
 
 
 class UserResponse(BaseModel):
@@ -81,6 +84,9 @@ class UserResponse(BaseModel):
     address: Optional[str]
     created_at: datetime
     last_login: Optional[datetime]
+    notification_email: bool = True
+    notification_sms: bool = False
+    privacy_public_profile: bool = False
     
     # Professional Verification Fields
     license_number: Optional[str] = None

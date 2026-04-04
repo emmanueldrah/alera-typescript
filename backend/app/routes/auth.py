@@ -1,4 +1,4 @@
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, status, Response, Request
 from sqlalchemy.orm import Session
 from datetime import datetime, timedelta
 from pydantic import BaseModel
@@ -24,6 +24,8 @@ from app.utils.auth import (
     generate_secure_token,
     hash_token,
 )
+from app.utils.cookies import set_auth_cookies, clear_auth_cookies, set_csrf_token, clear_csrf_token
+from app.utils.csrf import generate_csrf_token
 from app.utils.dependencies import get_current_user
 from app.services.email_service import EmailService
 from app.utils.time import utcnow
@@ -75,7 +77,7 @@ def _serialize_user(user: User) -> UserResponse:
 
 
 @router.post("/register", status_code=status.HTTP_201_CREATED)
-async def register(user_data: UserCreate, db: Session = Depends(get_db)):
+async def register(user_data: UserCreate, response: Response, db: Session = Depends(get_db)):
     """Register a new user"""
 
     # Check if user already exists
@@ -119,6 +121,9 @@ async def register(user_data: UserCreate, db: Session = Depends(get_db)):
         email_verified_at=None,
         is_active=True,
         session_version=0,
+        notification_email=True,
+        notification_sms=False,
+        privacy_public_profile=False,
     )
 
     db.add(db_user)
@@ -145,6 +150,13 @@ async def register(user_data: UserCreate, db: Session = Depends(get_db)):
 
     access_token, refresh_token = _build_token_pair(db_user)
 
+    # Set secure cookies
+    set_auth_cookies(response, access_token, refresh_token)
+
+    # Set CSRF token
+    csrf_token = generate_csrf_token()
+    set_csrf_token(response, csrf_token)
+
     from app.routes.audit import log_action
 
     await log_action(
@@ -158,16 +170,14 @@ async def register(user_data: UserCreate, db: Session = Depends(get_db)):
     )
 
     return {
-        "access_token": access_token,
-        "refresh_token": refresh_token,
-        "token_type": "bearer",
-        "expires_in": settings.ACCESS_TOKEN_EXPIRE_MINUTES * 60,
+        "message": "Account created successfully",
         "user": _serialize_user(db_user),
+        "csrf_token": csrf_token,
     }
 
 
 @router.post("/login")
-async def login(credentials: LoginRequest, db: Session = Depends(get_db)):
+async def login(credentials: LoginRequest, response: Response, db: Session = Depends(get_db)):
     """Authenticate user and return access token"""
 
     # Find user by email
@@ -191,6 +201,13 @@ async def login(credentials: LoginRequest, db: Session = Depends(get_db)):
     # Create tokens
     access_token, refresh_token = _build_token_pair(user)
 
+    # Set secure cookies
+    set_auth_cookies(response, access_token, refresh_token)
+
+    # Set CSRF token
+    csrf_token = generate_csrf_token()
+    set_csrf_token(response, csrf_token)
+
     from app.routes.audit import log_action
 
     await log_action(
@@ -204,11 +221,9 @@ async def login(credentials: LoginRequest, db: Session = Depends(get_db)):
     )
     
     return {
-        "access_token": access_token,
-        "refresh_token": refresh_token,
-        "token_type": "bearer",
-        "expires_in": settings.ACCESS_TOKEN_EXPIRE_MINUTES * 60,
+        "message": "Login successful",
         "user": _serialize_user(user),
+        "csrf_token": csrf_token,
     }
 
 
@@ -372,13 +387,21 @@ async def resend_email_verification(
     return {"message": "Verification email sent"}
 
 
-@router.post("/refresh", response_model=TokenResponse)
-async def refresh(payload: RefreshTokenRequest, db: Session = Depends(get_db)):
-    """Refresh access token using refresh token"""
+@router.post("/refresh")
+async def refresh(request: Request, response: Response, db: Session = Depends(get_db)):
+    """Refresh access token using refresh token from cookie"""
 
     from app.utils.auth import decode_token
 
-    token_payload = decode_token(payload.refresh_token)
+    # Get refresh token from cookie
+    refresh_token = request.cookies.get("refresh_token")
+    if not refresh_token:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Refresh token not found"
+        )
+
+    token_payload = decode_token(refresh_token)
 
     if token_payload.get("type") != "refresh":
         raise HTTPException(
@@ -414,12 +437,25 @@ async def refresh(payload: RefreshTokenRequest, db: Session = Depends(get_db)):
         data={"sub": str(user.id), "sv": int(user.session_version or 0)},
         expires_delta=timedelta(minutes=settings.ACCESS_TOKEN_EXPIRE_MINUTES)
     )
+
+    # Set new access token cookie
+    response.set_cookie(
+        key="access_token",
+        value=access_token,
+        httponly=True,
+        secure=settings.COOKIE_SECURE,
+        samesite="lax",
+        max_age=settings.ACCESS_TOKEN_EXPIRE_MINUTES * 60,
+        path="/",
+    )
+
+    # Set new CSRF token
+    csrf_token = generate_csrf_token()
+    set_csrf_token(response, csrf_token)
     
     return {
-        "access_token": access_token,
-        "refresh_token": None,
-        "token_type": "bearer",
-        "expires_in": settings.ACCESS_TOKEN_EXPIRE_MINUTES * 60
+        "message": "Token refreshed successfully",
+        "csrf_token": csrf_token,
     }
 
 
@@ -466,13 +502,17 @@ async def change_password(
 
 @router.post("/logout")
 async def logout(
+    response: Response,
     current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db),
 ):
-    """Logout user by revoking the current session version."""
+    """Logout user by revoking the current session version and clearing cookies."""
 
     current_user.session_version = int(current_user.session_version or 0) + 1
     db.commit()
+
+    clear_auth_cookies(response)
+    clear_csrf_token(response)
 
     from app.routes.audit import log_action
 
