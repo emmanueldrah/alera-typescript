@@ -3,13 +3,23 @@ import { Users, FileText, Heart, Calendar, ArrowRight, Inbox } from 'lucide-reac
 import { Link } from 'react-router-dom';
 import { useAuth } from '@/contexts/useAuth';
 import { useAppData } from '@/contexts/useAppData';
+import { normalizeUserRole } from '@/lib/roleUtils';
+import {
+  getProfessionalVerificationStatus,
+  getVerificationStatusLabel,
+} from '@/lib/verificationStatus';
 
 const card = (i: number) => ({ initial: { opacity: 0, y: 15 }, animate: { opacity: 1, y: 0 }, transition: { delay: i * 0.08 } });
 
 const HospitalDashboard = () => {
   const { user, getUsers } = useAuth();
   const { appointments, referrals } = useAppData();
-  const doctors = getUsers().filter((account) => account.role === 'doctor');
+  const verifiedDoctors = getUsers().filter(
+    (account) =>
+      normalizeUserRole(account.role) === 'doctor' &&
+      account.isVerified !== false &&
+      account.isActive !== false,
+  );
   const totalPatients = new Set(appointments.map((appointment) => appointment.patientId).filter(Boolean)).size;
   const todaysVisits = appointments.filter((appointment) => appointment.date === new Date().toISOString().split('T')[0]).length;
   const pendingReferrals = referrals.filter((referral) => referral.status === 'pending');
@@ -24,7 +34,7 @@ const HospitalDashboard = () => {
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
         {[
           { icon: <Users className="w-5 h-5" />, label: 'Total Patients', value: totalPatients, color: 'text-primary', bg: 'bg-primary/10' },
-          { icon: <Heart className="w-5 h-5" />, label: 'Active Doctors', value: doctors.length, color: 'text-info', bg: 'bg-info/10' },
+          { icon: <Heart className="w-5 h-5" />, label: 'Verified Doctors', value: verifiedDoctors.length, color: 'text-info', bg: 'bg-info/10' },
           { icon: <Calendar className="w-5 h-5" />, label: "Today's Visits", value: todaysVisits, color: 'text-success', bg: 'bg-success/10' },
           { icon: <FileText className="w-5 h-5" />, label: 'Pending Referrals', value: pendingReferrals.length, color: 'text-warning', bg: 'bg-warning/10' },
         ].map((s, i) => (
@@ -61,22 +71,36 @@ const HospitalDashboard = () => {
 
         <motion.div {...card(5)} className="bg-card rounded-2xl border border-border p-6">
           <div className="flex items-center justify-between mb-4">
-            <h2 className="text-lg font-display font-semibold text-card-foreground">Doctor Assignments</h2>
+            <h2 className="text-lg font-display font-semibold text-card-foreground">Verified Doctor Assignments</h2>
             <Link to="/dashboard/doctors" className="text-sm text-primary hover:underline flex items-center gap-1">Manage <ArrowRight className="w-3 h-3" /></Link>
           </div>
-          {doctors.length === 0 ? (
+          {verifiedDoctors.length === 0 ? (
             <div className="flex flex-col items-center justify-center py-8 text-muted-foreground">
               <Inbox className="w-8 h-8 mb-2" />
-              <p className="text-sm">No doctors assigned yet</p>
+              <p className="text-sm">No verified doctors assigned yet</p>
             </div>
           ) : (
             <div className="space-y-3">
-              {doctors.slice(0, 3).map((doctor) => (
-                <div key={doctor.id} className="rounded-lg border border-border/50 bg-secondary/50 p-3">
-                  <div className="text-sm font-medium text-card-foreground">{doctor.name}</div>
-                  <div className="mt-1 text-xs text-muted-foreground">{doctor.profile?.bio?.trim() || 'Doctor'}</div>
-                </div>
-              ))}
+              {verifiedDoctors.slice(0, 3).map((doctor) => {
+                const verificationStatus = getProfessionalVerificationStatus(doctor.isVerified, doctor.isActive ?? true);
+                return (
+                  <div key={doctor.id} className="rounded-lg border border-border/50 bg-secondary/50 p-3">
+                    <div className="text-sm font-medium text-card-foreground">{doctor.name}</div>
+                    <div className="mt-1 text-xs text-muted-foreground">{doctor.profile?.bio?.trim() || 'Doctor'}</div>
+                    <div
+                      className={`mt-2 inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[10px] font-medium ${
+                        verificationStatus === 'verified'
+                          ? 'bg-success/15 text-success'
+                          : verificationStatus === 'pending'
+                            ? 'bg-warning/15 text-warning'
+                            : 'bg-destructive/15 text-destructive'
+                      }`}
+                    >
+                      {getVerificationStatusLabel(verificationStatus)}
+                    </div>
+                  </div>
+                );
+              })}
             </div>
           )}
         </motion.div>

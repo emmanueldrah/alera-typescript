@@ -8,7 +8,7 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
 import { useNotifications } from '@/contexts/useNotifications';
-import { VitalSigns } from '@/data/mockData';
+import type { VitalSigns } from '@/data/mockData';
 
 const vitalMetrics = [
   { key: 'heartRate', label: 'Heart Rate', unit: 'bpm', icon: Heart, normalRange: [60, 100], color: 'text-red-500' },

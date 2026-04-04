@@ -5,7 +5,7 @@ import { useAuth } from '@/contexts/useAuth';
 import { useAppData } from '@/contexts/useAppData';
 import { useNotifications } from '@/contexts/useNotifications';
 import { Button } from '@/components/ui/button';
-import { Appointment } from '@/data/mockData';
+import type { Appointment } from '@/data/mockData';
 import { getAppointmentTimeUntilLabel, isWithinNext24Hours, isWithinNextHour, parseAppointmentDateTime } from '@/lib/appointmentUtils';
 
 const AppointmentRemindersPage = () => {
