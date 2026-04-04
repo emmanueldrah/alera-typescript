@@ -42,6 +42,7 @@ from app.schemas import (
     UserCreate,
 )
 from app.schemas.additional_features import AppointmentReminderCreate, PatientConsentCreate
+from app.utils.access import WORKFORCE_ROLES, normalized_enum_text
 from app.utils.dependencies import get_current_user
 from app.utils.db_types import enum_value_renames
 from app.utils.time import utcnow
@@ -222,6 +223,21 @@ def test_sqlalchemy_enums_persist_lowercase_values():
 
     for column_type, expected in cases:
         assert list(column_type.enums) == expected
+
+
+def test_workforce_role_queries_normalize_enum_labels(db_session):
+    compiled = str(
+        db_session.query(User)
+        .filter(
+            normalized_enum_text(User.role).in_(
+                [role.value for role in WORKFORCE_ROLES]
+            )
+        )
+        .statement.compile(compile_kwargs={"literal_binds": True})
+    ).lower()
+
+    assert "lower(cast(users.role as" in compiled
+    assert "'hospital'" in compiled
 
 
 def test_professional_registration_requires_license_and_starts_pending(db_session):

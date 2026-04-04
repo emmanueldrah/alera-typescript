@@ -4,6 +4,7 @@ from database import get_db
 from app.models.user import User, UserRole
 from app.schemas import UserResponse, UserUpdate
 from app.utils.dependencies import get_current_user
+from app.utils.access import normalized_enum_text
 
 router = APIRouter(prefix="/api/users", tags=["users"])
 
@@ -52,8 +53,9 @@ async def list_doctors(
     List registered doctors (backend stores doctors as `provider`).
     Requires authentication but is not admin-only.
     """
+    role_text = normalized_enum_text(User.role)
     doctors = db.query(User).filter(
-        User.role == UserRole.PROVIDER,
+        role_text == UserRole.PROVIDER.value,
         User.is_active.is_(True),
         User.is_verified.is_(True),
     ).all()

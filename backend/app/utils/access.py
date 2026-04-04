@@ -1,5 +1,6 @@
 from fastapi import HTTPException, status
 from sqlalchemy.orm import Session
+from sqlalchemy import String, cast, func
 
 from app.models.appointment import Appointment
 from app.models.user import User, UserRole
@@ -20,6 +21,18 @@ def is_workforce_role(role: UserRole | str | None) -> bool:
         return False
     value = role.value if hasattr(role, "value") else str(role)
     return value in {member.value for member in WORKFORCE_ROLES}
+
+
+def normalized_enum_text(column):
+    """Return a lowercase text expression for Enum-backed columns.
+
+    PostgreSQL enum labels can drift between legacy uppercase values and the
+    lowercase values the application now uses. Casting to text and lowering
+    the expression avoids binding failures and keeps queries tolerant of either
+    representation.
+    """
+
+    return func.lower(cast(column, String))
 
 
 def require_verified_workforce_member(user: User, action: str) -> None:

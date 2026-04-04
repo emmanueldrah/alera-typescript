@@ -1,6 +1,5 @@
 from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.orm import Session
-from sqlalchemy import func
 from database import get_db
 from app.models import (
     User, UserRole, Appointment, AppointmentStatus, Prescription,
@@ -10,7 +9,7 @@ from app.models import (
 from app.utils.dependencies import get_current_admin
 from app.schemas import UserResponse
 from app.schemas.additional_features import AuditLogResponse
-from app.utils.access import WORKFORCE_ROLES
+from app.utils.access import WORKFORCE_ROLES, normalized_enum_text
 from app.utils.time import utcnow
 from datetime import datetime, timedelta, time
 
@@ -40,8 +39,9 @@ async def get_dashboard_stats(
     
     # 1. User counts - usually the most stable
     try:
+        role_text = normalized_enum_text(User.role)
         for role in UserRole:
-            count = db.query(User).filter(User.role == role.value).count()
+            count = db.query(User).filter(role_text == role.value).count()
             user_counts[role.value] = count
         total_users = sum(user_counts.values())
     except Exception as e:
@@ -139,7 +139,7 @@ async def list_all_users(
                 status_code=status.HTTP_400_BAD_REQUEST,
                 detail=f"Invalid role filter: {role_filter}"
             )
-        query = query.filter(User.role == role)
+        query = query.filter(normalized_enum_text(User.role) == role.value)
     
     users = query.offset(skip).limit(limit).all()
     
@@ -375,8 +375,9 @@ async def get_pending_verifications(
     """List providers awaiting professional verification"""
     
     # All non-patient workforce roles remain pending until an admin approves them.
+    role_text = normalized_enum_text(User.role)
     providers = db.query(User).filter(
-        User.role.in_([role.value for role in WORKFORCE_ROLES]),
+        role_text.in_([role.value for role in WORKFORCE_ROLES]),
         User.is_verified.is_(False),
         User.is_active.is_(True)
     ).all()
