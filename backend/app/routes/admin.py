@@ -5,10 +5,12 @@ from database import get_db
 from app.models.user import User, UserRole
 from app.models.appointment import Appointment, AppointmentStatus
 from app.models.prescription import Prescription
+from app.models.lab_imaging import LabTest, LabTestStatus, ImagingScan, ImagingScanStatus
+from app.models.ambulance import AmbulanceRequest, AmbulanceRequestStatus, EmergencyPriority
 from app.utils.dependencies import get_current_admin
 from app.schemas import UserResponse
 from app.schemas.additional_features import AuditLogResponse
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, time
 
 router = APIRouter(prefix="/api/admin", tags=["admin"])
 
@@ -19,58 +21,79 @@ async def get_dashboard_stats(
     db: Session = Depends(get_db)
 ):
     """Get admin dashboard statistics"""
-    from app.models import LabTest, ImagingScan, AmbulanceRequest
     
-    # Count users by role
-    user_counts = {}
-    for role in UserRole:
-        count = db.query(User).filter(User.role == role).count()
-        user_counts[role.value] = count
-    
-    # Count appointments
-    total_appointments = db.query(Appointment).count()
-    today_appointments = db.query(Appointment).filter(
-        func.date(Appointment.scheduled_time) == datetime.utcnow().date()
-    ).count()
-    
-    # Count prescriptions
-    active_prescriptions = db.query(Prescription).filter(
-        Prescription.status == "active"
-    ).count()
+    try:
+        # Count users by role
+        user_counts = {}
+        for role in UserRole:
+            count = db.query(User).filter(User.role == role).count()
+            user_counts[role.value] = count
+        
+        # Robust date range for "today"
+        today = datetime.utcnow().date()
+        start_of_today = datetime.combine(today, time.min)
+        end_of_today = datetime.combine(today, time.max)
 
-    # Count Lab & Imaging
-    pending_labs = db.query(LabTest).filter(LabTest.status != "completed").count()
-    pending_imaging = db.query(ImagingScan).filter(ImagingScan.status != "completed").count()
+        # Count appointments
+        total_appointments = db.query(Appointment).count()
+        today_appointments = db.query(Appointment).filter(
+            Appointment.scheduled_time >= start_of_today,
+            Appointment.scheduled_time <= end_of_today
+        ).count()
+        
+        # Count prescriptions
+        active_prescriptions = db.query(Prescription).filter(
+            Prescription.status == "active"
+        ).count()
 
-    # Emergencies
-    active_emergencies = db.query(AmbulanceRequest).filter(
-        AmbulanceRequest.status != "completed",
-        AmbulanceRequest.priority == "critical"
-    ).count()
-    
-    return {
-        "timestamp": datetime.utcnow(),
-        "users": {
-            "total": sum(user_counts.values()),
-            "by_role": user_counts
-        },
-        "appointments": {
-            "total": total_appointments,
-            "today": today_appointments
-        },
-        "prescriptions": {
-            "active": active_prescriptions
-        },
-        "lab_tests": {
-            "pending": pending_labs
-        },
-        "imaging": {
-            "pending": pending_imaging
-        },
-        "emergencies": {
-            "active": active_emergencies
+        # Count Lab & Imaging
+        pending_labs = db.query(LabTest).filter(LabTest.status != LabTestStatus.COMPLETED).count()
+        pending_imaging = db.query(ImagingScan).filter(ImagingScan.status != ImagingScanStatus.COMPLETED).count()
+
+        # Emergencies
+        active_emergencies = db.query(AmbulanceRequest).filter(
+            AmbulanceRequest.status != AmbulanceRequestStatus.COMPLETED,
+            AmbulanceRequest.priority == EmergencyPriority.CRITICAL
+        ).count()
+        
+        return {
+            "timestamp": datetime.utcnow(),
+            "users": {
+                "total": sum(user_counts.values()),
+                "by_role": user_counts
+            },
+            "appointments": {
+                "total": total_appointments,
+                "today": today_appointments
+            },
+            "prescriptions": {
+                "active": active_prescriptions
+            },
+            "lab_tests": {
+                "pending": pending_labs
+            },
+            "imaging": {
+                "pending": pending_imaging
+            },
+            "emergencies": {
+                "active": active_emergencies
+            }
         }
-    }
+    except Exception as e:
+        # Avoid crashing the whole dashboard if one model/query fails
+        import traceback
+        print(f"Error fetching dashboard stats: {e}")
+        traceback.print_exc()
+        return {
+            "error": str(e),
+            "timestamp": datetime.utcnow(),
+            "users": {"total": 0, "by_role": {}},
+            "appointments": {"total": 0, "today": 0},
+            "prescriptions": {"active": 0},
+            "lab_tests": {"pending": 0},
+            "imaging": {"pending": 0},
+            "emergencies": {"active": 0}
+        }
 
 
 
