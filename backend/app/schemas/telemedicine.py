@@ -1,4 +1,4 @@
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, ConfigDict
 from datetime import datetime
 from typing import Optional
 
@@ -31,8 +31,7 @@ class VideoCallResponse(VideoCallBase):
     duration_seconds: Optional[int]
     recording_url: Optional[str]
     
-    class Config:
-        from_attributes = True
+    model_config = ConfigDict(from_attributes=True)
 
 
 class MessageBase(BaseModel):
@@ -60,5 +59,4 @@ class MessageResponse(MessageBase):
     created_at: datetime
     read_at: Optional[datetime]
     
-    class Config:
-        from_attributes = True
+    model_config = ConfigDict(from_attributes=True)

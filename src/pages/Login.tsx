@@ -3,6 +3,7 @@ import { useNavigate, Link } from 'react-router-dom';
 import { useAuth } from '@/contexts/useAuth';
 import { motion } from 'framer-motion';
 import { Heart, ArrowRight, Eye, EyeOff } from 'lucide-react';
+import { handleApiError } from '@/lib/errorHandler';
 
 const Login = () => {
   const [email, setEmail] = useState('');
@@ -21,8 +22,8 @@ const Login = () => {
     try {
       await login(email, password);
       navigate('/dashboard');
-    } catch {
-      setError('Invalid credentials');
+    } catch (err) {
+      setError(handleApiError(err, 'sign in'));
     } finally {
       setLoading(false);
     }
@@ -70,6 +71,11 @@ const Login = () => {
                 <button type="button" onClick={() => setShowPassword(!showPassword)} className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground">
                   {showPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
                 </button>
+              </div>
+              <div className="mt-2 text-right">
+                <Link to="/forgot-password" className="text-xs font-medium text-primary hover:underline">
+                  Forgot password?
+                </Link>
               </div>
             </div>
 

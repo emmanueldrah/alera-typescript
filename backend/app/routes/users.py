@@ -52,12 +52,20 @@ async def list_doctors(
     List registered doctors (backend stores doctors as `provider`).
     Requires authentication but is not admin-only.
     """
-    doctors = db.query(User).filter(User.role == UserRole.PROVIDER, User.is_active.is_(True)).all()
+    doctors = db.query(User).filter(
+        User.role == UserRole.PROVIDER,
+        User.is_active.is_(True),
+        User.is_verified.is_(True),
+    ).all()
     return doctors
 
 
 @router.get("/{user_id}", response_model=UserResponse)
-async def get_user(user_id: int, db: Session = Depends(get_db)):
+async def get_user(
+    user_id: int,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
     """Get user information by ID"""
     
     user = db.query(User).filter(User.id == user_id).first()
@@ -65,6 +73,12 @@ async def get_user(user_id: int, db: Session = Depends(get_db)):
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
             detail="User not found"
+        )
+
+    if current_user.id != user_id and current_user.role.value != "admin":
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Not authorized to view this user",
         )
     
     return user

@@ -10,9 +10,15 @@ from app.models import (
 from app.utils.dependencies import get_current_admin
 from app.schemas import UserResponse
 from app.schemas.additional_features import AuditLogResponse
+from app.utils.access import WORKFORCE_ROLES
+from app.utils.time import utcnow
 from datetime import datetime, timedelta, time
 
 router = APIRouter(prefix="/api/admin", tags=["admin"])
+
+
+def _revoke_user_sessions(user: User) -> None:
+    user.session_version = int(user.session_version or 0) + 1
 
 
 @router.get("/dashboard/stats")
@@ -43,7 +49,7 @@ async def get_dashboard_stats(
 
     # 2. Appointments
     try:
-        today = datetime.utcnow().date()
+        today = utcnow().date()
         start_of_today = datetime.combine(today, time.min)
         end_of_today = datetime.combine(today, time.max)
 
@@ -85,7 +91,7 @@ async def get_dashboard_stats(
         print(f"Warning: Failed to fetch emergency counts: {e}")
     
     return {
-        "timestamp": datetime.utcnow(),
+        "timestamp": utcnow(),
         "users": {
             "total": total_users,
             "by_role": user_counts
@@ -163,7 +169,20 @@ async def deactivate_user(
         )
     
     user.is_active = False
+    _revoke_user_sessions(user)
     db.commit()
+
+    from app.routes.audit import log_action
+
+    await log_action(
+        db=db,
+        user_id=current_user.id,
+        action="admin.deactivate_user",
+        resource_type="user",
+        resource_id=user.id,
+        description=f"Deactivated user {user.email}",
+        status="warning",
+    )
     
     return {"message": f"User {user.email} has been deactivated"}
 
@@ -186,6 +205,18 @@ async def reactivate_user(
     
     user.is_active = True
     db.commit()
+
+    from app.routes.audit import log_action
+
+    await log_action(
+        db=db,
+        user_id=current_user.id,
+        action="admin.reactivate_user",
+        resource_type="user",
+        resource_id=user.id,
+        description=f"Reactivated user {user.email}",
+        status="success",
+    )
     
     return {"message": f"User {user.email} has been reactivated"}
 
@@ -224,7 +255,21 @@ async def change_user_role(
     
     old_role = user.role
     user.role = role
+    user.is_verified = role in (UserRole.PATIENT, UserRole.ADMIN)
+    _revoke_user_sessions(user)
     db.commit()
+
+    from app.routes.audit import log_action
+
+    await log_action(
+        db=db,
+        user_id=current_user.id,
+        action="admin.change_user_role",
+        resource_type="user",
+        resource_id=user.id,
+        description=f"Changed role from {old_role.value} to {role.value}",
+        status="warning",
+    )
     
     return {
         "message": f"User role changed from {old_role.value} to {new_role}",
@@ -242,7 +287,7 @@ async def get_appointment_analytics(
 ):
     """Get appointment analytics for last N days"""
     
-    start_date = datetime.utcnow() - timedelta(days=days)
+    start_date = utcnow() - timedelta(days=days)
     
     appointments = db.query(Appointment).filter(
         Appointment.created_at >= start_date
@@ -269,7 +314,7 @@ async def get_user_analytics(
 ):
     """Get user signup analytics"""
     
-    start_date = datetime.utcnow() - timedelta(days=days)
+    start_date = utcnow() - timedelta(days=days)
     
     new_users = db.query(User).filter(
         User.created_at >= start_date
@@ -313,7 +358,7 @@ async def get_system_health(
     
     return {
         "status": "healthy",
-        "timestamp": datetime.utcnow(),
+        "timestamp": utcnow(),
         "database": "connected",
         "cache": "operational",
         "version": "1.0.0"
@@ -329,16 +374,11 @@ async def get_pending_verifications(
 ):
     """List providers awaiting professional verification"""
     
-    # Filter for Doctors, Labs, Imaging, Ambulance who have a license but aren't verified
+    # All non-patient workforce roles remain pending until an admin approves them.
     providers = db.query(User).filter(
-        User.role.in_([
-            UserRole.PROVIDER.value, 
-            UserRole.LABORATORY.value, 
-            UserRole.IMAGING.value, 
-            UserRole.AMBULANCE.value
-        ]),
+        User.role.in_([role.value for role in WORKFORCE_ROLES]),
         User.is_verified.is_(False),
-        User.license_number.is_not(None)
+        User.is_active.is_(True)
     ).all()
     
     return providers
@@ -355,9 +395,24 @@ async def approve_provider(
     user = db.query(User).filter(User.id == user_id).first()
     if not user:
         raise HTTPException(status_code=404, detail="User not found")
-        
+    if user.role == UserRole.PATIENT:
+        raise HTTPException(status_code=400, detail="Patients do not require professional verification")
+
     user.is_verified = True
+    user.is_active = True
     db.commit()
+
+    from app.routes.audit import log_action
+
+    await log_action(
+        db=db,
+        user_id=current_user.id,
+        action="admin.approve_verification",
+        resource_type="user",
+        resource_id=user.id,
+        description=f"Approved verification for {user.email}",
+        status="success",
+    )
     
     return {"message": f"Provider {user.email} verified successfully", "user_id": user_id}
 
@@ -374,10 +429,26 @@ async def reject_provider(
     user = db.query(User).filter(User.id == user_id).first()
     if not user:
         raise HTTPException(status_code=404, detail="User not found")
-        
+    if user.role == UserRole.PATIENT:
+        raise HTTPException(status_code=400, detail="Patients do not require professional verification")
+
     # For now, we deactivate them and could add a note
     user.is_active = False
+    user.is_verified = False
+    _revoke_user_sessions(user)
     db.commit()
+
+    from app.routes.audit import log_action
+
+    await log_action(
+        db=db,
+        user_id=current_user.id,
+        action="admin.reject_verification",
+        resource_type="user",
+        resource_id=user.id,
+        description=f"Rejected verification for {user.email}: {reason}",
+        status="warning",
+    )
     
     return {"message": f"Provider {user.email} rejected: {reason}", "user_id": user_id}
 

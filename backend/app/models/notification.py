@@ -2,6 +2,7 @@ from sqlalchemy import Column, Integer, String, DateTime, ForeignKey, Text, Bool
 from sqlalchemy.orm import relationship
 from datetime import datetime
 from database import Base
+from app.utils.time import utcnow
 
 
 class Notification(Base):
@@ -32,7 +33,7 @@ class Notification(Base):
     push_sent = Column(Boolean, default=False)
     
     # Timestamps
-    created_at = Column(DateTime, default=datetime.utcnow, nullable=False)
+    created_at = Column(DateTime, default=utcnow, nullable=False)
     read_at = Column(DateTime, nullable=True)
     scheduled_for = Column(DateTime, nullable=True)
     

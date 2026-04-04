@@ -23,6 +23,9 @@ const Signup = () => {
   const [password, setPassword] = useState('');
   const [showPassword, setShowPassword] = useState(false);
   const [selectedRole, setSelectedRole] = useState<SignupRole | null>(null);
+  const [licenseNumber, setLicenseNumber] = useState('');
+  const [licenseState, setLicenseState] = useState('');
+  const [specialty, setSpecialty] = useState('');
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
   const { signup } = useAuth();
@@ -33,10 +36,22 @@ const Signup = () => {
     if (!selectedRole) { setError('Please select a role'); return; }
     if (!name.trim() || !email.trim() || !password.trim()) { setError('All fields are required'); return; }
     if (password.trim().length < 8) { setError('Password must be at least 8 characters.'); return; }
+    if (selectedRole !== 'patient' && (!licenseNumber.trim() || !licenseState.trim())) {
+      setError('License number and license state are required for professional accounts');
+      return;
+    }
     setLoading(true);
     setError('');
     try {
-      await signup(name, email, password, selectedRole);
+      await signup(
+        name,
+        email,
+        password,
+        selectedRole,
+        selectedRole === 'patient' ? undefined : licenseNumber.trim(),
+        selectedRole === 'patient' ? undefined : licenseState.trim(),
+        selectedRole === 'patient' ? undefined : specialty.trim() || undefined,
+      );
       navigate('/dashboard');
     } catch (error) {
       setError(handleApiError(error));
@@ -93,6 +108,16 @@ const Signup = () => {
               </div>
             </div>
 
+            {selectedRole && selectedRole !== 'patient' && (
+              <motion.div
+                initial={{ opacity: 0, y: 6 }}
+                animate={{ opacity: 1, y: 0 }}
+                className="rounded-xl border border-warning/30 bg-warning/5 p-4 text-sm text-warning"
+              >
+                Professional accounts stay pending until an administrator verifies the license details you provide here.
+              </motion.div>
+            )}
+
             <div>
               <label className="text-sm font-medium text-card-foreground mb-1.5 block">Full Name</label>
               <input type="text" value={name} onChange={e => setName(e.target.value)} placeholder="Enter your full name"
@@ -116,10 +141,50 @@ const Signup = () => {
               </div>
             </div>
 
+            {selectedRole && selectedRole !== 'patient' && (
+              <div className="space-y-4 rounded-2xl border border-border bg-secondary/30 p-4">
+                <div className="text-sm font-semibold text-card-foreground">License details</div>
+                <div>
+                  <label className="text-sm font-medium text-card-foreground mb-1.5 block">License Number</label>
+                  <input
+                    type="text"
+                    value={licenseNumber}
+                    onChange={e => setLicenseNumber(e.target.value)}
+                    placeholder="License or registration number"
+                    className="w-full h-11 px-4 rounded-xl border border-input bg-background text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-primary/30 transition"
+                  />
+                </div>
+                <div>
+                  <label className="text-sm font-medium text-card-foreground mb-1.5 block">License State</label>
+                  <input
+                    type="text"
+                    value={licenseState}
+                    onChange={e => setLicenseState(e.target.value)}
+                    placeholder="State or jurisdiction"
+                    className="w-full h-11 px-4 rounded-xl border border-input bg-background text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-primary/30 transition"
+                  />
+                </div>
+                <div>
+                  <label className="text-sm font-medium text-card-foreground mb-1.5 block">Specialty</label>
+                  <input
+                    type="text"
+                    value={specialty}
+                    onChange={e => setSpecialty(e.target.value)}
+                    placeholder="Optional specialty or department"
+                    className="w-full h-11 px-4 rounded-xl border border-input bg-background text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-primary/30 transition"
+                  />
+                </div>
+              </div>
+            )}
+
             <button type="submit" disabled={loading}
               className="w-full h-12 rounded-xl bg-gradient-primary text-primary-foreground font-semibold flex items-center justify-center gap-2 hover:opacity-90 transition disabled:opacity-50">
               {loading ? 'Creating account...' : <><span>Create Account</span><ArrowRight className="w-4 h-4" /></>}
             </button>
+
+            <p className="text-xs text-muted-foreground text-center">
+              We will send a verification email after sign-up so you can confirm your account and recover access later.
+            </p>
           </form>
 
           <p className="text-center text-sm text-muted-foreground mt-6">

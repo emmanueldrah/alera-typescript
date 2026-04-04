@@ -2,7 +2,7 @@ import { useState } from 'react';
 import { motion } from 'framer-motion';
 import { useAuth } from '@/contexts/useAuth';
 import { Button } from '@/components/ui/button';
-import { Users, Heart, FlaskConical, ScanLine, Pill, Ambulance, Building2, ShieldCheck, Loader, Eye, EyeOff, Upload, Bell, Lock, AlertCircle, Check } from 'lucide-react';
+import { Users, Heart, FlaskConical, ScanLine, Pill, Ambulance, Building2, ShieldCheck, Loader, Eye, EyeOff, Upload, Bell, Lock, AlertCircle, Check, Mail } from 'lucide-react';
 
 const card = (i: number) => ({ initial: { opacity: 0, y: 15 }, animate: { opacity: 1, y: 0 }, transition: { delay: i * 0.1 } });
 
@@ -29,7 +29,7 @@ const roleLabels: Record<string, string> = {
 };
 
 const ProfilePage = () => {
-  const { user, updateProfile, updateBasicInfo, changePassword, updateNotificationPreferences, updatePrivacySettings, deleteAccount, clearCache } = useAuth();
+  const { user, updateProfile, updateBasicInfo, changePassword, updateNotificationPreferences, updatePrivacySettings, deleteAccount, resendEmailVerification, clearCache } = useAuth();
   const [activeTab, setActiveTab] = useState<'basic' | 'contact' | 'security' | 'notifications' | 'privacy' | 'account'>('basic');
   const [isLoading, setIsLoading] = useState(false);
   const [success, setSuccess] = useState('');
@@ -69,6 +69,9 @@ const ProfilePage = () => {
   const [showDeletePassword, setShowDeletePassword] = useState(false);
   const [confirmDelete, setConfirmDelete] = useState(false);
   const [confirmClearCache, setConfirmClearCache] = useState(false);
+  const [sendingVerification, setSendingVerification] = useState(false);
+  const isPendingVerification = Boolean(user && user.role !== 'patient' && user.isVerified === false);
+  const isEmailUnverified = Boolean(user && user.emailVerified === false);
 
   if (!user) return null;
 
@@ -134,6 +137,10 @@ const ProfilePage = () => {
       setNewPassword('');
       setConfirmPassword('');
       showMessage('Password changed successfully', 'success');
+      setTimeout(() => {
+        clearCache();
+        window.location.href = '/login';
+      }, 800);
     } catch (err) {
       showMessage(err instanceof Error ? err.message : 'Failed to change password', 'error');
     } finally {
@@ -172,6 +179,19 @@ const ProfilePage = () => {
     }
   };
 
+  const handleResendVerification = async () => {
+    setError('');
+    setSendingVerification(true);
+    try {
+      await resendEmailVerification();
+      showMessage('Verification email sent', 'success');
+    } catch (err) {
+      showMessage(err instanceof Error ? err.message : 'Failed to resend verification email', 'error');
+    } finally {
+      setSendingVerification(false);
+    }
+  };
+
   const handleDeleteAccount = async () => {
     setError('');
     if (!deletePassword) {
@@ -182,6 +202,10 @@ const ProfilePage = () => {
     try {
       await deleteAccount(deletePassword);
       showMessage('Account deleted successfully', 'success');
+      setTimeout(() => {
+        clearCache();
+        window.location.href = '/login';
+      }, 800);
     } catch (err) {
       showMessage(err instanceof Error ? err.message : 'Failed to delete account', 'error');
     } finally {
@@ -221,6 +245,12 @@ const ProfilePage = () => {
                 {roleIcons[user.role]}
                 {roleLabels[user.role]}
               </div>
+              {isPendingVerification && (
+                <div className="inline-flex items-center gap-2 px-3 py-1.5 rounded-lg bg-warning/10 text-warning text-sm font-medium">
+                  <ShieldCheck className="w-4 h-4" />
+                  Pending verification
+                </div>
+              )}
               {user.createdAt && <p className="text-xs text-muted-foreground">Member since {new Date(user.createdAt).toLocaleDateString()}</p>}
             </div>
           </div>
@@ -472,6 +502,23 @@ const ProfilePage = () => {
               <div>
                 <p className="text-xs font-semibold text-muted-foreground uppercase">Account Type</p>
                 <p className="text-foreground mt-1">{roleLabels[user.role]}</p>
+              </div>
+              <div>
+                <p className="text-xs font-semibold text-muted-foreground uppercase">Email Verification</p>
+                <div className="mt-1 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+                  <div className="flex items-center gap-2">
+                    <Mail className={`w-4 h-4 ${isEmailUnverified ? 'text-warning' : 'text-success'}`} />
+                    <p className={`text-sm ${isEmailUnverified ? 'text-warning' : 'text-success'}`}>
+                      {isEmailUnverified ? 'Pending verification' : 'Verified'}
+                    </p>
+                  </div>
+                  {isEmailUnverified && (
+                    <Button onClick={handleResendVerification} disabled={isLoading || sendingVerification} variant="outline" className="gap-2 w-fit">
+                      {sendingVerification && <Loader className="w-4 h-4 animate-spin" />}
+                      Resend email
+                    </Button>
+                  )}
+                </div>
               </div>
               {user.createdAt && (
                 <div>

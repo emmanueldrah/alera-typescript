@@ -2,15 +2,27 @@ from passlib.context import CryptContext
 from jose import JWTError, jwt
 from datetime import datetime, timedelta, timezone
 from typing import Optional
+from importlib.metadata import PackageNotFoundError, version as package_version
+import hashlib
+import secrets
 from config import settings
 from fastapi import HTTPException, status
 
-# Password hashing - use argon2 instead of bcrypt to avoid version issues
+try:
+    import argon2
+
+    # Passlib still inspects argon2.__version__, which now emits a deprecation warning.
+    # Seed the module attribute from package metadata before Passlib touches it.
+    argon2.__version__ = package_version("argon2-cffi")
+except (ImportError, PackageNotFoundError):
+    pass
+
+# Password hashing - use argon2 for modern password verification
 pwd_context = CryptContext(schemes=["argon2"], deprecated="auto")
 
 
 def hash_password(password: str) -> str:
-    """Hash a password using bcrypt"""
+    """Hash a password using argon2."""
     return pwd_context.hash(password)
 
 
@@ -105,3 +117,18 @@ def get_user_id_from_token(token: str) -> int:
     """Extract user ID from token"""
     payload = decode_token(token)
     return _extract_subject_as_int(payload)
+
+
+def get_user_id_from_payload(payload: dict) -> int:
+    """Extract user ID from a decoded JWT payload."""
+    return _extract_subject_as_int(payload)
+
+
+def generate_secure_token() -> str:
+    """Generate a high-entropy random token for recovery flows."""
+    return secrets.token_urlsafe(32)
+
+
+def hash_token(token: str) -> str:
+    """Hash a recovery token for storage."""
+    return hashlib.sha256(token.encode("utf-8")).hexdigest()

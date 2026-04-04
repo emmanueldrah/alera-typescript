@@ -1,7 +1,7 @@
 import { useState, useEffect, useMemo, useCallback } from 'react';
 import { motion } from 'framer-motion';
 import { Users, Search, Heart, FlaskConical, ScanLine, Pill, Ambulance, Building2, ShieldCheck, Ban, CheckCircle, Inbox, Plus, Loader, Mail, Calendar } from 'lucide-react';
-import type { UserRole } from '@/contexts/AuthContext';
+import type { UserRole, SignupRole } from '@/contexts/AuthContext';
 import { useAuth } from '@/contexts/useAuth';
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
@@ -44,7 +44,7 @@ const roleLabels: Record<string, string> = {
   admin: 'Admin',
 };
 
-const signupRoleToBackend: Record<UserRole, ApiUser['role']> = {
+const signupRoleToBackend: Record<SignupRole, ApiUser['role']> = {
   patient: 'patient',
   doctor: 'provider',
   hospital: 'hospital',
@@ -52,7 +52,6 @@ const signupRoleToBackend: Record<UserRole, ApiUser['role']> = {
   imaging: 'imaging',
   pharmacy: 'pharmacist',
   ambulance: 'ambulance',
-  admin: 'admin',
 };
 
 const mapRowToDisplay = (u: AdminUserRow): DisplayUser => {
@@ -86,7 +85,15 @@ const UsersPage = () => {
   const [listLoading, setListLoading] = useState(true);
   const [listError, setListError] = useState('');
   const [actionId, setActionId] = useState<string | null>(null);
-  const [formData, setFormData] = useState({ name: '', email: '', password: '', role: 'patient' as UserRole });
+  const [formData, setFormData] = useState({
+    name: '',
+    email: '',
+    password: '',
+    role: 'patient' as SignupRole,
+    licenseNumber: '',
+    licenseState: '',
+    specialty: '',
+  });
   const [error, setError] = useState('');
 
   const fetchUsers = useCallback(async () => {
@@ -170,6 +177,11 @@ const UsersPage = () => {
       const lastName = lastNameParts.join(' ') || 'User';
       const username = formData.email.split('@')[0] || formData.name.toLowerCase().replace(/\s+/g, '.');
       const backendRole = signupRoleToBackend[formData.role] ?? 'patient';
+      if (formData.role !== 'patient' && (!formData.licenseNumber.trim() || !formData.licenseState.trim())) {
+        setError('License number and license state are required for professional accounts');
+        setIsLoading(false);
+        return;
+      }
 
       await authApi.register({
         email: formData.email,
@@ -178,9 +190,12 @@ const UsersPage = () => {
         first_name: firstName,
         last_name: lastName,
         role: backendRole,
+        license_number: formData.role === 'patient' ? undefined : formData.licenseNumber.trim(),
+        license_state: formData.role === 'patient' ? undefined : formData.licenseState.trim(),
+        specialty: formData.role === 'patient' ? undefined : formData.specialty.trim() || undefined,
       });
 
-      setFormData({ name: '', email: '', password: '', role: 'patient' });
+      setFormData({ name: '', email: '', password: '', role: 'patient', licenseNumber: '', licenseState: '', specialty: '' });
       setIsDialogOpen(false);
       await fetchUsers();
     } catch (err) {
@@ -267,7 +282,7 @@ const UsersPage = () => {
                 </div>
                 <div>
                   <label className="block text-sm font-medium text-foreground mb-1">User Role</label>
-                  <Select value={formData.role} onValueChange={role => setFormData({ ...formData, role: role as UserRole })}>
+                  <Select value={formData.role} onValueChange={role => setFormData({ ...formData, role: role as SignupRole })}>
                     <SelectTrigger className="h-10">
                       <SelectValue placeholder="Select a role" />
                     </SelectTrigger>
@@ -279,10 +294,44 @@ const UsersPage = () => {
                       <SelectItem value="imaging">Imaging Center</SelectItem>
                       <SelectItem value="pharmacy">Pharmacy</SelectItem>
                       <SelectItem value="ambulance">Ambulance</SelectItem>
-                      <SelectItem value="admin">Admin</SelectItem>
                     </SelectContent>
                   </Select>
                 </div>
+                {formData.role !== 'patient' && (
+                  <div className="space-y-4 rounded-xl border border-border bg-secondary/30 p-4">
+                    <div className="text-sm font-semibold text-foreground">License details</div>
+                    <div>
+                      <label className="block text-sm font-medium text-foreground mb-1">License Number</label>
+                      <input
+                        type="text"
+                        placeholder="License or registration number"
+                        value={formData.licenseNumber}
+                        onChange={e => setFormData({ ...formData, licenseNumber: e.target.value })}
+                        className="w-full h-10 px-3 rounded-lg border border-input bg-background text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-primary/30"
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-sm font-medium text-foreground mb-1">License State</label>
+                      <input
+                        type="text"
+                        placeholder="State or jurisdiction"
+                        value={formData.licenseState}
+                        onChange={e => setFormData({ ...formData, licenseState: e.target.value })}
+                        className="w-full h-10 px-3 rounded-lg border border-input bg-background text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-primary/30"
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-sm font-medium text-foreground mb-1">Specialty</label>
+                      <input
+                        type="text"
+                        placeholder="Optional specialty or department"
+                        value={formData.specialty}
+                        onChange={e => setFormData({ ...formData, specialty: e.target.value })}
+                        className="w-full h-10 px-3 rounded-lg border border-input bg-background text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-primary/30"
+                      />
+                    </div>
+                  </div>
+                )}
               </div>
               <div className="flex gap-3">
                 <Button variant="outline" onClick={() => setIsDialogOpen(false)} disabled={isLoading}>

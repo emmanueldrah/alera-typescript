@@ -6,6 +6,7 @@ from app.models.appointment import Appointment
 from app.models.user import User, UserRole
 from app.schemas import AllergyResponse, AllergyCreate, AllergyUpdate
 from app.utils.dependencies import get_current_user
+from app.utils.access import require_verified_workforce_member
 
 router = APIRouter(prefix="/api/allergies", tags=["allergies"])
 
@@ -55,6 +56,9 @@ async def list_allergies_for_patient(
 ):
     """Explicit path: allergies for one patient (authorized roles)."""
 
+    if current_user.role != UserRole.PATIENT:
+        require_verified_workforce_member(current_user, "view patient allergies")
+
     if current_user.role == UserRole.PATIENT and patient_id != current_user.id:
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Not authorized")
 
@@ -89,6 +93,9 @@ async def list_allergies(
     """List allergies: patients see their own; providers see panel (or one patient); admin/hospital see all or filtered."""
 
     q = db.query(Allergy).options(joinedload(Allergy.patient))
+
+    if current_user.role != UserRole.PATIENT:
+        require_verified_workforce_member(current_user, "view patient allergies")
 
     if current_user.role == UserRole.PATIENT:
         rows = q.filter(Allergy.patient_id == current_user.id).order_by(Allergy.created_at.desc()).all()
@@ -130,6 +137,9 @@ async def create_allergy(
     """Create an allergy (patient for self; provider for patients on their panel; admin for any patient id)."""
 
     target_patient_id: int
+
+    if current_user.role != UserRole.PATIENT:
+        require_verified_workforce_member(current_user, "create allergies")
 
     if current_user.role == UserRole.PATIENT:
         target_patient_id = current_user.id
@@ -173,6 +183,18 @@ async def create_allergy(
     loaded = db.query(Allergy).options(joinedload(Allergy.patient)).filter(Allergy.id == db_allergy.id).first()
     if not loaded:
         raise HTTPException(status_code=500, detail="Failed to load created allergy")
+
+    from app.routes.audit import log_action
+
+    await log_action(
+        db=db,
+        user_id=current_user.id,
+        action="allergy.create",
+        resource_type="allergy",
+        resource_id=loaded.id,
+        description=f"Created allergy for patient {loaded.patient_id}",
+        status="created",
+    )
     return allergy_to_response(loaded)
 
 
@@ -197,6 +219,9 @@ async def update_allergy(
     if not allergy:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Allergy not found")
 
+    if current_user.role != UserRole.PATIENT:
+        require_verified_workforce_member(current_user, "update allergies")
+
     if not _can_mutate_allergy(db, current_user, allergy):
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Not authorized")
 
@@ -208,6 +233,18 @@ async def update_allergy(
     loaded = db.query(Allergy).options(joinedload(Allergy.patient)).filter(Allergy.id == allergy_id).first()
     if not loaded:
         raise HTTPException(status_code=500, detail="Failed to load allergy")
+
+    from app.routes.audit import log_action
+
+    await log_action(
+        db=db,
+        user_id=current_user.id,
+        action="allergy.update",
+        resource_type="allergy",
+        resource_id=loaded.id,
+        description=f"Updated allergy {loaded.id}",
+        status="updated",
+    )
     return allergy_to_response(loaded)
 
 
@@ -221,11 +258,26 @@ async def delete_allergy(
     if not allergy:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Allergy not found")
 
+    if current_user.role != UserRole.PATIENT:
+        require_verified_workforce_member(current_user, "delete allergies")
+
     if not _can_mutate_allergy(db, current_user, allergy):
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Not authorized")
 
     db.delete(allergy)
     db.commit()
+
+    from app.routes.audit import log_action
+
+    await log_action(
+        db=db,
+        user_id=current_user.id,
+        action="allergy.delete",
+        resource_type="allergy",
+        resource_id=allergy.id,
+        description=f"Deleted allergy {allergy.id}",
+        status="warning",
+    )
     return {"message": "Allergy deleted"}
 
 
@@ -238,6 +290,9 @@ async def get_allergy(
     allergy = db.query(Allergy).options(joinedload(Allergy.patient)).filter(Allergy.id == allergy_id).first()
     if not allergy:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Allergy not found")
+
+    if current_user.role != UserRole.PATIENT:
+        require_verified_workforce_member(current_user, "view patient allergies")
 
     if current_user.role == UserRole.PATIENT and allergy.patient_id != current_user.id:
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Not authorized")

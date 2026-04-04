@@ -2,6 +2,7 @@ from sqlalchemy import Column, Integer, String, DateTime, ForeignKey, Text, Inde
 from sqlalchemy.orm import relationship
 from datetime import datetime
 from database import Base
+from app.utils.time import utcnow
 
 
 class Prescription(Base):
@@ -30,7 +31,7 @@ class Prescription(Base):
     refills_remaining = Column(Integer, default=0, nullable=False)
     
     # Dates
-    prescribed_date = Column(DateTime, default=datetime.utcnow, nullable=False)
+    prescribed_date = Column(DateTime, default=utcnow, nullable=False)
     start_date = Column(DateTime, nullable=False)
     end_date = Column(DateTime, nullable=True)
     expiry_date = Column(DateTime, nullable=True)
@@ -45,8 +46,8 @@ class Prescription(Base):
     interaction_warnings = Column(Text, nullable=True)
     
     # Timestamps
-    created_at = Column(DateTime, default=datetime.utcnow, nullable=False)
-    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow, nullable=False)
+    created_at = Column(DateTime, default=utcnow, nullable=False)
+    updated_at = Column(DateTime, default=utcnow, onupdate=utcnow, nullable=False)
     
     # Relationships
     patient = relationship("User", foreign_keys=[patient_id], back_populates="prescriptions_as_patient")

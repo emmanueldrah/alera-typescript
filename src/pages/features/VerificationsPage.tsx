@@ -9,9 +9,10 @@ import { Button } from '@/components/ui/button';
 import { api } from '@/lib/apiService';
 import { handleApiError } from '@/lib/errorHandler';
 import { useToast } from '@/hooks/use-toast';
+import { normalizeUserRole } from '@/lib/roleUtils';
 
 const roleIcons: Record<string, React.ReactNode> = {
-  provider: <Heart className="w-5 h-5" />,
+  doctor: <Heart className="w-5 h-5" />,
   hospital: <Building2 className="w-5 h-5" />,
   laboratory: <FlaskConical className="w-5 h-5" />,
   imaging: <ScanLine className="w-5 h-5" />,
@@ -20,7 +21,7 @@ const roleIcons: Record<string, React.ReactNode> = {
 };
 
 const roleLabels: Record<string, string> = {
-  provider: 'Doctor/Provider',
+  doctor: 'Doctor/Provider',
   hospital: 'Hospital',
   laboratory: 'Laboratory',
   imaging: 'Imaging Center',
@@ -44,7 +45,7 @@ const VerificationsPage = () => {
         id: u.id,
         name: `${u.first_name} ${u.last_name}`,
         email: u.email,
-        role: u.role,
+        role: normalizeUserRole(u.role) ?? 'doctor',
         status: u.is_verified ? 'approved' : 'pending',
         appliedDate: new Date(u.created_at).toLocaleDateString(),
         documents: `License: ${u.license_number || 'N/A'} (${u.license_state || 'Any'})`,

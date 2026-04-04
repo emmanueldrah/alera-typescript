@@ -8,6 +8,7 @@ from datetime import datetime
 import enum
 import sys
 from database import Base
+from app.utils.time import utcnow
 
 
 class DocumentType(str, enum.Enum):
@@ -30,7 +31,7 @@ class PatientDocument(Base):
     file_type = Column(SQLEnum(DocumentType), default=DocumentType.OTHER)
     file_size = Column(Integer)  # bytes
     mime_type = Column(String)
-    upload_time = Column(DateTime, default=datetime.utcnow)
+    upload_time = Column(DateTime, default=utcnow)
     
     # Metadata
     description = Column(String)
@@ -84,8 +85,8 @@ class PatientConsent(Base):
     document_file_id = Column(String, ForeignKey("patient_documents.file_id"))
     
     # Tracking
-    created_at = Column(DateTime, default=datetime.utcnow)
-    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+    created_at = Column(DateTime, default=utcnow)
+    updated_at = Column(DateTime, default=utcnow, onupdate=utcnow)
     requested_by = Column(Integer)  # user_id who requested consent
     
     # Relationships
@@ -134,7 +135,7 @@ class AppointmentReminder(Base):
     last_retry_at = Column(DateTime)
     error_message = Column(String)
     
-    created_at = Column(DateTime, default=datetime.utcnow)
+    created_at = Column(DateTime, default=utcnow)
 
     def to_dict(self):
         return {
@@ -175,8 +176,8 @@ class EmailTemplate(Base):
     usage_count = Column(Integer, default=0)
     last_used = Column(DateTime)
     
-    created_at = Column(DateTime, default=datetime.utcnow)
-    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+    created_at = Column(DateTime, default=utcnow)
+    updated_at = Column(DateTime, default=utcnow, onupdate=utcnow)
 
     def to_dict(self):
         return {
@@ -214,8 +215,8 @@ class SMSTemplate(Base):
     usage_count = Column(Integer, default=0)
     last_used = Column(DateTime)
     
-    created_at = Column(DateTime, default=datetime.utcnow)
-    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+    created_at = Column(DateTime, default=utcnow)
+    updated_at = Column(DateTime, default=utcnow, onupdate=utcnow)
 
     def to_dict(self):
         return {

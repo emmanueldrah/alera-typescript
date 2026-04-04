@@ -8,7 +8,7 @@ import { normalizeUserRole } from '@/lib/roleUtils';
 import {
   Heart, LayoutDashboard, Calendar, FileText, FlaskConical, ScanLine,
   Pill, Ambulance, Users, Building2, ShieldCheck, Activity, Bell,
-  LogOut, Menu, X, Clock, MessageSquare, Settings, HeartPulse
+  LogOut, Menu, X, Clock, MessageSquare, Settings, HeartPulse, Mail
 } from 'lucide-react';
 
 const roleNavItems: Record<string, { label: string; icon: React.ReactNode; path: string }[]> = {
@@ -90,20 +90,37 @@ interface DashboardLayoutProps {
 }
 
 const DashboardLayout = ({ children }: DashboardLayoutProps) => {
-  const { user, logout } = useAuth();
+  const { user, logout, resendEmailVerification } = useAuth();
   const { unreadCount, feedLabel, isLive } = useNotifications();
   const location = useLocation();
   const navigate = useNavigate();
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [notifOpen, setNotifOpen] = useState(false);
+  const [verificationNotice, setVerificationNotice] = useState('');
+  const [sendingVerification, setSendingVerification] = useState(false);
 
   if (!user) return null;
 
   const roleKey = normalizeUserRole(user.role) ?? user.role;
   const navItems = roleNavItems[roleKey] || [];
-  const handleSignOut = () => {
-    logout();
+  const isPendingVerification = user.role !== 'patient' && user.isVerified === false;
+  const isEmailUnverified = user.emailVerified === false;
+  const handleSignOut = async () => {
+    await logout();
     navigate('/login', { replace: true });
+  };
+
+  const handleResendVerification = async () => {
+    setVerificationNotice('');
+    setSendingVerification(true);
+    try {
+      await resendEmailVerification();
+      setVerificationNotice('A fresh verification email has been sent to your inbox.');
+    } catch (error) {
+      setVerificationNotice(error instanceof Error ? error.message : 'Failed to resend verification email');
+    } finally {
+      setSendingVerification(false);
+    }
   };
 
   return (
@@ -153,7 +170,7 @@ const DashboardLayout = ({ children }: DashboardLayoutProps) => {
           </nav>
 
           <div className="p-3">
-            <button onClick={handleSignOut}
+            <button onClick={() => void handleSignOut()}
               className="flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm font-medium text-sidebar-foreground/70 hover:bg-sidebar-accent hover:text-sidebar-foreground transition w-full">
               <LogOut className="w-5 h-5" /> Sign Out
             </button>
@@ -191,6 +208,35 @@ const DashboardLayout = ({ children }: DashboardLayoutProps) => {
             </div>
           </div>
         </header>
+        <div className="mx-6 mt-4 space-y-3">
+          {isEmailUnverified && (
+            <div className="rounded-2xl border border-info/30 bg-info/5 px-4 py-3 text-sm text-info">
+              <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+                <div className="flex items-start gap-3">
+                  <Mail className="mt-0.5 h-4 w-4 flex-shrink-0" />
+                  <div>
+                    <p className="font-medium">Email verification pending</p>
+                    <p className="text-xs text-info/80">Verify your email to secure account recovery and delivery of platform alerts.</p>
+                    {verificationNotice && <p className="mt-2 text-xs text-info/90">{verificationNotice}</p>}
+                  </div>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => void handleResendVerification()}
+                  disabled={sendingVerification}
+                  className="inline-flex items-center justify-center rounded-xl border border-info/30 bg-white/70 px-3 py-2 text-xs font-medium text-info transition hover:bg-white disabled:opacity-50"
+                >
+                  {sendingVerification ? 'Sending...' : 'Resend email'}
+                </button>
+              </div>
+            </div>
+          )}
+          {isPendingVerification && (
+            <div className="rounded-2xl border border-warning/30 bg-warning/5 px-4 py-3 text-sm text-warning">
+              Your professional account is pending verification. Some actions are disabled until an administrator approves your credentials.
+            </div>
+          )}
+        </div>
         <main className="flex-1 p-6">{children}</main>
       </div>
 

@@ -2,6 +2,7 @@ from sqlalchemy import Column, Integer, String, DateTime, ForeignKey, Text, Inde
 from sqlalchemy.orm import relationship
 from datetime import datetime
 from database import Base
+from app.utils.time import utcnow
 
 
 class AuditLog(Base):
@@ -30,7 +31,7 @@ class AuditLog(Base):
     severity = Column(String(50), default="info", nullable=False)  # info, warning, critical
     
     # Timestamp
-    created_at = Column(DateTime, default=datetime.utcnow, nullable=False, index=True)
+    created_at = Column(DateTime, default=utcnow, nullable=False, index=True)
     
     # Relationship
     user = relationship("User", back_populates="audit_logs")

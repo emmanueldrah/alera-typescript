@@ -2,6 +2,7 @@ from sqlalchemy import Column, Integer, String, DateTime, ForeignKey, Text, Floa
 from sqlalchemy.orm import relationship
 from datetime import datetime
 from database import Base
+from app.utils.time import utcnow
 
 
 class VideoCall(Base):
@@ -25,7 +26,7 @@ class VideoCall(Base):
     agora_uid = Column(Integer, nullable=True)
     
     # Timing
-    initiated_at = Column(DateTime, default=datetime.utcnow, nullable=False)
+    initiated_at = Column(DateTime, default=utcnow, nullable=False)
     started_at = Column(DateTime, nullable=True)
     ended_at = Column(DateTime, nullable=True)
     
@@ -42,8 +43,8 @@ class VideoCall(Base):
     reason_for_call = Column(String(255), nullable=True)
     
     # Timestamps
-    created_at = Column(DateTime, default=datetime.utcnow, nullable=False)
-    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow, nullable=False)
+    created_at = Column(DateTime, default=utcnow, nullable=False)
+    updated_at = Column(DateTime, default=utcnow, onupdate=utcnow, nullable=False)
     
     # Relationships
     patient = relationship("User", foreign_keys=[patient_id])
@@ -83,7 +84,7 @@ class Message(Base):
     attachment_type = Column(String(50), nullable=True)  # document, image, etc.
     
     # Timestamps
-    created_at = Column(DateTime, default=datetime.utcnow, nullable=False)
+    created_at = Column(DateTime, default=utcnow, nullable=False)
     read_at = Column(DateTime, nullable=True)
     
     # Relationships

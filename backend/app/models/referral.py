@@ -3,6 +3,7 @@
 from sqlalchemy import Column, DateTime, ForeignKey, Integer, String, Text, Index
 from sqlalchemy.orm import relationship
 from datetime import datetime
+from app.utils.time import utcnow
 
 from database import Base
 
@@ -26,8 +27,8 @@ class Referral(Base):
     notes = Column(Text, nullable=True)
     status = Column(String(32), nullable=False, default="pending")
 
-    created_at = Column(DateTime, default=datetime.utcnow, nullable=False)
-    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow, nullable=False)
+    created_at = Column(DateTime, default=utcnow, nullable=False)
+    updated_at = Column(DateTime, default=utcnow, onupdate=utcnow, nullable=False)
 
     patient = relationship("User", foreign_keys=[patient_id])
     from_doctor = relationship("User", foreign_keys=[from_doctor_id])

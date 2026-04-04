@@ -6,6 +6,8 @@ from app.models.telemedicine import VideoCall, Message
 from app.models.user import User
 from app.schemas.telemedicine import VideoCallResponse, VideoCallCreate, VideoCallUpdate, MessageResponse, MessageCreate, MessageUpdate
 from app.utils.dependencies import get_current_user
+from app.utils.access import require_verified_workforce_member
+from app.utils.time import utcnow
 import uuid
 
 router = APIRouter(prefix="/api/telemedicine", tags=["telemedicine"])
@@ -20,10 +22,15 @@ async def initiate_video_call(
     db: Session = Depends(get_db)
 ):
     """Initiate a video call with a provider"""
-    
+    if current_user.role.value != "patient":
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Only patients can initiate video calls"
+        )
+
     # Verify provider exists
     provider = db.query(User).filter(User.id == call_data.provider_id).first()
-    if not provider:
+    if not provider or provider.role.value != "provider" or not provider.is_active or not provider.is_verified:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
             detail="Provider not found"
@@ -31,7 +38,7 @@ async def initiate_video_call(
     
     # Generate unique call token and channel
     call_token = str(uuid.uuid4())
-    channel_name = f"alera_{current_user.id}_{call_data.provider_id}_{datetime.utcnow().timestamp()}"
+    channel_name = f"alera_{current_user.id}_{call_data.provider_id}_{utcnow().timestamp()}"
     
     db_call = VideoCall(
         patient_id=current_user.id,
@@ -46,6 +53,18 @@ async def initiate_video_call(
     db.add(db_call)
     db.commit()
     db.refresh(db_call)
+
+    from app.routes.audit import log_action
+
+    await log_action(
+        db=db,
+        user_id=current_user.id,
+        action="telemedicine.video_call.initiate",
+        resource_type="video_call",
+        resource_id=db_call.id,
+        description=f"Initiated video call with provider {provider.id}",
+        status="created",
+    )
     
     return db_call
 
@@ -63,10 +82,13 @@ async def list_video_calls(
         calls = db.query(VideoCall).filter(
             VideoCall.patient_id == current_user.id
         ).order_by(VideoCall.initiated_at.desc()).offset(skip).limit(limit).all()
-    elif current_user.role.value in ["provider", "admin"]:
+    elif current_user.role.value == "provider":
+        require_verified_workforce_member(current_user, "view telemedicine calls")
         calls = db.query(VideoCall).filter(
             VideoCall.provider_id == current_user.id
         ).order_by(VideoCall.initiated_at.desc()).offset(skip).limit(limit).all()
+    elif current_user.role.value == "admin":
+        calls = db.query(VideoCall).order_by(VideoCall.initiated_at.desc()).offset(skip).limit(limit).all()
     else:
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
@@ -99,6 +121,9 @@ async def get_video_call(
                 status_code=status.HTTP_403_FORBIDDEN,
                 detail="Not authorized"
             )
+
+    if current_user.role.value == "provider":
+        require_verified_workforce_member(current_user, "view telemedicine calls")
     
     return call
 
@@ -127,6 +152,9 @@ async def update_video_call(
                 status_code=status.HTTP_403_FORBIDDEN,
                 detail="Not authorized"
             )
+
+    if current_user.role.value == "provider":
+        require_verified_workforce_member(current_user, "update telemedicine calls")
     
     # Update fields
     update_data = call_update.dict(exclude_unset=True)
@@ -134,9 +162,9 @@ async def update_video_call(
     # Special handling for status change
     if "status" in update_data:
         if update_data["status"] == "connected" and call.started_at is None:
-            call.started_at = datetime.utcnow()
+            call.started_at = utcnow()
         elif update_data["status"] == "ended" and call.ended_at is None:
-            call.ended_at = datetime.utcnow()
+            call.ended_at = utcnow()
             if call.started_at:
                 call.duration_seconds = int((call.ended_at - call.started_at).total_seconds())
     
@@ -145,6 +173,18 @@ async def update_video_call(
     
     db.commit()
     db.refresh(call)
+
+    from app.routes.audit import log_action
+
+    await log_action(
+        db=db,
+        user_id=current_user.id,
+        action="telemedicine.video_call.update",
+        resource_type="video_call",
+        resource_id=call.id,
+        description=f"Updated call status to {call.status}",
+        status="updated",
+    )
     
     return call
 
@@ -158,7 +198,9 @@ async def send_message(
     db: Session = Depends(get_db)
 ):
     """Send message to another user"""
-    
+    if current_user.role.value != "patient":
+        require_verified_workforce_member(current_user, "send telemedicine messages")
+
     # Verify recipient exists
     recipient = db.query(User).filter(User.id == message_data.recipient_id).first()
     if not recipient:
@@ -179,6 +221,18 @@ async def send_message(
     db.add(db_message)
     db.commit()
     db.refresh(db_message)
+
+    from app.routes.audit import log_action
+
+    await log_action(
+        db=db,
+        user_id=current_user.id,
+        action="telemedicine.message.send",
+        resource_type="message",
+        resource_id=db_message.id,
+        description=f"Sent message to user {recipient.id}",
+        status="created",
+    )
     
     return db_message
 
@@ -193,6 +247,9 @@ async def list_messages(
     limit: int = 50
 ):
     """List messages for current user"""
+
+    if current_user.role.value != "patient" and current_user.role.value != "admin":
+        require_verified_workforce_member(current_user, "view telemedicine messages")
     
     query = db.query(Message).filter(
         (Message.recipient_id == current_user.id) | (Message.sender_id == current_user.id)
@@ -221,6 +278,9 @@ async def get_message(
     db: Session = Depends(get_db)
 ):
     """Get message details"""
+
+    if current_user.role.value != "patient" and current_user.role.value != "admin":
+        require_verified_workforce_member(current_user, "view telemedicine messages")
     
     message = db.query(Message).filter(Message.id == message_id).first()
     
@@ -241,7 +301,7 @@ async def get_message(
     # Mark as read if recipient
     if message.recipient_id == current_user.id and message.is_read == "N":
         message.is_read = "Y"
-        message.read_at = datetime.utcnow()
+        message.read_at = utcnow()
         db.commit()
     
     return message
@@ -255,6 +315,9 @@ async def update_message(
     db: Session = Depends(get_db)
 ):
     """Update message (archive, etc.)"""
+
+    if current_user.role.value != "patient" and current_user.role.value != "admin":
+        require_verified_workforce_member(current_user, "update telemedicine messages")
     
     message = db.query(Message).filter(Message.id == message_id).first()
     
@@ -289,6 +352,9 @@ async def delete_message(
     db: Session = Depends(get_db)
 ):
     """Delete message"""
+
+    if current_user.role.value != "patient" and current_user.role.value != "admin":
+        require_verified_workforce_member(current_user, "delete telemedicine messages")
     
     message = db.query(Message).filter(Message.id == message_id).first()
     

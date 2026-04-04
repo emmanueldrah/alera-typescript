@@ -17,6 +17,7 @@ from app.schemas.additional_features import (
     AuditLogListResponse,
 )
 from app.utils.dependencies import get_current_user
+from app.utils.time import utcnow
 
 router = APIRouter(prefix="/api/audit", tags=["audit"])
 
@@ -98,7 +99,7 @@ async def get_audit_logs(
     skip = max(skip, 0)
     limit = max(1, min(limit, 100))
 
-    start_date = datetime.utcnow() - timedelta(days=days)
+    start_date = utcnow() - timedelta(days=days)
     
     query = db.query(AuditLog).filter(AuditLog.created_at >= start_date)
 
@@ -212,7 +213,7 @@ async def get_data_retention_policy(
         "policy": "7-year retention for HIPAA compliance",
         "retention_days": 2555,
         "oldest_record": oldest_log.created_at.isoformat() if oldest_log is not None else None,
-        "oldest_record_days_old": (datetime.utcnow() - oldest_log.created_at).days if oldest_log is not None else 0,
+        "oldest_record_days_old": (utcnow() - oldest_log.created_at).days if oldest_log is not None else 0,
         "description": "All audit logs are retained for 7 years as required by HIPAA regulations",
         "gdpr_compliance": "Personal data is deleted upon patient request unless legal hold applies",
     }
@@ -236,7 +237,7 @@ async def get_user_audit_history(
     skip = max(skip, 0)
     limit = max(1, min(limit, 100))
 
-    start_date = datetime.utcnow() - timedelta(days=days)
+    start_date = utcnow() - timedelta(days=days)
 
     query = db.query(AuditLog).filter(
         AuditLog.user_id == user_id,
@@ -266,8 +267,8 @@ async def get_resource_changes(
     Shows all changes to a patient, appointment, prescription, etc.
     """
     
-    if current_user.role.value not in ["provider", "admin"]:
-        raise HTTPException(status_code=403, detail="Access denied")
+    if current_user.role.value != "admin":
+        raise HTTPException(status_code=403, detail="Only admins can view resource changes")
 
     skip = max(skip, 0)
     limit = max(1, min(limit, 100))

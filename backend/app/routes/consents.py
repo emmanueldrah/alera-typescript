@@ -6,6 +6,7 @@ import uuid
 from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.orm import Session
 from datetime import datetime
+from app.utils.time import utcnow
 
 from database import get_db
 from app.models.additional_features import PatientConsent
@@ -17,6 +18,7 @@ from app.schemas.additional_features import (
     ConsentListResponse,
 )
 from app.utils.dependencies import get_current_user
+from app.utils.access import require_provider_panel_access, require_verified_workforce_member
 
 router = APIRouter(prefix="/api/consents", tags=["consents"])
 
@@ -36,6 +38,14 @@ async def create_consent(
     if not patient_id:
         raise HTTPException(status_code=400, detail="patient_id is required")
 
+    patient = db.query(User).filter(User.id == patient_id).first()
+    if not patient:
+        raise HTTPException(status_code=404, detail="Patient not found")
+
+    if current_user.role.value == "provider":
+        require_verified_workforce_member(current_user, "request consents")
+        require_provider_panel_access(db, current_user.id, patient_id, "request consent for")
+
     try:
         consent = PatientConsent(
             id=str(uuid.uuid4()),
@@ -50,6 +60,18 @@ async def create_consent(
         db.add(consent)
         db.commit()
         db.refresh(consent)
+
+        from app.routes.audit import log_action
+
+        await log_action(
+            db=db,
+            user_id=current_user.id,
+            action="consent.create",
+            resource_type="consent",
+            resource_id=patient_id,
+            description=f"Requested consent {consent.consent_type} for patient {patient_id}",
+            status="created",
+        )
 
         return PatientConsentResponse(**consent.to_dict())
 
@@ -75,12 +97,17 @@ async def list_consents(
         query = query.filter(PatientConsent.patient_id == current_user.id)
     # Providers see consents they requested
     elif current_user.role.value == "provider":
+        require_verified_workforce_member(current_user, "view consents")
         query = query.filter(PatientConsent.requested_by == current_user.id)
+    elif current_user.role.value != "admin":
+        raise HTTPException(status_code=403, detail="Access denied")
 
     # Filter by patient if specified
     if patient_id:
         if current_user.role.value == "patient" and patient_id != current_user.id:
             raise HTTPException(status_code=403, detail="Access denied")
+        if current_user.role.value == "provider":
+            require_provider_panel_access(db, current_user.id, patient_id, "view consents for")
         query = query.filter(PatientConsent.patient_id == patient_id)
 
     total = query.count()
@@ -110,6 +137,12 @@ async def get_consent(
     # Check permissions
     if current_user.role.value == "patient" and consent.patient_id != current_user.id:
         raise HTTPException(status_code=403, detail="Access denied")
+    if current_user.role.value == "provider":
+        require_verified_workforce_member(current_user, "view consents")
+        if consent.requested_by != current_user.id:
+            raise HTTPException(status_code=403, detail="Access denied")
+    if current_user.role.value not in ["patient", "provider", "admin"]:
+        raise HTTPException(status_code=403, detail="Access denied")
 
     return PatientConsentResponse(**consent.to_dict())
 
@@ -138,7 +171,7 @@ async def update_consent(
         if update_data.is_accepted is not None:
             consent.is_accepted = update_data.is_accepted
             if update_data.is_accepted:
-                consent.accepted_at = datetime.utcnow()
+                consent.accepted_at = utcnow()
             else:
                 consent.accepted_at = None
 
@@ -150,6 +183,18 @@ async def update_consent(
 
         db.commit()
         db.refresh(consent)
+
+        from app.routes.audit import log_action
+
+        await log_action(
+            db=db,
+            user_id=current_user.id,
+            action="consent.update",
+            resource_type="consent",
+            resource_id=consent.patient_id,
+            description=f"Updated consent {consent.id}",
+            status="updated",
+        )
 
         return PatientConsentResponse(**consent.to_dict())
 
@@ -177,13 +222,25 @@ async def accept_consent(
         raise HTTPException(status_code=403, detail="Access denied")
 
     # Check expiration
-    if consent.expires_at and consent.expires_at < datetime.utcnow():
+    if consent.expires_at and consent.expires_at < utcnow():
         raise HTTPException(status_code=400, detail="Consent has expired")
 
     consent.is_accepted = True
-    consent.accepted_at = datetime.utcnow()
+    consent.accepted_at = utcnow()
     db.commit()
     db.refresh(consent)
+
+    from app.routes.audit import log_action
+
+    await log_action(
+        db=db,
+        user_id=current_user.id,
+        action="consent.accept",
+        resource_type="consent",
+        resource_id=consent.patient_id,
+        description=f"Accepted consent {consent.id}",
+        status="success",
+    )
 
     return PatientConsentResponse(**consent.to_dict())
 
@@ -211,6 +268,18 @@ async def decline_consent(
     db.commit()
     db.refresh(consent)
 
+    from app.routes.audit import log_action
+
+    await log_action(
+        db=db,
+        user_id=current_user.id,
+        action="consent.decline",
+        resource_type="consent",
+        resource_id=consent.patient_id,
+        description=f"Declined consent {consent.id}",
+        status="warning",
+    )
+
     return PatientConsentResponse(**consent.to_dict())
 
 
@@ -233,7 +302,22 @@ async def delete_consent(
     if consent.requested_by != current_user.id and current_user.role.value != "admin":
         raise HTTPException(status_code=403, detail="Access denied")
 
+    if current_user.role.value == "provider":
+        require_verified_workforce_member(current_user, "delete consents")
+
     db.delete(consent)
     db.commit()
+
+    from app.routes.audit import log_action
+
+    await log_action(
+        db=db,
+        user_id=current_user.id,
+        action="consent.delete",
+        resource_type="consent",
+        resource_id=consent.patient_id,
+        description=f"Deleted consent {consent.id}",
+        status="warning",
+    )
 
     return None

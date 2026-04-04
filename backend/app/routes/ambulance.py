@@ -4,6 +4,8 @@ from database import get_db
 from app.models import AmbulanceRequest, User, UserRole, AmbulanceRequestStatus, EmergencyPriority
 from app.schemas import AmbulanceRequestResponse, AmbulanceRequestCreate, AmbulanceRequestUpdate
 from app.utils.dependencies import get_current_user
+from app.utils.access import require_verified_workforce_member
+from app.utils.time import utcnow
 from datetime import datetime
 
 router = APIRouter(prefix="/api/ambulance", tags=["ambulance"])
@@ -16,9 +18,26 @@ async def create_ambulance_request(
     db: Session = Depends(get_db)
 ):
     """Create a new ambulance/emergency request"""
+
+    if current_user.role == UserRole.PATIENT:
+        if request.patient_id is not None and request.patient_id != current_user.id:
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="Patients can only request ambulance help for themselves"
+            )
+        patient_id = current_user.id if request.patient_id is None else request.patient_id
+    elif current_user.role in [UserRole.ADMIN, UserRole.HOSPITAL, UserRole.AMBULANCE]:
+        if current_user.role in [UserRole.HOSPITAL, UserRole.AMBULANCE]:
+            require_verified_workforce_member(current_user, "create ambulance requests")
+        patient_id = request.patient_id or current_user.id
+    else:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Only patients, hospitals, ambulance dispatchers, and admins can create ambulance requests"
+        )
     
     db_request = AmbulanceRequest(
-        patient_id=request.patient_id or current_user.id,
+        patient_id=patient_id,
         location_name=request.location_name,
         address=request.address,
         latitude=request.latitude,
@@ -31,6 +50,18 @@ async def create_ambulance_request(
     db.add(db_request)
     db.commit()
     db.refresh(db_request)
+
+    from app.routes.audit import log_action
+
+    await log_action(
+        db=db,
+        user_id=current_user.id,
+        action="ambulance_request.create",
+        resource_type="ambulance_request",
+        resource_id=db_request.id,
+        description=f"Created ambulance request {db_request.id}",
+        status="created",
+    )
     
     return db_request
 
@@ -48,10 +79,14 @@ async def list_ambulance_requests(
         query = db.query(AmbulanceRequest).filter(AmbulanceRequest.patient_id == current_user.id)
     elif current_user.role in [UserRole.AMBULANCE, UserRole.ADMIN, UserRole.HOSPITAL]:
         # Dispatchers, Admins, and Hospitals see all requests
+        if current_user.role in [UserRole.AMBULANCE, UserRole.HOSPITAL]:
+            require_verified_workforce_member(current_user, "view ambulance requests")
         query = db.query(AmbulanceRequest)
     else:
-        # Others see only their own if they were assigned (simplified)
-        query = db.query(AmbulanceRequest).filter(AmbulanceRequest.patient_id == current_user.id)
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Not authorized"
+        )
         
     return query.order_by(AmbulanceRequest.requested_at.desc()).offset(skip).limit(limit).all()
 
@@ -74,6 +109,13 @@ async def get_ambulance_request(
         
     # Check access
     if current_user.role == UserRole.PATIENT and db_request.patient_id != current_user.id:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Not authorized"
+        )
+    if current_user.role in [UserRole.AMBULANCE, UserRole.HOSPITAL]:
+        require_verified_workforce_member(current_user, "view ambulance requests")
+    if current_user.role not in [UserRole.PATIENT, UserRole.AMBULANCE, UserRole.HOSPITAL, UserRole.ADMIN]:
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
             detail="Not authorized"
@@ -104,15 +146,17 @@ async def update_ambulance_request(
             status_code=status.HTTP_403_FORBIDDEN,
             detail="Only dispatchers or admins can update ambulance requests"
         )
+    if current_user.role == UserRole.AMBULANCE:
+        require_verified_workforce_member(current_user, "update ambulance requests")
         
     update_data = request_update.dict(exclude_unset=True)
     for field, value in update_data.items():
         if field == "status" and value:
             db_request.status = AmbulanceRequestStatus(value)
             if value == AmbulanceRequestStatus.DISPATCHED:
-                db_request.dispatched_at = datetime.utcnow()
+                db_request.dispatched_at = utcnow()
             elif value == AmbulanceRequestStatus.COMPLETED:
-                db_request.completed_at = datetime.utcnow()
+                db_request.completed_at = utcnow()
         elif field == "priority" and value:
             db_request.priority = EmergencyPriority(value)
         else:
@@ -120,5 +164,17 @@ async def update_ambulance_request(
             
     db.commit()
     db.refresh(db_request)
+
+    from app.routes.audit import log_action
+
+    await log_action(
+        db=db,
+        user_id=current_user.id,
+        action="ambulance_request.update",
+        resource_type="ambulance_request",
+        resource_id=db_request.id,
+        description=f"Updated ambulance request {db_request.id}",
+        status="updated",
+    )
     
     return db_request

@@ -5,6 +5,7 @@ from app.models.prescription import Prescription
 from app.models.user import User
 from app.schemas import PrescriptionResponse, PrescriptionCreate, PrescriptionUpdate
 from app.utils.dependencies import get_current_user
+from app.utils.access import require_verified_workforce_member
 
 router = APIRouter(prefix="/api/prescriptions", tags=["prescriptions"])
 
@@ -61,6 +62,8 @@ async def create_prescription(
             status_code=status.HTTP_403_FORBIDDEN,
             detail="Only providers can create prescriptions",
         )
+    if current_user.role.value == "provider":
+        require_verified_workforce_member(current_user, "create prescriptions")
 
     patient = db.query(User).filter(User.id == prescription.patient_id).first()
     if not patient:
@@ -92,6 +95,18 @@ async def create_prescription(
     loaded = _load_prescription(db, db_prescription.id)
     if not loaded:
         raise HTTPException(status_code=500, detail="Failed to load created prescription")
+
+    from app.routes.audit import log_action
+
+    await log_action(
+        db=db,
+        user_id=current_user.id,
+        action="prescription.create",
+        resource_type="prescription",
+        resource_id=loaded.id,
+        description=f"Created prescription {loaded.id} for patient {loaded.patient_id}",
+        status="created",
+    )
     return serialize_prescription(loaded)
 
 
@@ -109,8 +124,11 @@ async def list_prescriptions(
     if current_user.role.value == "patient":
         q = q.filter(Prescription.patient_id == current_user.id)
     elif current_user.role.value in ("pharmacist", "admin"):
+        if current_user.role.value == "pharmacist":
+            require_verified_workforce_member(current_user, "view prescriptions")
         pass  # pharmacy / admin: workflow queue (all prescriptions)
     elif current_user.role.value in ("provider",):
+        require_verified_workforce_member(current_user, "view prescriptions")
         q = q.filter(Prescription.provider_id == current_user.id)
     else:
         raise HTTPException(
@@ -145,6 +163,9 @@ async def get_prescription(
                 detail="Not authorized",
             )
 
+    if current_user.role.value in ("provider", "pharmacist"):
+        require_verified_workforce_member(current_user, "view prescriptions")
+
     return serialize_prescription(prescription)
 
 
@@ -169,6 +190,9 @@ async def update_prescription(
     is_admin = current_user.role.value == "admin"
     is_pharmacist = current_user.role.value == "pharmacist"
 
+    if current_user.role.value in ("provider", "pharmacist"):
+        require_verified_workforce_member(current_user, "update prescriptions")
+
     if not (is_owner or is_admin or is_pharmacist):
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
@@ -188,4 +212,16 @@ async def update_prescription(
     loaded = _load_prescription(db, prescription_id)
     if not loaded:
         raise HTTPException(status_code=500, detail="Failed to load prescription")
+
+    from app.routes.audit import log_action
+
+    await log_action(
+        db=db,
+        user_id=current_user.id,
+        action="prescription.update",
+        resource_type="prescription",
+        resource_id=loaded.id,
+        description=f"Updated prescription {loaded.id}",
+        status="updated",
+    )
     return serialize_prescription(loaded)

@@ -12,6 +12,7 @@ from app.models.referral import (
 from app.schemas import ReferralCreate, ReferralUpdate, ReferralResponse
 from app.schemas import REFERRAL_TYPE_VALUES
 from app.utils.dependencies import get_current_user
+from app.utils.access import require_verified_workforce_member
 
 router = APIRouter(prefix="/api/referrals", tags=["referrals"])
 
@@ -108,6 +109,8 @@ async def create_referral(
             status_code=status.HTTP_403_FORBIDDEN,
             detail="Only providers can create referrals",
         )
+    if current_user.role == UserRole.PROVIDER:
+        require_verified_workforce_member(current_user, "create referrals")
 
     rtype = _normalize_type(body.referral_type)
 
@@ -135,6 +138,18 @@ async def create_referral(
     db.add(ref)
     db.commit()
     db.refresh(ref)
+
+    from app.routes.audit import log_action
+
+    await log_action(
+        db=db,
+        user_id=current_user.id,
+        action="referral.create",
+        resource_type="referral",
+        resource_id=ref.id,
+        description=f"Created referral {ref.id} for patient {ref.patient_id}",
+        status="created",
+    )
     return referral_to_response(ref, db)
 
 
@@ -152,8 +167,10 @@ async def list_referrals(
     if current_user.role == UserRole.PATIENT:
         q = db.query(Referral).filter(Referral.patient_id == current_user.id)
     elif current_user.role == UserRole.PROVIDER:
+        require_verified_workforce_member(current_user, "view referrals")
         q = db.query(Referral).filter(Referral.from_doctor_id == current_user.id)
     elif current_user.role in (UserRole.HOSPITAL, UserRole.LABORATORY, UserRole.IMAGING, UserRole.PHARMACIST):
+        require_verified_workforce_member(current_user, "view referrals")
         q = db.query(Referral)
     elif current_user.role == UserRole.ADMIN:
         q = db.query(Referral)
@@ -192,6 +209,14 @@ async def get_referral(
         REFERRAL_TYPE_PHARMACY,
     ):
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Not authorized")
+    if current_user.role in (
+        UserRole.PROVIDER,
+        UserRole.HOSPITAL,
+        UserRole.LABORATORY,
+        UserRole.IMAGING,
+        UserRole.PHARMACIST,
+    ):
+        require_verified_workforce_member(current_user, "view referrals")
     if current_user.role not in (
         UserRole.PATIENT,
         UserRole.PROVIDER,
@@ -236,6 +261,14 @@ async def update_referral(
         REFERRAL_TYPE_PHARMACY,
     ):
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Not authorized")
+    if current_user.role in (
+        UserRole.PROVIDER,
+        UserRole.HOSPITAL,
+        UserRole.LABORATORY,
+        UserRole.IMAGING,
+        UserRole.PHARMACIST,
+    ):
+        require_verified_workforce_member(current_user, "update referrals")
 
     data = body.model_dump(exclude_unset=True)
 
@@ -262,4 +295,16 @@ async def update_referral(
 
     db.commit()
     db.refresh(ref)
+
+    from app.routes.audit import log_action
+
+    await log_action(
+        db=db,
+        user_id=current_user.id,
+        action="referral.update",
+        resource_type="referral",
+        resource_id=ref.id,
+        description=f"Updated referral {ref.id}",
+        status="updated",
+    )
     return referral_to_response(ref, db)

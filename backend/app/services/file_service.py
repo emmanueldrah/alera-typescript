@@ -12,6 +12,7 @@ from datetime import datetime
 from fastapi import UploadFile, HTTPException
 import shutil
 from config import settings
+from app.utils.time import utcnow
 
 
 # Configuration constants
@@ -139,7 +140,7 @@ class FileStorageService:
                 "file_path": str(file_path),
                 "file_size": len(contents),
                 "mime_type": file.content_type or "application/octet-stream",
-                "upload_time": datetime.utcnow().isoformat(),
+                "upload_time": utcnow().isoformat(),
             }
         except Exception as e:
             try:
@@ -206,7 +207,7 @@ class DocumentService:
         Generate a unique document reference
         Format: DOC_TYPE_USERID_TIMESTAMP
         """
-        timestamp = datetime.utcnow().strftime("%Y%m%d%H%M%S")
+        timestamp = utcnow().strftime("%Y%m%d%H%M%S")
         doc_type_abbr = document_type[:4].upper()
         user_abbr = user_id[:6]
         return f"{doc_type_abbr}_{user_abbr}_{timestamp}"
@@ -228,4 +229,3 @@ class DocumentService:
             return "clinical_note"
         else:
             return "other"
-

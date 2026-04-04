@@ -5,6 +5,7 @@ from app.models.notification import Notification
 from app.models.user import User
 from app.schemas import NotificationResponse
 from app.utils.dependencies import get_current_user
+from app.utils.time import utcnow
 
 router = APIRouter(prefix="/api/notifications", tags=["notifications"])
 
@@ -87,9 +88,8 @@ async def mark_as_read(
                 detail="Not authorized"
             )
     
-    from datetime import datetime
     notification.is_read = True
-    notification.read_at = datetime.utcnow()
+    notification.read_at = utcnow()
     db.commit()
     
     return {"message": "Notification marked as read"}
@@ -164,14 +164,12 @@ async def mark_all_as_read(
 ):
     """Mark all notifications as read"""
     
-    from datetime import datetime
-    
     db.query(Notification).filter(
         Notification.user_id == current_user.id,
         Notification.is_read == False
     ).update({
         Notification.is_read: True,
-        Notification.read_at: datetime.utcnow()
+        Notification.read_at: utcnow()
     })
     
     db.commit()

@@ -1,4 +1,4 @@
-from pydantic_settings import BaseSettings
+from pydantic_settings import BaseSettings, SettingsConfigDict
 from pydantic import field_validator, Field
 from typing import List
 import sys
@@ -40,6 +40,7 @@ class Settings(BaseSettings):
     # Email
     SENDGRID_API_KEY: str = ""
     SENDGRID_FROM_EMAIL: str = "noreply@alera.health"
+    FRONTEND_URL: str = Field(default="http://localhost:5173", description="Frontend application base URL")
 
     # SMS
     TWILIO_ACCOUNT_SID: str = ""
@@ -61,10 +62,11 @@ class Settings(BaseSettings):
     )
     AUDIT_LOG_RETENTION_DAYS: int = 2555
 
-    class Config:
-        env_file = ".env"
-        case_sensitive = True
-        extra = "allow"  # Allow extra fields from environment variables
+    model_config = SettingsConfigDict(
+        env_file=".env",
+        case_sensitive=True,
+        extra="allow",  # Allow extra fields from environment variables
+    )
 
     @field_validator("DEBUG", mode="before")
     @classmethod

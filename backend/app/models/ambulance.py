@@ -8,6 +8,7 @@ from datetime import datetime
 import enum
 import sys
 from database import Base
+from app.utils.time import utcnow
 
 
 class AmbulanceRequestStatus(str, enum.Enum):
@@ -44,7 +45,7 @@ class AmbulanceRequest(Base):
     priority = Column(SQLEnum(EmergencyPriority), default=EmergencyPriority.MEDIUM)
     
     # Tracking
-    requested_at = Column(DateTime, default=datetime.utcnow)
+    requested_at = Column(DateTime, default=utcnow)
     dispatched_at = Column(DateTime, nullable=True)
     completed_at = Column(DateTime, nullable=True)
     

@@ -13,6 +13,7 @@ from app.models import (
     AmbulanceRequest, AmbulanceRequestStatus, EmergencyPriority
 )
 from datetime import datetime, time
+from app.utils.time import utcnow
 
 def test_stats():
     # Initialize DB to create tables
@@ -32,7 +33,7 @@ def test_stats():
         print(f"User counts: {user_counts}")
 
         # 2. Today's Activity
-        today = datetime.utcnow().date()
+        today = utcnow().date()
         start_of_today = datetime.combine(today, time.min)
         end_of_today = datetime.combine(today, time.max)
         

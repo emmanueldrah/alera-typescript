@@ -6,6 +6,7 @@ import uuid
 from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.orm import Session
 from datetime import datetime
+from app.utils.time import utcnow
 
 from database import get_db
 from app.models.additional_features import AppointmentReminder, EmailTemplate, SMSTemplate
@@ -24,6 +25,7 @@ from app.schemas.additional_features import (
     TemplateListResponse,
 )
 from app.utils.dependencies import get_current_user
+from app.utils.access import require_verified_workforce_member
 
 router = APIRouter(tags=["reminders", "templates"])
 
@@ -42,6 +44,9 @@ async def create_reminder(
     if current_user.role.value not in ["provider", "admin"]:
         raise HTTPException(status_code=403, detail="Only providers and admins can create reminders")
 
+    if current_user.role.value == "provider":
+        require_verified_workforce_member(current_user, "create reminders")
+
     try:
         reminder = AppointmentReminder(
             id=str(uuid.uuid4()),
@@ -56,6 +61,18 @@ async def create_reminder(
         db.add(reminder)
         db.commit()
         db.refresh(reminder)
+
+        from app.routes.audit import log_action
+
+        await log_action(
+            db=db,
+            user_id=current_user.id,
+            action="reminder.create",
+            resource_type="reminder",
+            resource_id=reminder.appointment_id,
+            description=f"Created reminder for appointment {reminder.appointment_id}",
+            status="created",
+        )
 
         return AppointmentReminderResponse(**reminder.to_dict())
 
@@ -102,6 +119,9 @@ async def get_reminder(
     current_user: User = Depends(get_current_user),
 ):
     """Get a specific reminder"""
+
+    if current_user.role.value != "admin":
+        raise HTTPException(status_code=403, detail="Only admins can view reminders")
     
     reminder = db.query(AppointmentReminder).filter(
         AppointmentReminder.id == reminder_id
@@ -136,7 +156,7 @@ async def update_reminder(
         if update_data.is_sent is not None:
             reminder.is_sent = update_data.is_sent
             if update_data.is_sent:
-                reminder.sent_at = datetime.utcnow()
+                reminder.sent_at = utcnow()
 
         if update_data.delivery_status is not None:
             reminder.delivery_status = update_data.delivery_status
@@ -146,6 +166,18 @@ async def update_reminder(
 
         db.commit()
         db.refresh(reminder)
+
+        from app.routes.audit import log_action
+
+        await log_action(
+            db=db,
+            user_id=current_user.id,
+            action="reminder.update",
+            resource_type="reminder",
+            resource_id=reminder.appointment_id,
+            description=f"Updated reminder {reminder.id}",
+            status="updated",
+        )
 
         return AppointmentReminderResponse(**reminder.to_dict())
 
@@ -192,6 +224,18 @@ async def create_email_template(
         db.commit()
         db.refresh(template)
 
+        from app.routes.audit import log_action
+
+        await log_action(
+            db=db,
+            user_id=current_user.id,
+            action="email_template.create",
+            resource_type="template",
+            resource_id=None,
+            description=f"Created email template {template.name}",
+            status="created",
+        )
+
         return EmailTemplateResponse(**template.to_dict())
 
     except Exception as e:
@@ -208,6 +252,9 @@ async def list_email_templates(
     current_user: User = Depends(get_current_user),
 ):
     """List email templates"""
+
+    if current_user.role.value != "admin":
+        raise HTTPException(status_code=403, detail="Only admins can view templates")
     
     query = db.query(EmailTemplate)
 
@@ -230,6 +277,9 @@ async def get_email_template(
     current_user: User = Depends(get_current_user),
 ):
     """Get a specific email template"""
+
+    if current_user.role.value != "admin":
+        raise HTTPException(status_code=403, detail="Only admins can view templates")
     
     template = db.query(EmailTemplate).filter(
         EmailTemplate.id == template_id
@@ -279,9 +329,21 @@ async def update_email_template(
         if update_data.is_active is not None:
             template.is_active = update_data.is_active
 
-        template.updated_at = datetime.utcnow()
+        template.updated_at = utcnow()
         db.commit()
         db.refresh(template)
+
+        from app.routes.audit import log_action
+
+        await log_action(
+            db=db,
+            user_id=current_user.id,
+            action="email_template.update",
+            resource_type="template",
+            resource_id=None,
+            description=f"Updated email template {template.name}",
+            status="updated",
+        )
 
         return EmailTemplateResponse(**template.to_dict())
 
@@ -326,6 +388,18 @@ async def create_sms_template(
         db.commit()
         db.refresh(template)
 
+        from app.routes.audit import log_action
+
+        await log_action(
+            db=db,
+            user_id=current_user.id,
+            action="sms_template.create",
+            resource_type="template",
+            resource_id=None,
+            description=f"Created SMS template {template.name}",
+            status="created",
+        )
+
         return SMSTemplateResponse(**template.to_dict())
 
     except Exception as e:
@@ -342,6 +416,9 @@ async def list_sms_templates(
     current_user: User = Depends(get_current_user),
 ):
     """List SMS templates"""
+
+    if current_user.role.value != "admin":
+        raise HTTPException(status_code=403, detail="Only admins can view templates")
     
     query = db.query(SMSTemplate)
 
@@ -364,6 +441,9 @@ async def get_sms_template(
     current_user: User = Depends(get_current_user),
 ):
     """Get a specific SMS template"""
+
+    if current_user.role.value != "admin":
+        raise HTTPException(status_code=403, detail="Only admins can view templates")
     
     template = db.query(SMSTemplate).filter(
         SMSTemplate.id == template_id
@@ -407,9 +487,21 @@ async def update_sms_template(
         if update_data.is_active is not None:
             template.is_active = update_data.is_active
 
-        template.updated_at = datetime.utcnow()
+        template.updated_at = utcnow()
         db.commit()
         db.refresh(template)
+
+        from app.routes.audit import log_action
+
+        await log_action(
+            db=db,
+            user_id=current_user.id,
+            action="sms_template.update",
+            resource_type="template",
+            resource_id=None,
+            description=f"Updated SMS template {template.name}",
+            status="updated",
+        )
 
         return SMSTemplateResponse(**template.to_dict())
 

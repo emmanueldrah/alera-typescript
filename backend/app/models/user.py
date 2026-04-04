@@ -3,6 +3,7 @@ from sqlalchemy.orm import relationship
 from datetime import datetime
 import enum
 from database import Base
+from app.utils.time import utcnow
 
 
 class UserRole(str, enum.Enum):
@@ -38,8 +39,17 @@ class User(Base):
     role = Column(Enum(UserRole), default=UserRole.PATIENT, nullable=False)
     is_active = Column(Boolean, default=True)
     is_verified = Column(Boolean, default=False)
+    email_verified = Column(Boolean, default=False, nullable=False)
+    email_verified_at = Column(DateTime, nullable=True)
+    session_version = Column(Integer, default=0, nullable=False)
     profile_image_url = Column(String(500), nullable=True)
     bio = Column(Text, nullable=True)
+
+    # Account recovery / verification
+    email_verification_token_hash = Column(String(255), nullable=True)
+    email_verification_expires_at = Column(DateTime, nullable=True)
+    password_reset_token_hash = Column(String(255), nullable=True)
+    password_reset_expires_at = Column(DateTime, nullable=True)
     
     # License Information (for providers)
     license_number = Column(String(255), nullable=True)
@@ -47,8 +57,8 @@ class User(Base):
     license_state = Column(String(100), nullable=True)
     
     # Timestamps
-    created_at = Column(DateTime, default=datetime.utcnow, nullable=False)
-    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow, nullable=False)
+    created_at = Column(DateTime, default=utcnow, nullable=False)
+    updated_at = Column(DateTime, default=utcnow, onupdate=utcnow, nullable=False)
     last_login = Column(DateTime, nullable=True)
     
     # Relationships

@@ -5,6 +5,7 @@ from app.models.appointment import Appointment, AppointmentStatus, AppointmentTy
 from app.models.user import User
 from app.schemas import AppointmentResponse, AppointmentCreate, AppointmentUpdate
 from app.utils.dependencies import get_current_user
+from app.utils.access import require_verified_workforce_member
 
 router = APIRouter(prefix="/api/appointments", tags=["appointments"])
 
@@ -54,8 +55,14 @@ async def create_appointment(
 ):
     """Create a new appointment"""
 
+    if current_user.role.value != "patient":
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Only patients can book appointments",
+        )
+
     provider = db.query(User).filter(User.id == appointment.provider_id).first()
-    if not provider:
+    if not provider or provider.role.value != "provider" or not provider.is_active or not provider.is_verified:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
             detail="Provider not found",
@@ -87,6 +94,18 @@ async def create_appointment(
     apt = _load_appointment(db, db_appointment.id)
     if not apt:
         raise HTTPException(status_code=500, detail="Failed to load created appointment")
+
+    from app.routes.audit import log_action
+
+    await log_action(
+        db=db,
+        user_id=current_user.id,
+        action="appointment.create",
+        resource_type="appointment",
+        resource_id=apt.id,
+        description=f"Booked appointment with provider {provider.id}",
+        status="created",
+    )
     return serialize_appointment(apt)
 
 
@@ -103,8 +122,11 @@ async def list_appointments(
 
     if current_user.role.value == "patient":
         q = q.filter(Appointment.patient_id == current_user.id)
-    elif current_user.role.value in ("provider", "admin"):
+    elif current_user.role.value == "provider":
+        require_verified_workforce_member(current_user, "view appointments")
         q = q.filter(Appointment.provider_id == current_user.id)
+    elif current_user.role.value == "admin":
+        pass
     else:
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
@@ -137,6 +159,8 @@ async def get_appointment(
                 status_code=status.HTTP_403_FORBIDDEN,
                 detail="Not authorized to view this appointment",
             )
+    if current_user.role.value == "provider":
+        require_verified_workforce_member(current_user, "view appointments")
 
     return serialize_appointment(appointment)
 
@@ -165,6 +189,9 @@ async def update_appointment(
                 detail="Not authorized to update this appointment",
             )
 
+    if current_user.role.value == "provider":
+        require_verified_workforce_member(current_user, "update appointments")
+
     update_data = appointment_update.dict(exclude_unset=True)
     for field, value in update_data.items():
         if field == "status" and value is not None:
@@ -182,6 +209,18 @@ async def update_appointment(
     apt = _load_appointment(db, appointment_id)
     if not apt:
         raise HTTPException(status_code=500, detail="Failed to load appointment")
+
+    from app.routes.audit import log_action
+
+    await log_action(
+        db=db,
+        user_id=current_user.id,
+        action="appointment.update",
+        resource_type="appointment",
+        resource_id=apt.id,
+        description=f"Updated appointment {apt.id}",
+        status="updated",
+    )
     return serialize_appointment(apt)
 
 
@@ -208,7 +247,22 @@ async def delete_appointment(
                 detail="Not authorized to delete this appointment",
             )
 
+    if current_user.role.value == "provider":
+        require_verified_workforce_member(current_user, "cancel appointments")
+
     appointment.status = AppointmentStatus.CANCELLED
     db.commit()
+
+    from app.routes.audit import log_action
+
+    await log_action(
+        db=db,
+        user_id=current_user.id,
+        action="appointment.cancel",
+        resource_type="appointment",
+        resource_id=appointment.id,
+        description=f"Cancelled appointment {appointment.id}",
+        status="warning",
+    )
 
     return {"message": "Appointment cancelled"}

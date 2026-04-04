@@ -17,6 +17,9 @@ import LandingTrust from "./pages/Landing/Trust";
 import LandingWhoWeServe from "./pages/Landing/WhoWeServe";
 import Login from "./pages/Login";
 import Signup from "./pages/Signup";
+import ForgotPassword from "./pages/ForgotPassword";
+import ResetPassword from "./pages/ResetPassword";
+import VerifyEmail from "./pages/VerifyEmail";
 import DashboardHome from "./pages/DashboardHome";
 import FeatureWrapper from "./pages/FeatureWrapper";
 import NotFound from "./pages/NotFound";
@@ -63,6 +66,9 @@ const App = () => {
                       </Route>
                       <Route path="/login" element={<AuthRedirect><Login /></AuthRedirect>} />
                       <Route path="/signup" element={<AuthRedirect><Signup /></AuthRedirect>} />
+                      <Route path="/forgot-password" element={<ForgotPassword />} />
+                      <Route path="/reset-password" element={<ResetPassword />} />
+                      <Route path="/verify-email" element={<VerifyEmail />} />
                       <Route path="/dashboard" element={<ProtectedRoute><DashboardHome /></ProtectedRoute>} />
                       {featureRoutes.map(page => (
                         <Route key={page} path={`/dashboard/${page}`} element={<ProtectedRoute><FeatureWrapper page={page} /></ProtectedRoute>} />

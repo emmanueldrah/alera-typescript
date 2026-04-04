@@ -1,5 +1,5 @@
 import React, { useState, useCallback, useEffect } from 'react';
-import { clearAleraStorage, storageKeys } from '@/lib/storageKeys';
+import { clearAleraStorage } from '@/lib/storageKeys';
 import { AuthContext } from './auth-context';
 import { authApi, type ApiUser } from '@/lib/apiService';
 import { setTokens, getAccessToken, clearTokens } from '@/lib/apiClient';
@@ -13,6 +13,8 @@ export type UserRole =
   | 'pharmacy'
   | 'ambulance'
   | 'admin';
+
+export type SignupRole = Exclude<UserRole, 'admin'>;
 
 export interface UserProfile {
   firstName: string;
@@ -35,13 +37,15 @@ export interface User {
   email: string;
   name: string;
   role: UserRole;
+  isVerified?: boolean;
+  isActive?: boolean;
+  emailVerified?: boolean;
+  emailVerifiedAt?: string | null;
   avatar?: string;
   profile?: UserProfile;
   createdAt?: string;
   lastLogin?: string;
 }
-
-type SignupRole = UserRole;
 
 const isApiUser = (data: unknown): data is ApiUser => {
   return typeof data === 'object' && data !== null && 'id' in data && 'email' in data;
@@ -81,6 +85,10 @@ const mapBackendUser = (data: ApiUser): User => {
     email: data.email,
     name: fullName || data.email,
     role: mapBackendRoleToUserRole(data.role),
+    isVerified: Boolean(data.is_verified),
+    isActive: data.is_active ?? true,
+    emailVerified: data.email_verified ?? false,
+    emailVerifiedAt: data.email_verified_at ?? null,
     avatar: data.avatar || data.profile_image_url,
     createdAt: data.created_at,
     lastLogin: data.last_login,
@@ -157,13 +165,21 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     }
   }, []);
 
-  const signup = useCallback(async (name: string, email: string, password: string, role: SignupRole) => {
+  const signup = useCallback(async (
+    name: string,
+    email: string,
+    password: string,
+    role: SignupRole,
+    licenseNumber?: string,
+    licenseState?: string,
+    specialty?: string,
+  ) => {
     try {
       const [firstName = '', ...lastNameParts] = name.split(' ');
       const lastName = lastNameParts.join(' ') || 'User';
       
       // Map frontend roles to backend roles
-      const roleMap: Record<UserRole, BackendRole> = {
+      const roleMap: Record<SignupRole, BackendRole> = {
         patient: 'patient',
         doctor: 'provider',
         hospital: 'hospital',
@@ -171,7 +187,6 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         imaging: 'imaging',
         pharmacy: 'pharmacist',
         ambulance: 'ambulance',
-        admin: 'admin'
       };
       const backendRole = roleMap[role] || 'patient';
       
@@ -186,6 +201,9 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         last_name: lastName,
         role: backendRole,
         phone: undefined,
+        license_number: role === 'patient' ? undefined : licenseNumber,
+        license_state: role === 'patient' ? undefined : licenseState,
+        specialty: role === 'patient' ? undefined : specialty,
       });
       
       const { access_token, refresh_token, user: userData } = response;
@@ -268,10 +286,13 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const deleteAccount = useCallback(async (password: string) => {
     if (!user) throw new Error('No user logged in');
 
-    // TODO: Implement account deletion endpoint
-    // await authApi.deleteAccount(password);
-    clearTokens();
-    setUser(null);
+    await authApi.deleteAccount(password);
+  }, [user]);
+
+  const resendEmailVerification = useCallback(async () => {
+    if (!user) throw new Error('No user logged in');
+
+    await authApi.resendVerificationEmail();
   }, [user]);
 
   const clearCache = useCallback(() => {
@@ -281,7 +302,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   }, []);
 
   // Mock functions for backward compatibility - to be replaced by API calls
-  const addUser = useCallback(async (name: string, email: string, password: string, role: UserRole): Promise<User> => {
+  const addUser = useCallback(async (name: string, email: string, password: string, role: SignupRole): Promise<User> => {
     throw new Error('Use signup instead');
   }, []);
 
@@ -323,6 +344,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         updateNotificationPreferences,
         updatePrivacySettings,
         deleteAccount,
+        resendEmailVerification,
         clearCache
       }}>
         {children}
@@ -345,6 +367,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       updateNotificationPreferences, 
       updatePrivacySettings, 
       deleteAccount, 
+      resendEmailVerification,
       clearCache 
     }}>
       {children}

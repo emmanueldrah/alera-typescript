@@ -6,6 +6,7 @@ import uuid
 from fastapi import APIRouter, UploadFile, File, Depends, HTTPException, status
 from sqlalchemy.orm import Session
 from datetime import datetime
+from app.utils.time import utcnow
 
 from database import get_db
 from app.models.additional_features import PatientDocument
@@ -15,7 +16,12 @@ from app.schemas.additional_features import (
     PatientDocumentUpdate,
     DocumentListResponse,
 )
-from app.utils.dependencies import get_current_user, get_current_patient
+from app.utils.dependencies import get_current_user
+from app.utils.access import (
+    provider_panel_patient_ids,
+    require_provider_panel_access,
+    require_verified_workforce_member,
+)
 from app.services.file_service import FileStorageService, DocumentService
 
 router = APIRouter(prefix="/api/documents", tags=["documents"])
@@ -68,6 +74,18 @@ async def upload_document(
         db.commit()
         db.refresh(document)
 
+        from app.routes.audit import log_action
+
+        await log_action(
+            db=db,
+            user_id=current_user.id,
+            action="document.upload",
+            resource_type="document",
+            resource_id=document.patient_id,
+            description=f"Uploaded document {document.filename}",
+            status="created",
+        )
+
         return PatientDocumentResponse(**document.to_dict())
 
     except HTTPException:
@@ -94,14 +112,21 @@ async def list_documents(
         query = db.query(PatientDocument).filter(
             PatientDocument.patient_id == current_user.id
         )
-    # Providers see their patients' documents (if shared)
+    # Providers see only shared documents for patients on their panel.
     elif current_user.role.value == "provider":
+        require_verified_workforce_member(current_user, "view patient documents")
+        panel_ids = provider_panel_patient_ids(db, current_user.id)
+        if not panel_ids:
+            return DocumentListResponse(total=0, items=[])
         query = db.query(PatientDocument).filter(
+            PatientDocument.patient_id.in_(panel_ids),
             PatientDocument.is_private == False
         )
     # Admins see all documents
-    else:
+    elif current_user.role.value == "admin":
         query = db.query(PatientDocument)
+    else:
+        raise HTTPException(status_code=403, detail="Access denied")
 
     total = query.count()
     items = query.offset(skip).limit(limit).all()
@@ -132,11 +157,17 @@ async def get_document(
         raise HTTPException(status_code=403, detail="Access denied")
 
     if current_user.role.value == "provider" and document.is_private:
+        require_verified_workforce_member(current_user, "access patient documents")
+        require_provider_panel_access(db, current_user.id, document.patient_id, "access this document")
         raise HTTPException(status_code=403, detail="Document is private")
+
+    if current_user.role.value == "provider":
+        require_verified_workforce_member(current_user, "access patient documents")
+        require_provider_panel_access(db, current_user.id, document.patient_id, "access this document")
 
     # Update access tracking
     document.accessed_count = (document.accessed_count or 0) + 1
-    document.last_accessed = datetime.utcnow()
+    document.last_accessed = utcnow()
     db.commit()
 
     return PatientDocumentResponse(**document.to_dict())
@@ -171,6 +202,18 @@ async def update_document(
     db.commit()
     db.refresh(document)
 
+    from app.routes.audit import log_action
+
+    await log_action(
+        db=db,
+        user_id=current_user.id,
+        action="document.update",
+        resource_type="document",
+        resource_id=document.patient_id,
+        description=f"Updated document {document.filename}",
+        status="updated",
+    )
+
     return PatientDocumentResponse(**document.to_dict())
 
 
@@ -200,6 +243,18 @@ async def delete_document(
     db.delete(document)
     db.commit()
 
+    from app.routes.audit import log_action
+
+    await log_action(
+        db=db,
+        user_id=current_user.id,
+        action="document.delete",
+        resource_type="document",
+        resource_id=document.patient_id,
+        description=f"Deleted document {document.filename}",
+        status="warning",
+    )
+
     return None
 
 
@@ -224,7 +279,13 @@ async def download_document(
         raise HTTPException(status_code=403, detail="Access denied")
 
     if current_user.role.value == "provider" and document.is_private:
+        require_verified_workforce_member(current_user, "download patient documents")
+        require_provider_panel_access(db, current_user.id, document.patient_id, "download this document")
         raise HTTPException(status_code=403, detail="Document is private")
+
+    if current_user.role.value == "provider":
+        require_verified_workforce_member(current_user, "download patient documents")
+        require_provider_panel_access(db, current_user.id, document.patient_id, "download this document")
 
     # Get file
     file_path = FileStorageService.get_file_path(
@@ -234,6 +295,18 @@ async def download_document(
 
     if not file_path or not file_path.exists():
         raise HTTPException(status_code=404, detail="File not found")
+
+    from app.routes.audit import log_action
+
+    await log_action(
+        db=db,
+        user_id=current_user.id,
+        action="document.download",
+        resource_type="document",
+        resource_id=document.patient_id,
+        description=f"Downloaded document {document.filename}",
+        status="info",
+    )
 
     return FileResponse(
         path=file_path,
@@ -255,10 +328,16 @@ async def get_patient_documents(
     if current_user.role.value not in ["provider", "admin"]:
         raise HTTPException(status_code=403, detail="Access denied")
 
+    if current_user.role.value == "provider":
+        require_verified_workforce_member(current_user, "view patient documents")
+        require_provider_panel_access(db, current_user.id, patient_id, "view this patient document set")
+
     query = db.query(PatientDocument).filter(
-        PatientDocument.patient_id == patient_id,
-        PatientDocument.is_private == False
+        PatientDocument.patient_id == patient_id
     )
+
+    if current_user.role.value == "provider":
+        query = query.filter(PatientDocument.is_private == False)
 
     if current_user.role.value == "admin":
         # Admins can see all documents

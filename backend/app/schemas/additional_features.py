@@ -2,7 +2,7 @@
 Pydantic schemas for Phase 3C features
 """
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, ConfigDict
 from datetime import datetime
 from typing import Optional, List
 from enum import Enum
@@ -44,8 +44,7 @@ class PatientDocumentResponse(BaseModel):
     accessed_count: int
     last_accessed: Optional[str]
 
-    class Config:
-        from_attributes = True
+    model_config = ConfigDict(from_attributes=True)
 
 
 # Consent Schemas
@@ -77,8 +76,7 @@ class PatientConsentResponse(BaseModel):
     updated_at: Optional[str]
     requested_by: Optional[int]
 
-    class Config:
-        from_attributes = True
+    model_config = ConfigDict(from_attributes=True)
 
 
 # Reminder Schemas
@@ -112,8 +110,7 @@ class AppointmentReminderResponse(BaseModel):
     error_message: Optional[str]
     created_at: str
 
-    class Config:
-        from_attributes = True
+    model_config = ConfigDict(from_attributes=True)
 
 
 # Template Schemas
@@ -149,8 +146,7 @@ class EmailTemplateResponse(BaseModel):
     created_at: str
     updated_at: str
 
-    class Config:
-        from_attributes = True
+    model_config = ConfigDict(from_attributes=True)
 
 
 class SMSTemplateCreate(BaseModel):
@@ -178,8 +174,7 @@ class SMSTemplateResponse(BaseModel):
     created_at: str
     updated_at: str
 
-    class Config:
-        from_attributes = True
+    model_config = ConfigDict(from_attributes=True)
 
 
 # Audit Log Schemas
@@ -202,8 +197,7 @@ class AuditLogResponse(BaseModel):
     error_message: Optional[str] = None
     timestamp: str
 
-    class Config:
-        from_attributes = True
+    model_config = ConfigDict(from_attributes=True)
 
 
 class AuditLogFilter(BaseModel):

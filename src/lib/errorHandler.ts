@@ -43,19 +43,19 @@ export const getErrorMessage = (error: unknown): string => {
       }
 
       if (status === 401) {
-        return 'Session expired. Please log in again.';
+        return detail || message || 'Session expired. Please log in again.';
       }
 
       if (status === 403) {
-        return 'You do not have permission to perform this action.';
+        return detail || message || 'You do not have permission to perform this action.';
       }
 
       if (status === 404) {
-        return 'The requested resource was not found.';
+        return detail || message || 'The requested resource was not found.';
       }
 
       if (status === 409) {
-        return 'This resource already exists. Please use a different value.';
+        return detail || message || 'This resource already exists. Please use a different value.';
       }
 
       if (status === 422) {
@@ -63,7 +63,7 @@ export const getErrorMessage = (error: unknown): string => {
       }
 
       if (status === 500) {
-        return 'Server error. Please try again later.';
+        return detail || message || 'Server error. Please try again later.';
       }
 
       if (status >= 500) {
@@ -235,12 +235,12 @@ export const handleApiError = (
 
   if (isAuthError(error)) {
     onAuthError?.();
-    return 'Your session has expired. Please log in again.';
+    return getErrorMessage(error) || 'Your session has expired. Please log in again.';
   }
 
   if (isAuthorizationError(error)) {
     onAuthorizationError?.();
-    return 'You do not have permission to perform this action.';
+    return getErrorMessage(error) || 'You do not have permission to perform this action.';
   }
 
   return createFriendlyErrorMessage(error, context);

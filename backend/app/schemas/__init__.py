@@ -1,4 +1,4 @@
-from pydantic import BaseModel, EmailStr, Field
+from pydantic import BaseModel, EmailStr, Field, model_validator, ConfigDict
 from datetime import datetime
 from typing import Optional, List, Literal
 from enum import Enum
@@ -32,6 +32,17 @@ class UserBase(BaseModel):
 class UserCreate(UserBase):
     password: str = Field(..., min_length=8)
     role: UserRole = UserRole.PATIENT
+    license_number: Optional[str] = None
+    license_state: Optional[str] = None
+    specialty: Optional[str] = None
+
+    @model_validator(mode="after")
+    def validate_role_specific_fields(self):
+        if self.role != UserRole.PATIENT:
+            if not self.license_number or not self.license_state:
+                raise ValueError("license_number and license_state are required for professional accounts")
+
+        return self
 
 
 class UserUpdate(BaseModel):
@@ -58,6 +69,8 @@ class UserResponse(BaseModel):
     role: str
     is_active: bool
     is_verified: bool
+    email_verified: bool = False
+    email_verified_at: Optional[datetime] = None
     phone: Optional[str]
     date_of_birth: Optional[datetime]
     city: Optional[str]
@@ -74,8 +87,7 @@ class UserResponse(BaseModel):
     specialty: Optional[str] = None
     license_state: Optional[str] = None
     
-    class Config:
-        from_attributes = True
+    model_config = ConfigDict(from_attributes=True)
 
 
 # Authentication Schemas
@@ -92,13 +104,27 @@ class TokenResponse(BaseModel):
 
 
 class AuthResponse(TokenResponse):
-    user: "UserResponse"
+    user: UserResponse
 
 
 class PasswordChangeRequest(BaseModel):
     old_password: str
     new_password: str = Field(..., min_length=8)
     confirm_password: str
+
+
+class PasswordResetRequest(BaseModel):
+    email: EmailStr
+
+
+class PasswordResetConfirmRequest(BaseModel):
+    token: str
+    new_password: str = Field(..., min_length=8)
+    confirm_password: str
+
+
+class EmailVerificationConfirmRequest(BaseModel):
+    token: str
 
 
 # Appointment Schemas
@@ -137,8 +163,7 @@ class AppointmentResponse(AppointmentBase):
     patient_name: Optional[str] = None
     provider_name: Optional[str] = None
 
-    class Config:
-        from_attributes = True
+    model_config = ConfigDict(from_attributes=True)
 
 
 # Prescription Schemas
@@ -183,8 +208,7 @@ class PrescriptionResponse(PrescriptionBase):
     patient_name: Optional[str] = None
     provider_name: Optional[str] = None
 
-    class Config:
-        from_attributes = True
+    model_config = ConfigDict(from_attributes=True)
 
 
 # Allergy Schemas
@@ -216,8 +240,7 @@ class AllergyResponse(AllergyBase):
     created_at: datetime
     patient_name: Optional[str] = None
 
-    class Config:
-        from_attributes = True
+    model_config = ConfigDict(from_attributes=True)
 
 
 # Notification Schemas
@@ -239,8 +262,7 @@ class NotificationResponse(NotificationBase):
     is_archived: bool
     created_at: datetime
     
-    class Config:
-        from_attributes = True
+    model_config = ConfigDict(from_attributes=True)
 
 
 # Lab Test Schemas
@@ -283,8 +305,7 @@ class LabTestResponse(LabTestBase):
     patient_name: Optional[str] = None
     ordered_by_name: Optional[str] = None
 
-    class Config:
-        from_attributes = True
+    model_config = ConfigDict(from_attributes=True)
 
 
 # Imaging Scan Schemas
@@ -325,8 +346,7 @@ class ImagingScanResponse(ImagingScanBase):
     patient_name: Optional[str] = None
     ordered_by_name: Optional[str] = None
 
-    class Config:
-        from_attributes = True
+    model_config = ConfigDict(from_attributes=True)
 
 
 # Referral schemas
@@ -363,8 +383,7 @@ class ReferralResponse(BaseModel):
     patient_name: Optional[str] = None
     from_doctor_name: Optional[str] = None
 
-    class Config:
-        from_attributes = True
+    model_config = ConfigDict(from_attributes=True)
 
 
 # Ambulance Request Schemas
@@ -396,6 +415,4 @@ class AmbulanceRequestResponse(AmbulanceRequestBase):
     dispatched_at: Optional[datetime] = None
     completed_at: Optional[datetime] = None
 
-    class Config:
-        from_attributes = True
-
+    model_config = ConfigDict(from_attributes=True)

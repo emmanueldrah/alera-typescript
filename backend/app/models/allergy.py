@@ -2,6 +2,7 @@ from sqlalchemy import Column, Integer, String, DateTime, ForeignKey, Text, Inde
 from sqlalchemy.orm import relationship
 from datetime import datetime
 from database import Base
+from app.utils.time import utcnow
 
 
 class Allergy(Base):
@@ -30,8 +31,8 @@ class Allergy(Base):
     medication_avoided = Column(String(500), nullable=True)
     
     # Timestamps
-    created_at = Column(DateTime, default=datetime.utcnow, nullable=False)
-    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow, nullable=False)
+    created_at = Column(DateTime, default=utcnow, nullable=False)
+    updated_at = Column(DateTime, default=utcnow, onupdate=utcnow, nullable=False)
     
     # Relationship
     patient = relationship("User", back_populates="allergies")

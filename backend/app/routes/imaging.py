@@ -4,6 +4,7 @@ from database import get_db
 from app.models import ImagingScan, User, UserRole, ImagingScanStatus
 from app.schemas import ImagingScanResponse, ImagingScanCreate, ImagingScanUpdate
 from app.utils.dependencies import get_current_user
+from app.utils.access import require_verified_workforce_member
 
 router = APIRouter(prefix="/api/imaging", tags=["imaging"])
 
@@ -60,6 +61,8 @@ async def order_imaging_scan(
             status_code=status.HTTP_403_FORBIDDEN,
             detail="Only providers can order imaging scans",
         )
+    if current_user.role == UserRole.PROVIDER:
+        require_verified_workforce_member(current_user, "order imaging scans")
 
     patient = db.query(User).filter(User.id == imaging_scan.patient_id).first()
     if not patient:
@@ -83,6 +86,18 @@ async def order_imaging_scan(
     loaded = _load_scan_with_users(db, db_imaging_scan.id)
     if not loaded:
         raise HTTPException(status_code=500, detail="Failed to load created imaging scan")
+
+    from app.routes.audit import log_action
+
+    await log_action(
+        db=db,
+        user_id=current_user.id,
+        action="imaging_scan.create",
+        resource_type="imaging_scan",
+        resource_id=loaded.id,
+        description=f"Ordered imaging scan {loaded.scan_type} for patient {loaded.patient_id}",
+        status="created",
+    )
     return imaging_to_response(loaded)
 
 
@@ -98,8 +113,10 @@ async def list_imaging_scans(
     if current_user.role == UserRole.PATIENT:
         query = db.query(ImagingScan).filter(ImagingScan.patient_id == current_user.id)
     elif current_user.role == UserRole.IMAGING:
+        require_verified_workforce_member(current_user, "view imaging scans")
         query = db.query(ImagingScan)
     elif current_user.role == UserRole.PROVIDER:
+        require_verified_workforce_member(current_user, "view imaging scans")
         query = db.query(ImagingScan).filter(ImagingScan.ordered_by == current_user.id)
     elif current_user.role == UserRole.ADMIN:
         query = db.query(ImagingScan)
@@ -144,6 +161,8 @@ async def get_imaging_scan(
             status_code=status.HTTP_403_FORBIDDEN,
             detail="Not authorized",
         )
+    if current_user.role in (UserRole.PROVIDER, UserRole.IMAGING):
+        require_verified_workforce_member(current_user, "view imaging scans")
 
     return imaging_to_response(db_imaging_scan)
 
@@ -174,6 +193,8 @@ async def update_imaging_scan(
             status_code=status.HTTP_403_FORBIDDEN,
             detail="Not authorized to update this imaging scan",
         )
+    if current_user.role in (UserRole.PROVIDER, UserRole.IMAGING):
+        require_verified_workforce_member(current_user, "update imaging scans")
 
     update_data = imaging_scan_update.model_dump(exclude_unset=True)
     if "status" in update_data and update_data["status"] is not None:
@@ -197,4 +218,16 @@ async def update_imaging_scan(
     loaded = _load_scan_with_users(db, scan_id)
     if not loaded:
         raise HTTPException(status_code=500, detail="Failed to load imaging scan")
+
+    from app.routes.audit import log_action
+
+    await log_action(
+        db=db,
+        user_id=current_user.id,
+        action="imaging_scan.update",
+        resource_type="imaging_scan",
+        resource_id=loaded.id,
+        description=f"Updated imaging scan {loaded.id}",
+        status="updated",
+    )
     return imaging_to_response(loaded)

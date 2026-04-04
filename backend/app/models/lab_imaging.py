@@ -8,6 +8,7 @@ from datetime import datetime
 import enum
 import sys
 from database import Base
+from app.utils.time import utcnow
 
 
 class LabTestStatus(str, enum.Enum):
@@ -46,11 +47,11 @@ class LabTest(Base):
     result_notes = Column(Text, nullable=True)
     result_file_url = Column(String, nullable=True)
 
-    ordered_at = Column(DateTime, default=datetime.utcnow)
+    ordered_at = Column(DateTime, default=utcnow)
     collected_at = Column(DateTime, nullable=True)
     completed_at = Column(DateTime, nullable=True)
-    created_at = Column(DateTime, default=datetime.utcnow)
-    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+    created_at = Column(DateTime, default=utcnow)
+    updated_at = Column(DateTime, default=utcnow, onupdate=utcnow)
 
     patient = relationship("User", foreign_keys=[patient_id])
     doctor = relationship("User", foreign_keys=[ordered_by])
@@ -98,10 +99,10 @@ class ImagingScan(Base):
     image_url = Column(String, nullable=True)
 
     scheduled_at = Column(DateTime, nullable=True)
-    ordered_at = Column(DateTime, default=datetime.utcnow)
+    ordered_at = Column(DateTime, default=utcnow)
     completed_at = Column(DateTime, nullable=True)
-    created_at = Column(DateTime, default=datetime.utcnow)
-    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+    created_at = Column(DateTime, default=utcnow)
+    updated_at = Column(DateTime, default=utcnow, onupdate=utcnow)
 
     patient = relationship("User", foreign_keys=[patient_id])
     doctor = relationship("User", foreign_keys=[ordered_by])

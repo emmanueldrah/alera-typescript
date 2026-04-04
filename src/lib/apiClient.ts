@@ -84,8 +84,12 @@ apiClient.interceptors.response.use(
       return Promise.reject(error);
     }
 
-    // Handle 401 Unauthorized - attempt token refresh
-    if (error.response?.status === 401 && !originalRequest._retry) {
+    const requestUrl = originalRequest.url || '';
+    const isLoginOrRegisterRequest = requestUrl.includes('/auth/login') || requestUrl.includes('/auth/register');
+    const isRefreshRequest = requestUrl.includes('/auth/refresh');
+
+    // Handle 401 Unauthorized - attempt token refresh for protected endpoints only.
+    if (error.response?.status === 401 && !originalRequest._retry && !isLoginOrRegisterRequest) {
       if (isRefreshing) {
         return new Promise((resolve, reject) => {
           failedQueue.push({ resolve, reject });
@@ -129,32 +133,14 @@ apiClient.interceptors.response.use(
       }
     }
 
-    // Handle other error responses
-    if (error.response?.status === 403) {
-      // Access forbidden - insufficient permissions
-      return Promise.reject({
-        status: 403,
-        message: 'Access denied. You do not have permission to access this resource.',
-        ...error,
-      });
+    if (error.response?.status === 401 && isLoginOrRegisterRequest) {
+      return Promise.reject(error);
     }
 
-    if (error.response?.status === 404) {
-      // Not found
-      return Promise.reject({
-        status: 404,
-        message: 'Resource not found.',
-        ...error,
-      });
-    }
-
-    if (error.response?.status === 500) {
-      // Server error
-      return Promise.reject({
-        status: 500,
-        message: 'Server error. Please try again later.',
-        ...error,
-      });
+    if (error.response?.status === 401 && isRefreshRequest) {
+      clearTokens();
+      window.location.href = '/login';
+      return Promise.reject(error);
     }
 
     return Promise.reject(error);

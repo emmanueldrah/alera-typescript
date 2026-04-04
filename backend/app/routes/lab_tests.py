@@ -4,6 +4,7 @@ from database import get_db
 from app.models import LabTest, User, UserRole, LabTestStatus
 from app.schemas import LabTestResponse, LabTestCreate, LabTestUpdate
 from app.utils.dependencies import get_current_user
+from app.utils.access import require_verified_workforce_member
 
 router = APIRouter(prefix="/api/lab-tests", tags=["lab-tests"])
 
@@ -61,6 +62,8 @@ async def create_lab_test(
             status_code=status.HTTP_403_FORBIDDEN,
             detail="Only providers can order lab tests",
         )
+    if current_user.role == UserRole.PROVIDER:
+        require_verified_workforce_member(current_user, "order lab tests")
 
     patient = db.query(User).filter(User.id == lab_test.patient_id).first()
     if not patient:
@@ -84,6 +87,18 @@ async def create_lab_test(
     loaded = _load_lab_with_users(db, db_lab_test.id)
     if not loaded:
         raise HTTPException(status_code=500, detail="Failed to load created lab test")
+
+    from app.routes.audit import log_action
+
+    await log_action(
+        db=db,
+        user_id=current_user.id,
+        action="lab_test.create",
+        resource_type="lab_test",
+        resource_id=loaded.id,
+        description=f"Ordered lab test {loaded.test_name} for patient {loaded.patient_id}",
+        status="created",
+    )
     return lab_test_to_response(loaded)
 
 
@@ -99,8 +114,10 @@ async def list_lab_tests(
     if current_user.role == UserRole.PATIENT:
         query = db.query(LabTest).filter(LabTest.patient_id == current_user.id)
     elif current_user.role == UserRole.LABORATORY:
+        require_verified_workforce_member(current_user, "view lab tests")
         query = db.query(LabTest)
     elif current_user.role == UserRole.PROVIDER:
+        require_verified_workforce_member(current_user, "view lab tests")
         query = db.query(LabTest).filter(LabTest.ordered_by == current_user.id)
     elif current_user.role == UserRole.ADMIN:
         query = db.query(LabTest)
@@ -145,6 +162,8 @@ async def get_lab_test(
             status_code=status.HTTP_403_FORBIDDEN,
             detail="Not authorized",
         )
+    if current_user.role in (UserRole.PROVIDER, UserRole.LABORATORY):
+        require_verified_workforce_member(current_user, "view lab tests")
 
     return lab_test_to_response(db_lab_test)
 
@@ -175,6 +194,8 @@ async def update_lab_test(
             status_code=status.HTTP_403_FORBIDDEN,
             detail="Not authorized to update this lab test",
         )
+    if current_user.role in (UserRole.PROVIDER, UserRole.LABORATORY):
+        require_verified_workforce_member(current_user, "update lab tests")
 
     update_data = lab_test_update.model_dump(exclude_unset=True)
     if "status" in update_data and update_data["status"] is not None:
@@ -198,4 +219,16 @@ async def update_lab_test(
     loaded = _load_lab_with_users(db, test_id)
     if not loaded:
         raise HTTPException(status_code=500, detail="Failed to load lab test")
+
+    from app.routes.audit import log_action
+
+    await log_action(
+        db=db,
+        user_id=current_user.id,
+        action="lab_test.update",
+        resource_type="lab_test",
+        resource_id=loaded.id,
+        description=f"Updated lab test {loaded.id}",
+        status="updated",
+    )
     return lab_test_to_response(loaded)

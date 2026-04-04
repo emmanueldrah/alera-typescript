@@ -1,8 +1,9 @@
-from sqlalchemy import create_engine, event
-from sqlalchemy.ext.declarative import declarative_base
-from sqlalchemy.orm import sessionmaker, Session
+from sqlalchemy import create_engine, event, inspect, text
+from sqlalchemy.orm import sessionmaker, Session, declarative_base
 from sqlalchemy.pool import NullPool, StaticPool
 from config import settings
+from app.utils.time import utcnow
+from datetime import datetime
 from typing import Generator
 import sys
 import os
@@ -90,7 +91,6 @@ def _patch_referrals_referral_type_column():
     """SQLite: add referral_type if missing (create_all does not ALTER existing tables)."""
     if not str(engine.url).startswith("sqlite"):
         return
-    from sqlalchemy import text
 
     try:
         with engine.begin() as conn:
@@ -103,11 +103,58 @@ def _patch_referrals_referral_type_column():
         pass
 
 
+def _patch_users_session_version_column():
+    """Add session_version to users when upgrading an existing database."""
+    try:
+        columns = {column["name"] for column in inspect(engine).get_columns("users")}
+    except Exception:
+        return
+
+    if "session_version" in columns:
+        return
+
+    try:
+        with engine.begin() as conn:
+            conn.execute(
+                text("ALTER TABLE users ADD COLUMN session_version INTEGER NOT NULL DEFAULT 0")
+            )
+    except Exception as e:
+        print(f"WARNING: Could not patch users.session_version column: {e}")
+
+
+def _patch_users_account_recovery_columns():
+    """Add email verification and password reset columns when upgrading an existing database."""
+    try:
+        columns = {column["name"] for column in inspect(engine).get_columns("users")}
+    except Exception:
+        return
+
+    patches = {
+        "email_verified": "BOOLEAN NOT NULL DEFAULT FALSE",
+        "email_verified_at": "TIMESTAMP",
+        "email_verification_token_hash": "VARCHAR(255)",
+        "email_verification_expires_at": "TIMESTAMP",
+        "password_reset_token_hash": "VARCHAR(255)",
+        "password_reset_expires_at": "TIMESTAMP",
+    }
+
+    for column_name, ddl in patches.items():
+        if column_name in columns:
+            continue
+        try:
+            with engine.begin() as conn:
+                conn.execute(text(f"ALTER TABLE users ADD COLUMN {column_name} {ddl}"))
+        except Exception as e:
+            print(f"WARNING: Could not patch users.{column_name} column: {e}")
+
+
 def init_db():
     """Initialize database - create all tables and seed default admin"""
     try:
         Base.metadata.create_all(bind=engine)
         _patch_referrals_referral_type_column()
+        _patch_users_session_version_column()
+        _patch_users_account_recovery_columns()
         print("✓ Database tables initialized successfully")
     except Exception as e:
         print(f"ERROR: Failed to initialize database tables: {e}")
@@ -143,6 +190,8 @@ def _seed_admin():
             role=UserRole.ADMIN,
             is_active=True,
             is_verified=True,
+            email_verified=True,
+            email_verified_at=utcnow(),
         )
         db.add(admin)
         db.commit()
@@ -157,4 +206,3 @@ def _seed_admin():
 # Keep both import styles pointing at the same module.
 sys.modules.setdefault("database", sys.modules[__name__])
 sys.modules.setdefault("backend.database", sys.modules[__name__])
-

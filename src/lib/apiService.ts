@@ -7,6 +7,10 @@ export interface ApiUser {
   first_name?: string;
   last_name?: string;
   role: 'patient' | 'provider' | 'pharmacist' | 'admin' | 'hospital' | 'laboratory' | 'imaging' | 'ambulance';
+  is_active?: boolean;
+  is_verified?: boolean;
+  email_verified?: boolean;
+  email_verified_at?: string | null;
   avatar?: string;
   profile_image_url?: string;
   created_at?: string;
@@ -18,6 +22,8 @@ export interface ApiUser {
   zip_code?: string;
   date_of_birth?: string;
   bio?: string;
+  license_number?: string;
+  license_state?: string;
   specialty?: string;
 }
 
@@ -43,6 +49,8 @@ export interface AdminUserRow {
   role: string;
   is_active: boolean;
   is_verified: boolean;
+  email_verified?: boolean;
+  email_verified_at?: string | null;
   phone?: string | null;
   date_of_birth?: string | null;
   city?: string | null;
@@ -69,8 +77,11 @@ export const authApi = {
     username: string;
     first_name: string;
     last_name: string;
-    role: 'patient' | 'provider' | 'pharmacist' | 'admin' | 'hospital' | 'laboratory' | 'imaging' | 'ambulance';
+    role: 'patient' | 'provider' | 'pharmacist' | 'hospital' | 'laboratory' | 'imaging' | 'ambulance';
     phone?: string;
+    license_number?: string;
+    license_state?: string;
+    specialty?: string;
   }) => {
     const response = await apiClient.post('/auth/register', userData);
     return response.data;
@@ -121,6 +132,35 @@ export const authApi = {
 
   logout: async () => {
     const response = await apiClient.post('/auth/logout');
+    return response.data;
+  },
+
+  deleteAccount: async (password: string) => {
+    const response = await apiClient.post('/auth/delete-account', { password });
+    return response.data;
+  },
+
+  requestPasswordReset: async (email: string) => {
+    const response = await apiClient.post('/auth/request-password-reset', { email });
+    return response.data;
+  },
+
+  resetPassword: async (token: string, newPassword: string, confirmPassword: string) => {
+    const response = await apiClient.post('/auth/reset-password', {
+      token,
+      new_password: newPassword,
+      confirm_password: confirmPassword,
+    });
+    return response.data;
+  },
+
+  verifyEmail: async (token: string) => {
+    const response = await apiClient.post('/auth/verify-email', { token });
+    return response.data;
+  },
+
+  resendVerificationEmail: async () => {
+    const response = await apiClient.post('/auth/resend-verification');
     return response.data;
   },
 };
@@ -664,4 +704,3 @@ export const api = {
   imaging: imagingApi,
   referrals: referralsApi,
 };
-

@@ -3,6 +3,7 @@ from sqlalchemy.orm import relationship
 from datetime import datetime
 import enum
 from database import Base
+from app.utils.time import utcnow
 
 
 class AppointmentStatus(str, enum.Enum):
@@ -49,8 +50,8 @@ class Appointment(Base):
     cancellation_reason = Column(String(500), nullable=True)
     
     # Timestamps
-    created_at = Column(DateTime, default=datetime.utcnow, nullable=False)
-    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow, nullable=False)
+    created_at = Column(DateTime, default=utcnow, nullable=False)
+    updated_at = Column(DateTime, default=utcnow, onupdate=utcnow, nullable=False)
     
     # Relationships
     patient = relationship("User", foreign_keys=[patient_id], back_populates="appointments_as_patient")
