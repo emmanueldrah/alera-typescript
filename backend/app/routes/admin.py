@@ -2,11 +2,11 @@ from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.orm import Session
 from sqlalchemy import func
 from database import get_db
-from app.models.user import User, UserRole
-from app.models.appointment import Appointment, AppointmentStatus
-from app.models.prescription import Prescription
-from app.models.lab_imaging import LabTest, LabTestStatus, ImagingScan, ImagingScanStatus
-from app.models.ambulance import AmbulanceRequest, AmbulanceRequestStatus, EmergencyPriority
+from app.models import (
+    User, UserRole, Appointment, AppointmentStatus, Prescription,
+    LabTest, LabTestStatus, ImagingScan, ImagingScanStatus,
+    AmbulanceRequest, AmbulanceRequestStatus, EmergencyPriority
+)
 from app.utils.dependencies import get_current_admin
 from app.schemas import UserResponse
 from app.schemas.additional_features import AuditLogResponse
@@ -20,14 +20,17 @@ async def get_dashboard_stats(
     current_user: User = Depends(get_current_admin),
     db: Session = Depends(get_db)
 ):
-    """Get admin dashboard statistics"""
+    """Get admin dashboard statistics with accurate integration"""
     
     try:
-        # Count users by role
+        # Count users by role - using .value for multi-DB compatibility
         user_counts = {}
         for role in UserRole:
-            count = db.query(User).filter(User.role == role).count()
+            count = db.query(User).filter(User.role == role.value).count()
             user_counts[role.value] = count
+        
+        # Total ecosystem count
+        total_users = sum(user_counts.values())
         
         # Robust date range for "today"
         today = datetime.utcnow().date()
@@ -46,20 +49,26 @@ async def get_dashboard_stats(
             Prescription.status == "active"
         ).count()
 
-        # Count Lab & Imaging
-        pending_labs = db.query(LabTest).filter(LabTest.status != LabTestStatus.COMPLETED).count()
-        pending_imaging = db.query(ImagingScan).filter(ImagingScan.status != ImagingScanStatus.COMPLETED).count()
+        # Count Lab & Imaging - filter for anything NOT completed
+        pending_labs = db.query(LabTest).filter(
+            LabTest.status != LabTestStatus.COMPLETED.value
+        ).count()
+        
+        pending_imaging = db.query(ImagingScan).filter(
+            ImagingScan.status != ImagingScanStatus.COMPLETED.value
+        ).count()
 
-        # Emergencies
+        # Emergencies - Critical and not completed/cancelled
         active_emergencies = db.query(AmbulanceRequest).filter(
-            AmbulanceRequest.status != AmbulanceRequestStatus.COMPLETED,
-            AmbulanceRequest.priority == EmergencyPriority.CRITICAL
+            AmbulanceRequest.status != AmbulanceRequestStatus.COMPLETED.value,
+            AmbulanceRequest.status != AmbulanceRequestStatus.CANCELLED.value,
+            AmbulanceRequest.priority == EmergencyPriority.CRITICAL.value
         ).count()
         
         return {
             "timestamp": datetime.utcnow(),
             "users": {
-                "total": sum(user_counts.values()),
+                "total": total_users,
                 "by_role": user_counts
             },
             "appointments": {
@@ -80,20 +89,17 @@ async def get_dashboard_stats(
             }
         }
     except Exception as e:
-        # Avoid crashing the whole dashboard if one model/query fails
         import traceback
-        print(f"Error fetching dashboard stats: {e}")
+        error_msg = f"Dashboard statistics integration error: {str(e)}"
+        print(error_msg)
         traceback.print_exc()
-        return {
-            "error": str(e),
-            "timestamp": datetime.utcnow(),
-            "users": {"total": 0, "by_role": {}},
-            "appointments": {"total": 0, "today": 0},
-            "prescriptions": {"active": 0},
-            "lab_tests": {"pending": 0},
-            "imaging": {"pending": 0},
-            "emergencies": {"active": 0}
-        }
+        
+        # If we hit an error, we should still return a response that doesn't break the UI
+        # but now we'll include the error detail for the user to see if the UI renders it
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=error_msg
+        )
 
 
 
