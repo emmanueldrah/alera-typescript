@@ -591,6 +591,20 @@ export const AppDataProvider: React.FC<{ children: React.ReactNode }> = ({ child
         const patient = getUsers().find((account) => account.id === String(request.patient_id));
         return mapBackendAmbulanceRequest(request, patient?.name);
       });
+      const providerVerifications = getUsers()
+        .filter((account) => account.role !== 'patient' && account.role !== 'admin')
+        .map((account): ProviderVerification => ({
+          id: account.id,
+          providerId: account.id,
+          name: account.name,
+          email: account.email,
+          role: account.role as ProviderVerification['role'],
+          documents: account.profile?.bio?.trim() || 'Professional credentials on file',
+          appliedDate: account.createdAt?.slice(0, 10) || new Date().toISOString().slice(0, 10),
+          status: account.isVerified ? 'approved' : account.isActive === false ? 'rejected' : 'pending',
+          verificationDate: account.isVerified ? account.lastLogin?.slice(0, 10) : undefined,
+          notes: account.profile?.bio || undefined,
+        }));
 
       setData({
         ...emptyData,
@@ -615,7 +629,7 @@ export const AppDataProvider: React.FC<{ children: React.ReactNode }> = ({ child
         invoices,
         billingRecords,
         appointmentReminders,
-        providerVerifications: [],
+        providerVerifications,
       });
     } catch (error) {
       if (!isPolling) console.error('Failed to load API data:', error);
@@ -1445,6 +1459,7 @@ export const AppDataProvider: React.FC<{ children: React.ReactNode }> = ({ child
           const existing = dataRef.current.providerPricing.find((pricing) => pricing.id === pricingId);
           if (!existing) return;
           await recordsApi.deleteRecord(pricingId);
+          await loadAPIData(true);
           await persistBillingRecord({
             id: `br-${Date.now()}`,
             timestamp: new Date().toISOString(),
