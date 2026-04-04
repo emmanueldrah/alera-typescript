@@ -6,6 +6,10 @@ import NotificationCenter from '@/components/NotificationCenter';
 import ChatWidget from '@/components/ChatWidget';
 import { normalizeUserRole } from '@/lib/roleUtils';
 import {
+  getProfessionalVerificationStatus,
+  getVerificationStatusLabel,
+} from '@/lib/verificationStatus';
+import {
   Heart, LayoutDashboard, Calendar, FileText, FlaskConical, ScanLine,
   Pill, Ambulance, Users, Building2, ShieldCheck, Activity, Bell,
   LogOut, Menu, X, Clock, MessageSquare, Settings, HeartPulse, Mail
@@ -103,7 +107,8 @@ const DashboardLayout = ({ children }: DashboardLayoutProps) => {
 
   const roleKey = normalizeUserRole(user.role) ?? user.role;
   const navItems = roleNavItems[roleKey] || [];
-  const isPendingVerification = user.role !== 'patient' && user.isVerified === false;
+  const professionalVerificationStatus = getProfessionalVerificationStatus(user.isVerified, user.isActive ?? true);
+  const isPendingVerification = professionalVerificationStatus === 'pending';
   const isEmailUnverified = user.role !== 'admin' && user.emailVerified === false;
   const handleSignOut = async () => {
     await logout();
@@ -148,6 +153,19 @@ const DashboardLayout = ({ children }: DashboardLayoutProps) => {
               <div className="min-w-0">
                 <div className="text-sm font-medium text-sidebar-foreground truncate">{user.name}</div>
                 <div className="text-xs text-sidebar-muted">{roleLabels[roleKey]}</div>
+                <div
+                  data-testid="sidebar-professional-verification"
+                  className={`mt-1 inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[10px] font-medium ${
+                  professionalVerificationStatus === 'verified'
+                    ? 'bg-success/15 text-success'
+                    : professionalVerificationStatus === 'pending'
+                      ? 'bg-warning/15 text-warning'
+                      : 'bg-destructive/15 text-destructive'
+                }`}
+                >
+                  <ShieldCheck className="w-3 h-3" />
+                  {getVerificationStatusLabel(professionalVerificationStatus)}
+                </div>
               </div>
             </div>
           </div>
@@ -215,11 +233,11 @@ const DashboardLayout = ({ children }: DashboardLayoutProps) => {
                 <div className="flex items-start gap-3">
                   <Mail className="mt-0.5 h-4 w-4 flex-shrink-0" />
                   <div>
-                    <p className="font-medium">Email verification pending</p>
-                    <p className="text-xs text-info/80">Verify your email to secure account recovery and delivery of platform alerts.</p>
-                    {verificationNotice && <p className="mt-2 text-xs text-info/90">{verificationNotice}</p>}
-                  </div>
+                  <p className="font-medium">Email verification pending</p>
+                  <p className="text-xs text-info/80">Verify your email to secure account recovery and delivery of platform alerts.</p>
+                  {verificationNotice && <p className="mt-2 text-xs text-info/90">{verificationNotice}</p>}
                 </div>
+              </div>
                 <button
                   type="button"
                   onClick={() => void handleResendVerification()}
@@ -233,7 +251,7 @@ const DashboardLayout = ({ children }: DashboardLayoutProps) => {
           )}
           {isPendingVerification && (
             <div className="rounded-2xl border border-warning/30 bg-warning/5 px-4 py-3 text-sm text-warning">
-              Your professional account is pending verification. Some actions are disabled until an administrator approves your credentials.
+              Your professional account is pending verification. Some actions are disabled until an administrator verifies your credentials.
             </div>
           )}
         </div>

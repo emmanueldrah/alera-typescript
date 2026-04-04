@@ -581,6 +581,11 @@ export const adminApi = {
     return response.data;
   },
 
+  verifyProvider: async (userId: string | number) => {
+    const response = await apiClient.put(`/admin/verifications/${userId}/approve`);
+    return response.data;
+  },
+
   approveProvider: async (userId: string | number) => {
     const response = await apiClient.put(`/admin/verifications/${userId}/approve`);
     return response.data;

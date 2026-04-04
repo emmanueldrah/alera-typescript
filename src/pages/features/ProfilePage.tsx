@@ -3,6 +3,10 @@ import { motion } from 'framer-motion';
 import { useAuth } from '@/contexts/useAuth';
 import { Button } from '@/components/ui/button';
 import { Users, Heart, FlaskConical, ScanLine, Pill, Ambulance, Building2, ShieldCheck, Loader, Eye, EyeOff, Upload, Bell, Lock, AlertCircle, Check, Mail } from 'lucide-react';
+import {
+  getProfessionalVerificationStatus,
+  getVerificationStatusLabel,
+} from '@/lib/verificationStatus';
 
 const card = (i: number) => ({ initial: { opacity: 0, y: 15 }, animate: { opacity: 1, y: 0 }, transition: { delay: i * 0.1 } });
 
@@ -70,7 +74,9 @@ const ProfilePage = () => {
   const [confirmDelete, setConfirmDelete] = useState(false);
   const [confirmClearCache, setConfirmClearCache] = useState(false);
   const [sendingVerification, setSendingVerification] = useState(false);
-  const isPendingVerification = Boolean(user && user.role !== 'patient' && user.isVerified === false);
+  const professionalVerificationStatus = user
+    ? getProfessionalVerificationStatus(user.isVerified, user.isActive ?? true)
+    : 'pending';
   const isEmailUnverified = Boolean(user && user.role !== 'admin' && user.emailVerified === false);
 
   if (!user) return null;
@@ -245,12 +251,18 @@ const ProfilePage = () => {
                 {roleIcons[user.role]}
                 {roleLabels[user.role]}
               </div>
-              {isPendingVerification && (
-                <div className="inline-flex items-center gap-2 px-3 py-1.5 rounded-lg bg-warning/10 text-warning text-sm font-medium">
-                  <ShieldCheck className="w-4 h-4" />
-                  Pending verification
-                </div>
-              )}
+              <div
+                className={`inline-flex items-center gap-2 px-3 py-1.5 rounded-lg text-sm font-medium ${
+                  professionalVerificationStatus === 'verified'
+                    ? 'bg-success/10 text-success'
+                    : professionalVerificationStatus === 'pending'
+                      ? 'bg-warning/10 text-warning'
+                      : 'bg-destructive/10 text-destructive'
+                }`}
+              >
+                <ShieldCheck className="w-4 h-4" />
+                {getVerificationStatusLabel(professionalVerificationStatus)}
+              </div>
               {user.createdAt && <p className="text-xs text-muted-foreground">Member since {new Date(user.createdAt).toLocaleDateString()}</p>}
             </div>
           </div>
@@ -502,6 +514,15 @@ const ProfilePage = () => {
               <div>
                 <p className="text-xs font-semibold text-muted-foreground uppercase">Account Type</p>
                 <p className="text-foreground mt-1">{roleLabels[user.role]}</p>
+              </div>
+              <div>
+                <p className="text-xs font-semibold text-muted-foreground uppercase">Professional Verification</p>
+                <div data-testid="professional-verification-status" className="mt-1 flex items-center gap-2">
+                  <ShieldCheck className={`w-4 h-4 ${professionalVerificationStatus === 'verified' ? 'text-success' : professionalVerificationStatus === 'pending' ? 'text-warning' : 'text-destructive'}`} />
+                  <p className={`text-sm ${professionalVerificationStatus === 'verified' ? 'text-success' : professionalVerificationStatus === 'pending' ? 'text-warning' : 'text-destructive'}`}>
+                    {getVerificationStatusLabel(professionalVerificationStatus)}
+                  </p>
+                </div>
               </div>
               <div>
                 <p className="text-xs font-semibold text-muted-foreground uppercase">Email Verification</p>

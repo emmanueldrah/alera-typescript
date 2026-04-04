@@ -9,17 +9,21 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { api, authApi, type AdminUserRow, type ApiUser } from '@/lib/apiService';
 import { handleApiError } from '@/lib/errorHandler';
 import { normalizeUserRole } from '@/lib/roleUtils';
+import {
+  getProfessionalVerificationStatus,
+  getVerificationStatusLabel,
+  type ProfessionalVerificationStatus,
+} from '@/lib/verificationStatus';
 
 interface DisplayUser {
   id: string;
   name: string;
   email: string;
   role: UserRole;
-  status: 'active' | 'suspended' | 'pending';
+  status: ProfessionalVerificationStatus;
   joinDate: string;
   lastLogin?: string;
   phone?: string;
-  isVerified: boolean;
 }
 
 const roleIcons: Record<string, React.ReactNode> = {
@@ -44,6 +48,12 @@ const roleLabels: Record<string, string> = {
   admin: 'Admin',
 };
 
+const statusStyles: Record<ProfessionalVerificationStatus, string> = {
+  verified: 'bg-success/10 text-success',
+  pending: 'bg-warning/10 text-warning',
+  suspended: 'bg-destructive/10 text-destructive',
+};
+
 const signupRoleToBackend: Record<SignupRole, ApiUser['role']> = {
   patient: 'patient',
   doctor: 'provider',
@@ -57,9 +67,7 @@ const signupRoleToBackend: Record<SignupRole, ApiUser['role']> = {
 const mapRowToDisplay = (u: AdminUserRow): DisplayUser => {
   const uiRole = normalizeUserRole(u.role) ?? 'patient';
   const name = [u.first_name, u.last_name].filter(Boolean).join(' ').trim() || u.email;
-  let status: DisplayUser['status'] = 'active';
-  if (!u.is_active) status = 'suspended';
-  else if (!u.is_verified) status = 'pending';
+  const status = getProfessionalVerificationStatus(u.is_verified, u.is_active);
 
   return {
     id: String(u.id),
@@ -70,7 +78,6 @@ const mapRowToDisplay = (u: AdminUserRow): DisplayUser => {
     joinDate: u.created_at ? new Date(u.created_at).toLocaleDateString() : '—',
     lastLogin: u.last_login ? new Date(u.last_login).toLocaleDateString() : undefined,
     phone: u.phone ?? undefined,
-    isVerified: u.is_verified,
   };
 };
 
@@ -385,10 +392,10 @@ const UsersPage = () => {
           onChange={e => setStatusFilter(e.target.value)}
           className="h-11 px-4 rounded-xl border border-input bg-background text-foreground focus:outline-none focus:ring-2 focus:ring-primary/30"
         >
-          <option value="all">All Status</option>
-          <option value="active">Active</option>
-          <option value="suspended">Suspended</option>
+          <option value="all">All verification states</option>
+          <option value="verified">Verified</option>
           <option value="pending">Pending verification</option>
+          <option value="suspended">Suspended</option>
         </select>
       </div>
 
@@ -430,9 +437,6 @@ const UsersPage = () => {
                       {u.email}
                     </div>
                     {u.phone && <div className="text-xs text-muted-foreground mt-0.5">{u.phone}</div>}
-                    {!u.isVerified && u.status !== 'suspended' && (
-                      <span className="inline-block mt-1 text-[10px] uppercase tracking-wide text-warning font-semibold">Unverified</span>
-                    )}
                   </td>
                   <td className="px-5 py-4">
                     <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-primary/10 text-primary text-xs font-medium">
@@ -441,15 +445,10 @@ const UsersPage = () => {
                   </td>
                   <td className="px-5 py-4">
                     <span
-                      className={`px-2.5 py-1 rounded-lg text-xs font-medium ${
-                        u.status === 'active'
-                          ? 'bg-success/10 text-success'
-                          : u.status === 'pending'
-                            ? 'bg-warning/10 text-warning'
-                            : 'bg-destructive/10 text-destructive'
-                      }`}
+                      data-testid={`user-verification-status-${u.id}`}
+                      className={`px-2.5 py-1 rounded-lg text-xs font-medium ${statusStyles[u.status]}`}
                     >
-                      {u.status.charAt(0).toUpperCase() + u.status.slice(1)}
+                      {getVerificationStatusLabel(u.status)}
                     </span>
                   </td>
                   <td className="px-5 py-4">

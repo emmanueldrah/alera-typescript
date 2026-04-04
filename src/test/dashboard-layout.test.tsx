@@ -67,7 +67,7 @@ describe('DashboardLayout', () => {
     );
 
     expect(screen.getByText(/email verification pending/i)).toBeInTheDocument();
-    expect(screen.getByText(/pending verification/i)).toBeInTheDocument();
+    expect(screen.getByTestId('sidebar-professional-verification')).toHaveTextContent(/pending verification/i);
     expect(screen.getByText(/dashboard content/i)).toBeInTheDocument();
   });
 
@@ -92,5 +92,27 @@ describe('DashboardLayout', () => {
     expect(screen.queryByText(/email verification pending/i)).not.toBeInTheDocument();
     expect(screen.queryByRole('button', { name: /resend email/i })).not.toBeInTheDocument();
     expect(screen.getByText(/dashboard content/i)).toBeInTheDocument();
+  });
+
+  it('shows verified status for verified professionals', () => {
+    authState.user = {
+      id: 'doctor-verified',
+      email: 'doctor@example.com',
+      name: 'Dr. Alice',
+      role: 'doctor',
+      isVerified: true,
+      emailVerified: true,
+    };
+
+    render(
+      <MemoryRouter initialEntries={['/dashboard']}>
+        <DashboardLayout>
+          <div>Dashboard content</div>
+        </DashboardLayout>
+      </MemoryRouter>
+    );
+
+    expect(screen.getByTestId('sidebar-professional-verification')).toHaveTextContent(/^Verified$/i);
+    expect(screen.queryByText(/pending verification/i)).not.toBeInTheDocument();
   });
 });

@@ -379,7 +379,7 @@ async def get_pending_verifications(
 ):
     """List providers awaiting professional verification"""
     
-    # All non-patient workforce roles remain pending until an admin approves them.
+    # All non-patient workforce roles remain pending until an admin verifies them.
     providers = _workforce_users_query(db).filter(
         User.is_verified.is_(False),
         User.is_active.is_(True)
@@ -393,7 +393,7 @@ async def list_verifications(
     current_user: User = Depends(get_current_admin),
     db: Session = Depends(get_db)
 ):
-    """List all workforce verification records, including approved and rejected accounts."""
+    """List all workforce verification records, including verified and rejected accounts."""
 
     return _workforce_users_query(db).order_by(User.created_at.desc()).all()
 
@@ -404,7 +404,7 @@ async def approve_provider(
     current_user: User = Depends(get_current_admin),
     db: Session = Depends(get_db)
 ):
-    """Approve a provider's professional credentials"""
+    """Verify a provider's professional credentials."""
     
     user = db.query(User).filter(User.id == user_id).first()
     if not user:
@@ -421,10 +421,10 @@ async def approve_provider(
     await log_action(
         db=db,
         user_id=current_user.id,
-        action="admin.approve_verification",
+        action="admin.verify_provider",
         resource_type="user",
         resource_id=user.id,
-        description=f"Approved verification for {user.email}",
+        description=f"Verified account for {user.email}",
         status="success",
     )
     

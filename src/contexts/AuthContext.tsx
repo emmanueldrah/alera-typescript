@@ -283,6 +283,33 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     });
   }, [user, updateProfile]);
 
+  const refreshCurrentUser = useCallback(async () => {
+    if (!getAccessToken()) return null;
+
+    try {
+      const userData = await authApi.getCurrentUser();
+      if (isApiUser(userData)) {
+        const updatedUser = mapBackendUser(userData);
+        setUser(updatedUser);
+        return updatedUser;
+      }
+      return null;
+    } catch (error) {
+      const status = typeof error === 'object' && error && 'response' in error
+        ? (error as { response?: { status?: number } }).response?.status
+        : undefined;
+
+      if (status === 401 || status === 403) {
+        clearTokens();
+        setUser(null);
+      } else {
+        console.error('Failed to refresh current user:', error);
+      }
+
+      return null;
+    }
+  }, []);
+
   const deleteAccount = useCallback(async (password: string) => {
     if (!user) throw new Error('No user logged in');
 
@@ -312,17 +339,25 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     return [];
   }, []);
 
-  // Get current user helper (for when needed)
-  const getCurrentUser = useCallback(async () => {
-    if (!user) throw new Error('No user logged in');
+  useEffect(() => {
+    const syncUser = () => {
+      void refreshCurrentUser();
+    };
 
-    const userData = await authApi.getCurrentUser();
-    if (isApiUser(userData)) {
-      const updatedUser = mapBackendUser(userData);
-      setUser(updatedUser);
-      return updatedUser;
-    }
-  }, [user]);
+    const handleVisibilityChange = () => {
+      if (document.visibilityState === 'visible') {
+        syncUser();
+      }
+    };
+
+    window.addEventListener('focus', syncUser);
+    document.addEventListener('visibilitychange', handleVisibilityChange);
+
+    return () => {
+      window.removeEventListener('focus', syncUser);
+      document.removeEventListener('visibilitychange', handleVisibilityChange);
+    };
+  }, [refreshCurrentUser]);
 
   if (isLoading) {
     // Don't mock auth methods during initialization; we still need signup/login to work

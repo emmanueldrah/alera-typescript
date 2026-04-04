@@ -10,6 +10,11 @@ import { api } from '@/lib/apiService';
 import { handleApiError } from '@/lib/errorHandler';
 import { useToast } from '@/hooks/use-toast';
 import { normalizeUserRole } from '@/lib/roleUtils';
+import {
+  getVerificationQueueStatus,
+  getVerificationStatusLabel,
+  type VerificationQueueStatus,
+} from '@/lib/verificationStatus';
 
 const roleIcons: Record<string, React.ReactNode> = {
   doctor: <Heart className="w-5 h-5" />,
@@ -35,6 +40,7 @@ const VerificationsPage = () => {
   const [verifications, setVerifications] = useState<any[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [statusFilter, setStatusFilter] = useState('all');
+  const statusTabs = ['all', 'pending', 'verified', 'rejected'] as const;
 
   const fetchVerifications = async () => {
     setIsLoading(true);
@@ -46,7 +52,7 @@ const VerificationsPage = () => {
         name: `${u.first_name} ${u.last_name}`,
         email: u.email,
         role: normalizeUserRole(u.role) ?? 'doctor',
-        status: u.is_verified ? 'approved' : (!u.is_active ? 'rejected' : 'pending'),
+        status: getVerificationQueueStatus(u.is_verified, u.is_active) as VerificationQueueStatus,
         appliedDate: new Date(u.created_at).toLocaleDateString(),
         documents: `License: ${u.license_number || 'N/A'} (${u.license_state || 'Any'})`,
         notes: u.bio,
@@ -76,18 +82,18 @@ const VerificationsPage = () => {
     return {
       total: verifications.length,
       pending: verifications.filter(v => v.status === 'pending').length,
-      approved: verifications.filter(v => v.status === 'approved').length,
+      verified: verifications.filter(v => v.status === 'verified').length,
       rejected: verifications.filter(v => v.status === 'rejected').length,
     };
   }, [verifications]);
 
-  const handleApprove = async (id: number) => {
+  const handleVerify = async (id: number) => {
     try {
-      await api.admin.approveProvider(id);
+      await api.admin.verifyProvider(id);
       toast({ title: 'Success', description: 'Provider verified successfully' });
       fetchVerifications();
     } catch (error) {
-      toast({ title: 'Approval Failed', description: handleApiError(error), variant: 'destructive' });
+      toast({ title: 'Verification Failed', description: handleApiError(error), variant: 'destructive' });
     }
   };
 
@@ -105,7 +111,7 @@ const VerificationsPage = () => {
     switch (status) {
       case 'pending':
         return 'bg-warning/10 text-warning border-warning/30';
-      case 'approved':
+      case 'verified':
         return 'bg-success/10 text-success border-success/30';
       case 'rejected':
         return 'bg-destructive/10 text-destructive border-destructive/30';
@@ -120,7 +126,7 @@ const VerificationsPage = () => {
     <div className="space-y-6">
       <div>
         <h1 className="text-2xl font-display font-bold text-foreground">Provider Verifications</h1>
-        <p className="text-muted-foreground mt-1">Review and approve provider registrations</p>
+        <p className="text-muted-foreground mt-1">Review and verify provider registrations</p>
       </div>
 
       <div className="grid grid-cols-4 gap-3">
@@ -136,9 +142,9 @@ const VerificationsPage = () => {
         </motion.div>
         <motion.div initial={{ opacity: 0, y: 15 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.1 }} className="bg-success/5 rounded-xl border border-success/30 p-4">
           <div className="text-success text-xs font-medium flex items-center gap-1">
-            <CheckCircle className="w-3 h-3" /> Approved
+            <CheckCircle className="w-3 h-3" /> Verified
           </div>
-          <div className="text-2xl font-bold text-success mt-1">{stats.approved}</div>
+          <div className="text-2xl font-bold text-success mt-1">{stats.verified}</div>
         </motion.div>
         <motion.div initial={{ opacity: 0, y: 15 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.15 }} className="bg-destructive/5 rounded-xl border border-destructive/30 p-4">
           <div className="text-destructive text-xs font-medium flex items-center gap-1">
@@ -149,7 +155,7 @@ const VerificationsPage = () => {
       </div>
 
       <div className="flex gap-2">
-        {['all', 'pending', 'approved', 'rejected'].map(status => (
+        {statusTabs.map(status => (
           <button
             key={status}
             onClick={() => setStatusFilter(status)}
@@ -159,7 +165,7 @@ const VerificationsPage = () => {
                 : 'bg-secondary text-secondary-foreground hover:bg-muted'
             }`}
           >
-            {status.charAt(0).toUpperCase() + status.slice(1)}
+            {status === 'all' ? 'All' : getVerificationStatusLabel(status)}
           </button>
         ))}
       </div>
@@ -187,8 +193,11 @@ const VerificationsPage = () => {
                       <h3 className="font-semibold text-foreground">{verification.name}</h3>
                       <p className="text-sm text-muted-foreground mt-0.5">{verification.email}</p>
                     </div>
-                    <span className={`px-3 py-1 rounded-lg text-xs font-medium whitespace-nowrap ${getStatusColor(verification.status)}`}>
-                      {verification.status.charAt(0).toUpperCase() + verification.status.slice(1)}
+                    <span
+                      data-testid={`verification-status-${verification.id}`}
+                      className={`px-3 py-1 rounded-lg text-xs font-medium whitespace-nowrap ${getStatusColor(verification.status)}`}
+                    >
+                      {getVerificationStatusLabel(verification.status)}
                     </span>
                   </div>
 
@@ -224,11 +233,11 @@ const VerificationsPage = () => {
                         <Button
                           variant="default"
                           size="sm"
-                          onClick={() => handleApprove(verification.id)}
+                          onClick={() => handleVerify(verification.id)}
                           className="gap-1"
                         >
-                          <CheckCircle className="w-3.5 h-3.5" />
-                          Approve
+                        <CheckCircle className="w-3.5 h-3.5" />
+                          Verify
                         </Button>
                         <Button
                           variant="destructive"
@@ -241,7 +250,7 @@ const VerificationsPage = () => {
                         </Button>
                       </>
                     )}
-                    {verification.status === 'approved' && (
+                    {verification.status === 'verified' && (
                       <span className="text-xs font-medium text-success flex items-center gap-1">
                         <CheckCircle className="w-4 h-4" />
                         Verified
