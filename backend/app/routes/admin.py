@@ -318,3 +318,141 @@ async def get_system_health(
         "cache": "operational",
         "version": "1.0.0"
     }
+
+
+# --- TRUST PILLAR: Professional Verification ---
+
+@router.get("/verifications/pending", response_model=list[UserResponse])
+async def get_pending_verifications(
+    current_user: User = Depends(get_current_admin),
+    db: Session = Depends(get_db)
+):
+    """List providers awaiting professional verification"""
+    
+    # Filter for Doctors, Labs, Imaging, Ambulance who have a license but aren't verified
+    providers = db.query(User).filter(
+        User.role.in_([
+            UserRole.PROVIDER.value, 
+            UserRole.LABORATORY.value, 
+            UserRole.IMAGING.value, 
+            UserRole.AMBULANCE.value
+        ]),
+        User.is_verified == False,
+        User.license_number != None
+    ).all()
+    
+    return providers
+
+
+@router.put("/verifications/{user_id}/approve")
+async def approve_provider(
+    user_id: int,
+    current_user: User = Depends(get_current_admin),
+    db: Session = Depends(get_db)
+):
+    """Approve a provider's professional credentials"""
+    
+    user = db.query(User).filter(User.id == user_id).first()
+    if not user:
+        raise HTTPException(status_code=404, detail="User not found")
+        
+    user.is_verified = True
+    db.commit()
+    
+    return {"message": f"Provider {user.email} verified successfully", "user_id": user_id}
+
+
+@router.put("/verifications/{user_id}/reject")
+async def reject_provider(
+    user_id: int,
+    reason: str = "Invalid credentials",
+    current_user: User = Depends(get_current_admin),
+    db: Session = Depends(get_db)
+):
+    """Reject/Flag a provider's credentials"""
+    
+    user = db.query(User).filter(User.id == user_id).first()
+    if not user:
+        raise HTTPException(status_code=404, detail="User not found")
+        
+    # For now, we deactivate them and could add a note
+    user.is_active = False
+    db.commit()
+    
+    return {"message": f"Provider {user.email} rejected: {reason}", "user_id": user_id}
+
+
+# --- MANAGEMENT PILLAR: Ecosystem Activity ---
+
+@router.get("/ecosystem/activity")
+async def get_ecosystem_activity(
+    current_user: User = Depends(get_current_admin),
+    db: Session = Depends(get_db),
+    limit: int = 20
+):
+    """Centralized feed of recent ecosystem events"""
+    
+    activity = []
+    
+    try:
+        # Recent Appointments
+        appts = db.query(Appointment).order_by(Appointment.created_at.desc()).limit(10).all()
+        for a in appts:
+            activity.append({
+                "type": "appointment",
+                "time": a.created_at,
+                "description": f"Appointment scheduled for {a.scheduled_time.strftime('%Y-%m-%d')}",
+                "status": a.status
+            })
+            
+        # Recent Prescriptions
+        scripts = db.query(Prescription).order_by(Prescription.created_at.desc()).limit(10).all()
+        for s in scripts:
+            activity.append({
+                "type": "prescription",
+                "time": s.created_at,
+                "description": f"New prescription issued: {s.medication}",
+                "status": s.status
+            })
+            
+        # Recent Lab/Imaging
+        labs = db.query(LabTest).order_by(LabTest.requested_at.desc()).limit(10).all()
+        for l in labs:
+            activity.append({
+                "type": "lab_test",
+                "time": l.requested_at,
+                "description": f"Lab test requested: {l.test_name}",
+                "status": l.status.value if hasattr(l.status, 'value') else l.status
+            })
+    except Exception as e:
+        print(f"Activity feed warning: {e}")
+        
+    # Sort all by time
+    activity.sort(key=lambda x: x["time"], reverse=True)
+    
+    return activity[:limit]
+
+
+# --- OPS PILLAR: Emergency Dispatch Monitoring ---
+
+@router.get("/ops/emergencies/active")
+async def get_active_emergency_dispatch(
+    current_user: User = Depends(get_current_admin),
+    db: Session = Depends(get_db)
+):
+    """Real-time view of active emergency requests"""
+    
+    try:
+        active_requests = db.query(AmbulanceRequest).filter(
+            AmbulanceRequest.status.in_([
+                AmbulanceRequestStatus.PENDING.value,
+                AmbulanceRequestStatus.DISPATCHED.value,
+                AmbulanceRequestStatus.EN_ROUTE.value,
+                AmbulanceRequestStatus.ARRIVED.value
+            ])
+        ).order_by(AmbulanceRequest.requested_at.desc()).all()
+        
+        return [req.to_dict() for req in active_requests]
+    except Exception as e:
+        print(f"Emergency monitor error: {e}")
+        return []

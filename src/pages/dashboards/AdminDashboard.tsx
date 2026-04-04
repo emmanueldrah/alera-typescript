@@ -3,6 +3,7 @@ import { motion, AnimatePresence } from 'framer-motion';
 import { Users, ShieldCheck, Activity, Building2, FlaskConical, Pill, Ambulance, Heart, BarChart3, AlertCircle, ScanLine, Inbox, RefreshCcw, Download, FileText, CheckCircle2 } from 'lucide-react';
 import { Link } from 'react-router-dom';
 import { useAuth } from '@/contexts/useAuth';
+import { Button } from '@/components/ui/button';
 import { api } from '@/lib/apiService';
 import { handleApiError } from '@/lib/errorHandler';
 
@@ -35,6 +36,8 @@ interface DashboardStats {
 const AdminDashboard = () => {
   const { user } = useAuth();
   const [stats, setStats] = useState<DashboardStats | null>(null);
+  const [activity, setActivity] = useState<any[]>([]);
+  const [emergencies, setEmergencies] = useState<any[]>([]);
   const [loadError, setLoadError] = useState('');
   const [isLoading, setIsLoading] = useState(true);
   const [isRefreshing, setIsRefreshing] = useState(false);
@@ -44,8 +47,14 @@ const AdminDashboard = () => {
   const fetchStats = useCallback(async (silent = false) => {
     if (!silent) setIsRefreshing(true);
     try {
-      const data = await api.admin.getDashboardStats();
-      setStats(data);
+      const [statsData, activityData, emergencyData] = await Promise.all([
+        api.admin.getDashboardStats(),
+        api.admin.getEcosystemActivity(10),
+        api.admin.getActiveEmergencyDispatch()
+      ]);
+      setStats(statsData);
+      setActivity(activityData);
+      setEmergencies(emergencyData);
       setLoadError('');
     } catch (error) {
       console.error('Failed to fetch admin stats:', error);
@@ -140,6 +149,37 @@ const AdminDashboard = () => {
         </div>
       </div>
 
+      {emergencies.length > 0 && (
+        <motion.div 
+          initial={{ opacity: 0, y: -20 }}
+          animate={{ opacity: 1, y: 0 }}
+          className="mb-8 p-6 bg-destructive/5 border border-destructive/20 rounded-2xl flex items-center justify-between shadow-lg shadow-destructive/5"
+        >
+          <div className="flex items-center gap-5">
+            <div className="relative">
+              <div className="absolute inset-0 bg-destructive/20 rounded-full animate-ping opacity-75" />
+              <div className="relative w-14 h-14 rounded-full bg-destructive/10 flex items-center justify-center text-destructive border border-destructive/20">
+                <Ambulance className="w-8 h-8" />
+              </div>
+            </div>
+            <div>
+              <div className="text-lg font-display font-bold text-destructive flex items-center gap-3">
+                Emergency Command Operations
+                <span className="bg-destructive text-white px-3 py-1 rounded-full text-xs font-bold tracking-wider">
+                  {emergencies.length} ACTIVE DISPATCHES
+                </span>
+              </div>
+              <p className="text-sm text-muted-foreground font-medium mt-1">Real-time monitoring of critical life-response assets in the ecosystem.</p>
+            </div>
+          </div>
+          <div className="flex items-center gap-3">
+            <Button variant="outline" className="border-destructive/30 text-destructive hover:bg-destructive/10 font-bold px-6">
+              Open Command Hub
+            </Button>
+          </div>
+        </motion.div>
+      )}
+
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
           {[
           { icon: <Users className="w-5 h-5" />, label: 'Total Ecosystem', value: stats?.users.total ?? '—', color: 'text-primary', bg: 'bg-primary/10' },
@@ -232,22 +272,26 @@ const AdminDashboard = () => {
           </div>
           
           <div className="space-y-4">
-            {showTraffic ? (
+            {activity.length > 0 ? (
               <div className="flex flex-col gap-3">
-                <div className="text-sm text-balance text-muted-foreground mb-2">Monitor system-wide health events as they happen.</div>
-                {[
-                  { label: 'Patient Appointment', detail: `${stats.appointments.today} scheduled for today`, icon: <Activity className="w-4 h-4" color="var(--info)" /> },
-                  { label: 'Clinical Prescriptions', detail: `${stats.prescriptions.active} active medications in network`, icon: <Pill className="w-4 h-4" color="var(--primary)" /> },
-                  { label: 'Laboratory Processing', detail: `${stats.lab_tests.pending} tests awaiting fulfillment`, icon: <FlaskConical className="w-4 h-4" color="var(--warning)" /> },
-                  { label: 'Imaging Diagnostic Flow', detail: `${stats.imaging.pending} scans currently in queue`, icon: <ScanLine className="w-4 h-4" color="var(--success)" /> },
-                ].map((feed, i) => (
+                <div className="text-sm text-balance text-muted-foreground mb-2">Live feed of health events happening across the network.</div>
+                {activity.map((event, i) => (
                   <div key={i} className="flex gap-4 p-3 rounded-xl bg-secondary/20 hover:bg-secondary/40 transition-colors border border-transparent hover:border-border/50">
                     <div className="w-10 h-10 rounded-lg bg-card border border-border flex items-center justify-center shrink-0">
-                      {feed.icon}
+                      {event.type === 'appointment' ? <Activity className="w-4 h-4 text-info" /> :
+                       event.type === 'prescription' ? <Pill className="w-4 h-4 text-primary" /> :
+                       <FlaskConical className="w-4 h-4 text-warning" />}
                     </div>
-                    <div>
-                      <div className="text-sm font-bold text-card-foreground">{feed.label}</div>
-                      <div className="text-xs text-muted-foreground font-medium">{feed.detail}</div>
+                    <div className="flex-1">
+                      <div className="flex items-center justify-between">
+                        <div className="text-sm font-bold text-card-foreground capitalize">
+                          {event.type.replace('_', ' ')}
+                        </div>
+                        <span className="text-[10px] text-muted-foreground font-medium">
+                          {new Date(event.time).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                        </span>
+                      </div>
+                      <div className="text-xs text-muted-foreground font-medium line-clamp-1">{event.description}</div>
                     </div>
                   </div>
                 ))}
@@ -255,14 +299,13 @@ const AdminDashboard = () => {
             ) : !stats ? (
               <div className="flex flex-col items-center justify-center py-12 text-muted-foreground text-center px-4">
                 <Inbox className="w-10 h-10 mb-3 opacity-50" />
-                <p className="text-sm font-medium">No metrics loaded yet.</p>
-                <p className="text-xs mt-1">Use Refresh above after fixing the connection issue.</p>
+                <p className="text-sm font-medium">Loading ecosystem activity...</p>
               </div>
             ) : (
               <div className="flex flex-col items-center justify-center py-12 text-muted-foreground text-center px-4">
                 <Inbox className="w-10 h-10 mb-3 opacity-50" />
-                <p className="text-sm font-medium">No appointments or prescriptions in the database yet.</p>
-                <p className="text-xs mt-1">User and visit counts above still reflect registered accounts.</p>
+                <p className="text-sm font-medium">No recent activity found.</p>
+                <p className="text-xs mt-1">Activity events (prescriptions, visits) will appear here as they happen.</p>
               </div>
             )}
           </div>

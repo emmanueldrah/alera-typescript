@@ -1,13 +1,17 @@
-import { useState, useMemo } from 'react';
+import { useState, useMemo, useEffect } from 'react';
 import { motion } from 'framer-motion';
-import { ShieldCheck, CheckCircle, XCircle, Heart, FlaskConical, ScanLine, Pill, Ambulance, Building2, Inbox, FileCheck } from 'lucide-react';
+import { 
+  ShieldCheck, CheckCircle, XCircle, Heart, FlaskConical, 
+  ScanLine, Pill, Ambulance, Building2, Inbox, FileCheck, RefreshCcw 
+} from 'lucide-react';
 import { useAuth } from '@/contexts/useAuth';
-import { useAppData } from '@/contexts/useAppData';
 import { Button } from '@/components/ui/button';
-import { ProviderVerification } from '@/data/mockData';
+import { api } from '@/lib/apiService';
+import { handleApiError } from '@/lib/errorHandler';
+import { useToast } from '@/hooks/use-toast';
 
 const roleIcons: Record<string, React.ReactNode> = {
-  doctor: <Heart className="w-5 h-5" />,
+  provider: <Heart className="w-5 h-5" />,
   hospital: <Building2 className="w-5 h-5" />,
   laboratory: <FlaskConical className="w-5 h-5" />,
   imaging: <ScanLine className="w-5 h-5" />,
@@ -16,7 +20,7 @@ const roleIcons: Record<string, React.ReactNode> = {
 };
 
 const roleLabels: Record<string, string> = {
-  doctor: 'Doctor',
+  provider: 'Doctor/Provider',
   hospital: 'Hospital',
   laboratory: 'Laboratory',
   imaging: 'Imaging Center',
@@ -26,49 +30,74 @@ const roleLabels: Record<string, string> = {
 
 const VerificationsPage = () => {
   const { user } = useAuth();
-  const { providerVerifications, updateProviderVerification } = useAppData();
+  const { toast } = useToast();
+  const [verifications, setVerifications] = useState<any[]>([]);
+  const [isLoading, setIsLoading] = useState(true);
   const [statusFilter, setStatusFilter] = useState('all');
 
+  const fetchVerifications = async () => {
+    setIsLoading(true);
+    try {
+      const data = await api.admin.getPendingVerifications();
+      // Map backend User objects to verification items
+      const mapped = data.map(u => ({
+        id: u.id,
+        name: `${u.first_name} ${u.last_name}`,
+        email: u.email,
+        role: u.role,
+        status: u.is_verified ? 'approved' : 'pending',
+        appliedDate: new Date(u.created_at).toLocaleDateString(),
+        documents: `License: ${u.license_number || 'N/A'} (${u.license_state || 'Any'})`,
+        notes: u.bio,
+      }));
+      setVerifications(mapped);
+    } catch (error) {
+      toast({
+        title: 'Error',
+        description: handleApiError(error),
+        variant: 'destructive',
+      });
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    fetchVerifications();
+  }, []);
+
   const filtered = useMemo(() => {
-    if (statusFilter === 'all') return providerVerifications;
-    return providerVerifications.filter(v => v.status === statusFilter);
-  }, [providerVerifications, statusFilter]);
+    if (statusFilter === 'all') return verifications;
+    return verifications.filter(v => v.status === statusFilter);
+  }, [verifications, statusFilter]);
 
   const stats = useMemo(() => {
     return {
-      total: providerVerifications.length,
-      pending: providerVerifications.filter(v => v.status === 'pending').length,
-      approved: providerVerifications.filter(v => v.status === 'approved').length,
-      rejected: providerVerifications.filter(v => v.status === 'rejected').length,
+      total: verifications.length,
+      pending: verifications.filter(v => v.status === 'pending').length,
+      approved: verifications.filter(v => v.status === 'approved').length,
+      rejected: verifications.filter(v => v.status === 'rejected').length,
     };
-  }, [providerVerifications]);
+  }, [verifications]);
 
-  // Only admins can see all verifications
-  if (user?.role !== 'admin') {
-    return (
-      <div className="flex flex-col items-center justify-center py-12 text-muted-foreground">
-        <ShieldCheck className="w-10 h-10 mb-3" />
-        <p className="text-sm">You don't have permission to view provider verifications</p>
-      </div>
-    );
-  }
-
-  const handleApprove = (id: string) => {
-    updateProviderVerification(id, prev => ({
-      ...prev,
-      status: 'approved',
-      verifiedBy: user?.id,
-      verificationDate: new Date().toLocaleDateString('en-CA'),
-    }));
+  const handleApprove = async (id: number) => {
+    try {
+      await api.admin.approveProvider(id);
+      toast({ title: 'Success', description: 'Provider verified successfully' });
+      fetchVerifications();
+    } catch (error) {
+      toast({ title: 'Approval Failed', description: handleApiError(error), variant: 'destructive' });
+    }
   };
 
-  const handleReject = (id: string) => {
-    updateProviderVerification(id, prev => ({
-      ...prev,
-      status: 'rejected',
-      verifiedBy: user?.id,
-      verificationDate: new Date().toLocaleDateString('en-CA'),
-    }));
+  const handleReject = async (id: number) => {
+    try {
+      await api.admin.rejectProvider(id);
+      toast({ title: 'Provider Rejected', description: 'Account has been flagged/deactivated' });
+      fetchVerifications();
+    } catch (error) {
+      toast({ title: 'Action Failed', description: handleApiError(error), variant: 'destructive' });
+    }
   };
 
   const getStatusColor = (status: string) => {

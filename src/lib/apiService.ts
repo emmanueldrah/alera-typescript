@@ -51,6 +51,9 @@ export interface AdminUserRow {
   bio?: string | null;
   profile_image_url?: string | null;
   address?: string | null;
+  license_number?: string | null;
+  license_state?: string | null;
+  specialty?: string | null;
   created_at: string;
   last_login?: string | null;
 }
@@ -525,6 +528,33 @@ export const adminApi = {
 
   getAdminNotifications: async () => {
     const response = await apiClient.get('/admin/notifications');
+    return response.data;
+  },
+
+  getPendingVerifications: async () => {
+    const response = await apiClient.get<AdminUserRow[]>('/admin/verifications/pending');
+    return response.data;
+  },
+
+  approveProvider: async (userId: string | number) => {
+    const response = await apiClient.put(`/admin/verifications/${userId}/approve`);
+    return response.data;
+  },
+
+  rejectProvider: async (userId: string | number, reason: string = 'Invalid credentials') => {
+    const response = await apiClient.put(`/admin/verifications/${userId}/reject`, undefined, {
+      params: { reason },
+    });
+    return response.data;
+  },
+
+  getEcosystemActivity: async (limit: number = 20) => {
+    const response = await apiClient.get('/admin/ecosystem/activity', { params: { limit } });
+    return response.data;
+  },
+
+  getActiveEmergencyDispatch: async () => {
+    const response = await apiClient.get('/admin/ops/emergencies/active');
     return response.data;
   },
 };
