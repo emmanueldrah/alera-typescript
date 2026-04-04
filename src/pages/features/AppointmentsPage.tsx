@@ -42,7 +42,7 @@ const AppointmentsPage = () => {
     () => (filter === 'all' ? visibleAppointments : visibleAppointments.filter((appointment) => appointment.status === filter)),
     [filter, visibleAppointments],
   );
-  const availableDoctors = useMemo(() => getBookableDoctors(doctorUsers, { allowMock: false }), [doctorUsers]);
+  const availableDoctors = useMemo(() => getBookableDoctors(doctorUsers), [doctorUsers]);
 
   const mapApiDoctorToAuthUser = (doc: ApiUser): AuthUser => {
     const fullName = doc.full_name?.trim() || [doc.first_name, doc.last_name].filter(Boolean).join(' ').trim();

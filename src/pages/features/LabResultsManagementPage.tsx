@@ -2,17 +2,18 @@ import React, { useMemo, useState } from 'react';
 import { motion } from 'framer-motion';
 import { AlertCircle, Upload, FileText, CheckCircle, Clock, Download, Eye, Trash2 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
+import { useAuth } from '@/contexts/useAuth';
 import { useAppData } from '@/contexts/useAppData';
 import type { LabTest } from '@/data/mockData';
 
 const LabResultsManagementPage: React.FC = () => {
+  const { user } = useAuth();
   const { labTests, updateLabTest } = useAppData();
   const [selectedTest, setSelectedTest] = useState<LabTest | null>(null);
   const [uploadingTestId, setUploadingTestId] = useState<string | null>(null);
   const [filterStatus, setFilterStatus] = useState<'all' | 'requested' | 'in-progress' | 'completed'>('all');
 
-  // Use mock patient ID (in real app, get from auth context)
-  const patientId = localStorage.getItem('currentUser')?.split('-')[0] || 'p-001';
+  const patientId = user?.role === 'patient' ? user.id : '';
 
   const patientTests = labTests.filter((test) => test.patientId === patientId);
 

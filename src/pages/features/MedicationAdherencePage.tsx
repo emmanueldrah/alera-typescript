@@ -2,16 +2,17 @@ import React, { useMemo, useState } from 'react';
 import { motion } from 'framer-motion';
 import { AlertCircle, Check, X, Calendar, TrendingUp, Pill, Activity, Plus } from 'lucide-react';
 import { Button } from '@/components/ui/button';
+import { useAuth } from '@/contexts/useAuth';
 import { useAppData } from '@/contexts/useAppData';
 import type { MedicationAdherence } from '@/data/mockData';
 
 const MedicationAdherencePage: React.FC = () => {
+  const { user } = useAuth();
   const { medicationAdherence, recordMedicationAdherence, prescriptions } = useAppData();
   const [selectedPrescription, setSelectedPrescription] = useState<string | null>(null);
   const [showForm, setShowForm] = useState(false);
 
-  // Use mock patient ID (in real app, get from auth context)
-  const patientId = localStorage.getItem('currentUser')?.split('-')[0] || 'p-001';
+  const patientId = user?.role === 'patient' ? user.id : '';
 
   const patientAdherence = medicationAdherence.filter((a) => a.patientId === patientId);
   const patientPrescriptions = prescriptions.filter((p) => p.patientId === patientId);
@@ -40,6 +41,10 @@ const MedicationAdherencePage: React.FC = () => {
   }, [patientAdherence]);
 
   const handleRecordAdherence = () => {
+    if (!patientId) {
+      alert('No patient is signed in');
+      return;
+    }
     if (!formData.prescriptionId || !formData.medicationName) {
       alert('Please select a prescription and enter medication name');
       return;

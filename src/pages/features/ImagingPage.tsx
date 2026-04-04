@@ -5,7 +5,7 @@ import { useSearchParams } from 'react-router-dom';
 import { useAuth } from '@/contexts/useAuth';
 import { useAppData } from '@/contexts/useAppData';
 import { useNotifications } from '@/contexts/useNotifications';
-import { type ImagingScan, imagingCenters } from '@/data/mockData';
+import { type ImagingScan } from '@/data/mockData';
 import { getDoctorPatients } from '@/lib/patientDirectory';
 import { getVisibleImagingScans } from '@/lib/recordVisibility';
 import { normalizeUserRole } from '@/lib/roleUtils';
@@ -74,7 +74,7 @@ const ImagingPage = () => {
       bodyPart: orderForm.bodyPart,
       date: new Date().toISOString().split('T')[0],
       status: 'requested',
-      centerId: imagingCenters[0]?.id,
+      centerId: undefined,
     };
     addImagingScan(scan);
     addNotification({

@@ -1,5 +1,5 @@
 import type { User } from '@/contexts/AuthContext';
-import { doctors as mockDoctors, type Doctor } from '@/data/mockData';
+import type { Doctor } from '@/data/mockData';
 
 const defaultAvailability: Doctor['availableHours'] = [
   { dayOfWeek: 'Monday', startTime: '09:00', endTime: '16:00' },
@@ -11,14 +11,9 @@ const defaultAvailability: Doctor['availableHours'] = [
 
 export const getBookableDoctors = (
   users: User[],
-  options?: {
-    allowMock?: boolean;
-  }
 ): Doctor[] => {
-  const registeredDoctors = users.filter((candidate) => candidate.role === 'doctor');
-  const allowMock = options?.allowMock ?? true;
-
-  if (registeredDoctors.length === 0) return allowMock ? mockDoctors : [];
+  const registeredDoctors = users.filter((candidate) => candidate.role === 'doctor' && candidate.isVerified !== false && candidate.isActive !== false);
+  if (registeredDoctors.length === 0) return [];
 
   return registeredDoctors.map((doctor, index) => ({
     id: doctor.id,

@@ -1,6 +1,6 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import type { AmbulanceRequest, Appointment, ImagingScan, LabTest, Prescription, VitalSigns, HealthMetric, InventoryItem, AmbulanceVehicle, Referral, ProviderVerification, PatientAllergy, PatientMedicalHistory, PatientConsent, DrugInteraction, ClinicalNote, PatientProblem, MedicationAdherence, ProviderPricing, ServiceCharge, Invoice, BillingRecord, AppointmentReminder } from '@/data/mockData';
-import { drugInteractionDatabase as mockDrugInteractions } from '@/data/mockData';
+import { drugInteractionDatabase } from '@/data/mockData';
 import { AppDataContext, type AppDataContextType } from './app-data-context';
 import { appointmentsApi, prescriptionsApi, allergiesApi, api, referralsApi, recordsApi, ambulanceApi } from '@/lib/apiService';
 import { useAuth } from './useAuth';
@@ -430,7 +430,11 @@ const imagingPayloadFromDelta = (prev: ImagingScan, next: ImagingScan): Record<s
   return p;
 };
 
-const unwrapRecordPayloads = <T,>(items: Array<{ payload: T }>): T[] => items.map((item) => item.payload);
+const toOptionalNumber = (value: string | number | null | undefined): number | null => {
+  if (value === null || value === undefined || value === '') return null;
+  const parsed = Number(value);
+  return Number.isFinite(parsed) ? parsed : null;
+};
 
 const loadStructuredPayloads = async <T extends { id?: string }>(recordType: string): Promise<T[]> => {
   try {
@@ -494,6 +498,7 @@ const attachPrescriptionRefills = (
 };
 
 type StructuredRecordScope = {
+  created_by?: number | null;
   patient_id?: number | null;
   provider_id?: number | null;
   appointment_id?: number | null;
@@ -632,9 +637,11 @@ export const AppDataProvider: React.FC<{ children: React.ReactNode }> = ({ child
     const collection = dataRef.current[collectionKey];
     const exists = Array.isArray(collection) && collection.some((item) => typeof item === 'object' && item !== null && String((item as { id?: string }).id) === entity.id);
 
+    const createdBy = scope.created_by;
     const payload = {
       id: entity.id,
       record_type: recordType,
+      ...(createdBy !== undefined ? { created_by: createdBy } : {}),
       patient_id: scope.patient_id ?? null,
       provider_id: scope.provider_id ?? null,
       appointment_id: scope.appointment_id ?? null,
@@ -660,7 +667,9 @@ export const AppDataProvider: React.FC<{ children: React.ReactNode }> = ({ child
     const collection = dataRef.current[collectionKey];
     const exists = Array.isArray(collection) && collection.some((item) => typeof item === 'object' && item !== null && String((item as { id?: string }).id) === entity.id);
 
+    const createdBy = scope.created_by;
     const payload = {
+      ...(createdBy !== undefined ? { created_by: createdBy } : {}),
       patient_id: scope.patient_id ?? null,
       provider_id: scope.provider_id ?? null,
       appointment_id: scope.appointment_id ?? null,
@@ -681,6 +690,12 @@ export const AppDataProvider: React.FC<{ children: React.ReactNode }> = ({ child
     await loadAPIData(true);
   }, [loadAPIData]);
 
+  const persistBillingRecord = useCallback(async (record: BillingRecord) => {
+    await upsertStructuredRecord('billing_record', record, 'billingRecords', {
+      created_by: toOptionalNumber(user?.id),
+    });
+  }, [upsertStructuredRecord, user?.id]);
+
   useEffect(() => {
     let active = true;
     void loadAPIData();
@@ -696,10 +711,6 @@ export const AppDataProvider: React.FC<{ children: React.ReactNode }> = ({ child
       window.clearInterval(interval);
     };
   }, [loadAPIData]);
-
-  const updateData = useCallback((updater: (current: StoredAppData) => StoredAppData) => {
-    setData((current) => updater(current));
-  }, []);
 
   const contextValue = useMemo<AppDataContextType>(() => ({
     appointments: data.appointments,
@@ -723,7 +734,7 @@ export const AppDataProvider: React.FC<{ children: React.ReactNode }> = ({ child
     serviceCharges: data.serviceCharges,
     invoices: data.invoices,
     billingRecords: data.billingRecords,
-    drugInteractionDatabase: mockDrugInteractions,
+    drugInteractionDatabase,
     
     addAppointment: (appointment) => {
       void (async () => {
@@ -1053,21 +1064,132 @@ export const AppDataProvider: React.FC<{ children: React.ReactNode }> = ({ child
         }
       })();
     },
-    addAmbulanceRequest: (request) => updateData((current) => ({ ...current, ambulanceRequests: [request, ...current.ambulanceRequests] })),
-    updateAmbulanceRequest: (id, update) => updateData((current) => ({
-      ...current,
-      ambulanceRequests: current.ambulanceRequests.map((request) => request.id === id ? update(request) : request),
-    })),
-    addVitalSigns: (vital) => updateData((current) => ({ ...current, vitalSigns: [vital, ...current.vitalSigns] })),
-    addHealthMetric: (metric) => updateData((current) => ({ ...current, healthMetrics: [metric, ...current.healthMetrics] })),
-    updateInventoryItem: (id, update) => updateData((current) => ({
-      ...current,
-      inventoryItems: current.inventoryItems.map((item) => item.id === id ? update(item) : item),
-    })),
-    updateAmbulance: (id, update) => updateData((current) => ({
-      ...current,
-      ambulances: current.ambulances.map((ambulance) => ambulance.id === id ? update(ambulance) : ambulance),
-    })),
+    addAmbulanceRequest: (request) => {
+      void (async () => {
+        try {
+          await ambulanceApi.createRequest({
+            patient_id: toOptionalNumber(request.patientId) ?? undefined,
+            location_name: request.location,
+            description: request.location,
+            priority: request.priority,
+          });
+          await loadAPIData(true);
+        } catch (error) {
+          console.error('addAmbulanceRequest failed:', error);
+        }
+      })();
+    },
+    updateAmbulanceRequest: (id, update) => {
+      void (async () => {
+        const prev = dataRef.current.ambulanceRequests.find((request) => request.id === id);
+        if (!prev) return;
+        const next = update(prev);
+        const payload: Record<string, unknown> = {};
+        if (next.status !== prev.status) {
+          payload.status = next.status === 'en-route' ? 'en_route' : next.status;
+        }
+        if (next.priority !== prev.priority) payload.priority = next.priority;
+        if (next.location !== prev.location) payload.location_name = next.location;
+        try {
+          if (Object.keys(payload).length > 0) {
+            await ambulanceApi.updateRequest(id, payload);
+          }
+          await loadAPIData(true);
+        } catch (error) {
+          console.error('updateAmbulanceRequest failed:', error);
+        }
+      })();
+    },
+    addVitalSigns: (vital) => {
+      void (async () => {
+        try {
+          await upsertStructuredRecord('vital_sign', vital, 'vitalSigns', {
+            patient_id: toOptionalNumber(vital.patientId),
+            created_by: toOptionalNumber(user?.id),
+          });
+        } catch (error) {
+          console.error('addVitalSigns failed:', error);
+        }
+      })();
+    },
+    addHealthMetric: (metric) => {
+      void (async () => {
+        try {
+          await upsertStructuredRecord('health_metric', metric, 'healthMetrics', {
+            patient_id: toOptionalNumber(metric.patientId),
+            status: metric.status,
+            created_by: toOptionalNumber(user?.id),
+          });
+        } catch (error) {
+          console.error('addHealthMetric failed:', error);
+        }
+      })();
+    },
+    updateInventoryItem: (id, update) => {
+      void (async () => {
+        const prev = dataRef.current.inventoryItems.find((item) => item.id === id);
+        if (!prev) return;
+        const next = update(prev);
+        try {
+          await updateStructuredRecord('inventory_item', next, 'inventoryItems', {
+            status: next.status,
+          });
+        } catch (error) {
+          console.error('updateInventoryItem failed:', error);
+        }
+      })();
+    },
+    updateAmbulance: (id, update) => {
+      void (async () => {
+        const prev = dataRef.current.ambulances.find((ambulance) => ambulance.id === id);
+        if (!prev) return;
+        const next = update(prev);
+        try {
+          await updateStructuredRecord('ambulance_vehicle', next, 'ambulances', {
+            status: next.status,
+          });
+        } catch (error) {
+          console.error('updateAmbulance failed:', error);
+        }
+      })();
+    },
+    addProviderVerification: (verification) => {
+      void (async () => {
+        try {
+          const providerId = toOptionalNumber(verification.providerId);
+          if (providerId !== null) {
+            if (verification.status === 'approved') {
+              await api.admin.verifyProvider(providerId);
+            } else if (verification.status === 'rejected') {
+              await api.admin.rejectProvider(providerId, verification.notes || 'Invalid credentials');
+            }
+          }
+          await loadAPIData(true);
+        } catch (error) {
+          console.error('addProviderVerification failed:', error);
+        }
+      })();
+    },
+    updateProviderVerification: (id, update) => {
+      void (async () => {
+        const prev = dataRef.current.providerVerifications.find((verification) => verification.id === id);
+        if (!prev) return;
+        const next = update(prev);
+        try {
+          const providerId = toOptionalNumber(next.providerId);
+          if (providerId !== null && next.status !== prev.status) {
+            if (next.status === 'approved') {
+              await api.admin.verifyProvider(providerId);
+            } else if (next.status === 'rejected') {
+              await api.admin.rejectProvider(providerId, next.notes || 'Invalid credentials');
+            }
+          }
+          await loadAPIData(true);
+        } catch (error) {
+          console.error('updateProviderVerification failed:', error);
+        }
+      })();
+    },
     addReferral: (referral) => {
       void (async () => {
         try {
@@ -1103,12 +1225,6 @@ export const AppDataProvider: React.FC<{ children: React.ReactNode }> = ({ child
         }
       })();
     },
-    addProviderVerification: (verification) => updateData((current) => ({ ...current, providerVerifications: [verification, ...current.providerVerifications] })),
-    updateProviderVerification: (id, update) => updateData((current) => ({
-      ...current,
-      providerVerifications: current.providerVerifications.map((verification) => verification.id === id ? update(verification) : verification),
-    })),
-    
     // Allergy and drug interaction management
     addAllergy: (allergy) => {
       void (async () => {
@@ -1139,21 +1255,65 @@ export const AppDataProvider: React.FC<{ children: React.ReactNode }> = ({ child
         }
       })();
     },
-    addMedicalHistory: (history) => updateData((current) => ({ ...current, medicalHistories: [history, ...current.medicalHistories] })),
-    updateMedicalHistory: (id, update) => updateData((current) => ({
-      ...current,
-      medicalHistories: current.medicalHistories.map((history) => history.id === id ? update(history) : history),
-    })),
-    addPatientConsent: (consent) => updateData((current) => ({ ...current, patientConsents: [consent, ...current.patientConsents] })),
-    updatePatientConsent: (id, update) => updateData((current) => ({
-      ...current,
-      patientConsents: current.patientConsents.map((consent) => consent.id === id ? update(consent) : consent),
-    })),
+    addMedicalHistory: (history) => {
+      void (async () => {
+        try {
+          await upsertStructuredRecord('medical_history', history, 'medicalHistories', {
+            patient_id: toOptionalNumber(history.patientId),
+            created_by: toOptionalNumber(user?.id),
+          });
+        } catch (error) {
+          console.error('addMedicalHistory failed:', error);
+        }
+      })();
+    },
+    updateMedicalHistory: (id, update) => {
+      void (async () => {
+        const prev = dataRef.current.medicalHistories.find((history) => history.id === id);
+        if (!prev) return;
+        const next = update(prev);
+        try {
+          await updateStructuredRecord('medical_history', next, 'medicalHistories', {
+            patient_id: toOptionalNumber(next.patientId),
+          });
+        } catch (error) {
+          console.error('updateMedicalHistory failed:', error);
+        }
+      })();
+    },
+    addPatientConsent: (consent) => {
+      void (async () => {
+        try {
+          await upsertStructuredRecord('patient_consent', consent, 'patientConsents', {
+            patient_id: toOptionalNumber(consent.patientId),
+            status: consent.status,
+            created_by: toOptionalNumber(user?.id),
+          });
+        } catch (error) {
+          console.error('addPatientConsent failed:', error);
+        }
+      })();
+    },
+    updatePatientConsent: (id, update) => {
+      void (async () => {
+        const prev = dataRef.current.patientConsents.find((consent) => consent.id === id);
+        if (!prev) return;
+        const next = update(prev);
+        try {
+          await updateStructuredRecord('patient_consent', next, 'patientConsents', {
+            patient_id: toOptionalNumber(next.patientId),
+            status: next.status,
+          });
+        } catch (error) {
+          console.error('updatePatientConsent failed:', error);
+        }
+      })();
+    },
     checkDrugInteractions: (medications) => {
       const interactions: DrugInteraction[] = [];
       for (let i = 0; i < medications.length; i++) {
         for (let j = i + 1; j < medications.length; j++) {
-          const interaction = mockDrugInteractions.find(
+          const interaction = drugInteractionDatabase.find(
             (di) =>
               (di.drug1.toLowerCase() === medications[i].toLowerCase() && di.drug2.toLowerCase() === medications[j].toLowerCase()) ||
               (di.drug1.toLowerCase() === medications[j].toLowerCase() && di.drug2.toLowerCase() === medications[i].toLowerCase()),
@@ -1166,112 +1326,250 @@ export const AppDataProvider: React.FC<{ children: React.ReactNode }> = ({ child
     getPatientAllergies: (patientId) => data.patientAllergies.filter((allergy) => allergy.patientId === patientId),
     
     // Clinical Notes Management (P2)
-    addClinicalNote: (note) => updateData((current) => ({ ...current, clinicalNotes: [note, ...current.clinicalNotes] })),
-    updateClinicalNote: (id, update) => updateData((current) => ({
-      ...current,
-      clinicalNotes: current.clinicalNotes.map((note) => note.id === id ? update(note) : note),
-    })),
+    addClinicalNote: (note) => {
+      void (async () => {
+        try {
+          await upsertStructuredRecord('clinical_note', note, 'clinicalNotes', {
+            patient_id: toOptionalNumber(note.patientId),
+            provider_id: toOptionalNumber(note.doctorId),
+            status: note.status,
+            created_by: toOptionalNumber(user?.id),
+          });
+        } catch (error) {
+          console.error('addClinicalNote failed:', error);
+        }
+      })();
+    },
+    updateClinicalNote: (id, update) => {
+      void (async () => {
+        const prev = dataRef.current.clinicalNotes.find((note) => note.id === id);
+        if (!prev) return;
+        const next = update(prev);
+        try {
+          await updateStructuredRecord('clinical_note', next, 'clinicalNotes', {
+            patient_id: toOptionalNumber(next.patientId),
+            provider_id: toOptionalNumber(next.doctorId),
+            status: next.status,
+          });
+        } catch (error) {
+          console.error('updateClinicalNote failed:', error);
+        }
+      })();
+    },
     
     // Patient Problem List Management (P2)
-    addPatientProblem: (problem) => updateData((current) => ({ ...current, patientProblems: [problem, ...current.patientProblems] })),
-    updatePatientProblem: (id, update) => updateData((current) => ({
-      ...current,
-      patientProblems: current.patientProblems.map((problem) => problem.id === id ? update(problem) : problem),
-    })),
+    addPatientProblem: (problem) => {
+      void (async () => {
+        try {
+          await upsertStructuredRecord('patient_problem', problem, 'patientProblems', {
+            patient_id: toOptionalNumber(problem.patientId),
+            status: problem.status,
+            created_by: toOptionalNumber(user?.id),
+          });
+        } catch (error) {
+          console.error('addPatientProblem failed:', error);
+        }
+      })();
+    },
+    updatePatientProblem: (id, update) => {
+      void (async () => {
+        const prev = dataRef.current.patientProblems.find((problem) => problem.id === id);
+        if (!prev) return;
+        const next = update(prev);
+        try {
+          await updateStructuredRecord('patient_problem', next, 'patientProblems', {
+            patient_id: toOptionalNumber(next.patientId),
+            status: next.status,
+          });
+        } catch (error) {
+          console.error('updatePatientProblem failed:', error);
+        }
+      })();
+    },
     
     // Medication Adherence Tracking (P2)
-    updateMedicationAdherence: (id, update) => updateData((current) => ({
-      ...current,
-      medicationAdherence: current.medicationAdherence.map((adherence) => adherence.id === id ? update(adherence) : adherence),
-    })),
-    recordMedicationAdherence: (adherence) => updateData((current) => ({ ...current, medicationAdherence: [adherence, ...current.medicationAdherence] })),
+    updateMedicationAdherence: (id, update) => {
+      void (async () => {
+        const prev = dataRef.current.medicationAdherence.find((adherence) => adherence.id === id);
+        if (!prev) return;
+        const next = update(prev);
+        try {
+          await updateStructuredRecord('medication_adherence', next, 'medicationAdherence', {
+            patient_id: toOptionalNumber(next.patientId),
+          });
+        } catch (error) {
+          console.error('updateMedicationAdherence failed:', error);
+        }
+      })();
+    },
+    recordMedicationAdherence: (adherence) => {
+      void (async () => {
+        try {
+          await upsertStructuredRecord('medication_adherence', adherence, 'medicationAdherence', {
+            patient_id: toOptionalNumber(adherence.patientId),
+            created_by: toOptionalNumber(user?.id),
+          });
+        } catch (error) {
+          console.error('recordMedicationAdherence failed:', error);
+        }
+      })();
+    },
     
     // Billing & Payment System (Ghana-specific)
-    setProviderPricing: (pricing) => updateData((current) => {
-      const existing = current.providerPricing.findIndex((p) => p.id === pricing.id);
-      const newPricing = existing >= 0
-        ? current.providerPricing.map((p, i) => i === existing ? pricing : p)
-        : [pricing, ...current.providerPricing];
-      const record: BillingRecord = {
-        id: `br-${Date.now()}`,
-        timestamp: new Date().toISOString(),
-        action: existing >= 0 ? 'pricing-updated' : 'pricing-created',
-        actionBy: pricing.providerId,
-        actionByName: pricing.providerName,
-        affectedProviderId: pricing.providerId,
-        details: `${existing >= 0 ? 'Updated' : 'Created'} pricing for ${pricing.serviceDescription}: GHS ${pricing.priceGHS}`,
-      };
-      return { ...current, providerPricing: newPricing, billingRecords: [record, ...current.billingRecords] };
-    }),
+    setProviderPricing: (pricing) => {
+      void (async () => {
+        try {
+          const existing = dataRef.current.providerPricing.find((p) => p.id === pricing.id);
+          await upsertStructuredRecord('provider_pricing', pricing, 'providerPricing', {
+            provider_id: toOptionalNumber(pricing.providerId),
+            created_by: toOptionalNumber(user?.id),
+          });
+
+          await persistBillingRecord({
+            id: `br-${Date.now()}`,
+            timestamp: new Date().toISOString(),
+            action: existing ? 'pricing-updated' : 'pricing-created',
+            actionBy: pricing.providerId,
+            actionByName: pricing.providerName,
+            affectedProviderId: pricing.providerId,
+            details: `${existing ? 'Updated' : 'Created'} pricing for ${pricing.serviceDescription}: GHS ${pricing.priceGHS}`,
+          });
+        } catch (error) {
+          console.error('setProviderPricing failed:', error);
+        }
+      })();
+    },
+    deleteProviderPricing: (pricingId) => {
+      void (async () => {
+        try {
+          const existing = dataRef.current.providerPricing.find((pricing) => pricing.id === pricingId);
+          if (!existing) return;
+          await recordsApi.deleteRecord(pricingId);
+          await persistBillingRecord({
+            id: `br-${Date.now()}`,
+            timestamp: new Date().toISOString(),
+            action: 'pricing-deleted',
+            actionBy: existing.providerId,
+            actionByName: existing.providerName,
+            affectedProviderId: existing.providerId,
+            details: `Deleted pricing for ${existing.serviceDescription}: GHS ${existing.priceGHS}`,
+          });
+        } catch (error) {
+          console.error('deleteProviderPricing failed:', error);
+        }
+      })();
+    },
     getProviderPricing: (providerId) => data.providerPricing.filter((p) => p.providerId === providerId),
     
-    createServiceCharge: (charge) => updateData((current) => {
-      const record: BillingRecord = {
-        id: `br-${Date.now()}`,
-        timestamp: new Date().toISOString(),
-        action: 'charge-created',
-        actionBy: charge.providerId,
-        actionByName: charge.providerName,
-        affectedPatientId: charge.patientId,
-        affectedProviderId: charge.providerId,
-        amountGHS: charge.amountGHS,
-        details: `Service charge created: ${charge.serviceDescription} (GHS ${charge.amountGHS}) for patient ${charge.patientId}`,
-      };
-      return { ...current, serviceCharges: [charge, ...current.serviceCharges], billingRecords: [record, ...current.billingRecords] };
-    }),
+    createServiceCharge: (charge) => {
+      void (async () => {
+        try {
+          await upsertStructuredRecord('service_charge', charge, 'serviceCharges', {
+            patient_id: toOptionalNumber(charge.patientId),
+            provider_id: toOptionalNumber(charge.providerId),
+            appointment_id: toOptionalNumber(charge.appointmentId),
+            status: charge.status,
+            created_by: toOptionalNumber(user?.id),
+          });
+          await persistBillingRecord({
+            id: `br-${Date.now()}`,
+            timestamp: new Date().toISOString(),
+            action: 'charge-created',
+            actionBy: charge.providerId,
+            actionByName: charge.providerName,
+            affectedPatientId: charge.patientId,
+            affectedProviderId: charge.providerId,
+            amountGHS: charge.amountGHS,
+            details: `Service charge created: ${charge.serviceDescription} (GHS ${charge.amountGHS}) for patient ${charge.patientId}`,
+          });
+        } catch (error) {
+          console.error('createServiceCharge failed:', error);
+        }
+      })();
+    },
     
-    createInvoice: (invoice) => updateData((current) => {
-      const record: BillingRecord = {
-        id: `br-${Date.now()}`,
-        timestamp: new Date().toISOString(),
-        action: 'invoice-created',
-        actionBy: 'system',
-        actionByName: 'System',
-        affectedPatientId: invoice.patientId,
-        relatedInvoiceId: invoice.id,
-        amountGHS: invoice.totalAmountGHS,
-        details: `Invoice ${invoice.id} created for patient ${invoice.patientName}: GHS ${invoice.totalAmountGHS}`,
-      };
-      return { ...current, invoices: [invoice, ...current.invoices], billingRecords: [record, ...current.billingRecords] };
-    }),
+    createInvoice: (invoice) => {
+      void (async () => {
+        try {
+          await upsertStructuredRecord('invoice', invoice, 'invoices', {
+            patient_id: toOptionalNumber(invoice.patientId),
+            status: invoice.status,
+            created_by: toOptionalNumber(user?.id),
+          });
+          await persistBillingRecord({
+            id: `br-${Date.now()}`,
+            timestamp: new Date().toISOString(),
+            action: 'invoice-created',
+            actionBy: user?.id || 'system',
+            actionByName: user?.name || 'System',
+            affectedPatientId: invoice.patientId,
+            relatedInvoiceId: invoice.id,
+            amountGHS: invoice.totalAmountGHS,
+            details: `Invoice ${invoice.id} created for patient ${invoice.patientName}: GHS ${invoice.totalAmountGHS}`,
+          });
+        } catch (error) {
+          console.error('createInvoice failed:', error);
+        }
+      })();
+    },
     
-    recordPayment: (invoiceId, paymentMethod, amountGHS) => updateData((current) => {
-      const invoice = current.invoices.find((inv) => inv.id === invoiceId);
-      if (!invoice) return current;
-      const newPaymentMethods = [...(invoice.paymentMethods || []), { method: paymentMethod, amountGHS, date: new Date().toISOString().split('T')[0], transactionId: `tx-${Date.now()}` }];
-      const totalPaid = newPaymentMethods.reduce((sum, p) => sum + p.amountGHS, 0);
-      const outstanding = Math.max(0, invoice.totalAmountGHS - totalPaid);
-      const updatedInvoice: Invoice = {
-        ...invoice,
-        amountPaidGHS: totalPaid,
-        outstandingAmountGHS: outstanding,
-        paymentMethods: newPaymentMethods,
-        status: outstanding === 0 ? 'paid' : totalPaid > 0 ? 'partially-paid' : invoice.status,
-      };
-      const record: BillingRecord = {
-        id: `br-${Date.now()}`,
-        timestamp: new Date().toISOString(),
-        action: 'payment-recorded',
-        actionBy: 'system',
-        actionByName: 'System',
-        affectedPatientId: invoice.patientId,
-        relatedInvoiceId: invoiceId,
-        amountGHS,
-        details: `Payment of GHS ${amountGHS} recorded via ${paymentMethod} for invoice ${invoiceId}`,
-      };
-      return {
-        ...current,
-        invoices: current.invoices.map((inv) => inv.id === invoiceId ? updatedInvoice : inv),
-        billingRecords: [record, ...current.billingRecords],
-      };
-    }),
+    recordPayment: (invoiceId, paymentMethod, amountGHS) => {
+      void (async () => {
+        const invoice = dataRef.current.invoices.find((inv) => inv.id === invoiceId);
+        if (!invoice) return;
+        const newPaymentMethods = [...(invoice.paymentMethods || []), {
+          method: paymentMethod,
+          amountGHS,
+          date: new Date().toISOString().split('T')[0],
+          transactionId: `tx-${Date.now()}`,
+        }];
+        const totalPaid = newPaymentMethods.reduce((sum, p) => sum + p.amountGHS, 0);
+        const outstanding = Math.max(0, invoice.totalAmountGHS - totalPaid);
+        const updatedInvoice: Invoice = {
+          ...invoice,
+          amountPaidGHS: totalPaid,
+          outstandingAmountGHS: outstanding,
+          paymentMethods: newPaymentMethods,
+          status: outstanding === 0 ? 'paid' : totalPaid > 0 ? 'partially-paid' : invoice.status,
+        };
+        try {
+          await updateStructuredRecord('invoice', updatedInvoice, 'invoices', {
+            patient_id: toOptionalNumber(updatedInvoice.patientId),
+            status: updatedInvoice.status,
+          });
+          await persistBillingRecord({
+            id: `br-${Date.now()}`,
+            timestamp: new Date().toISOString(),
+            action: 'payment-recorded',
+            actionBy: user?.id || 'system',
+            actionByName: user?.name || 'System',
+            affectedPatientId: invoice.patientId,
+            relatedInvoiceId: invoiceId,
+            amountGHS,
+            details: `Payment of GHS ${amountGHS} recorded via ${paymentMethod} for invoice ${invoiceId}`,
+          });
+        } catch (error) {
+          console.error('recordPayment failed:', error);
+        }
+      })();
+    },
     
     getPatientBalance: (patientId) => {
       const patientInvoices = data.invoices.filter((inv) => inv.patientId === patientId);
       return patientInvoices.reduce((sum, inv) => sum + inv.outstandingAmountGHS, 0);
     },
     
-    addBillingRecord: (record) => updateData((current) => ({ ...current, billingRecords: [record, ...current.billingRecords] })),
+    addBillingRecord: (record) => {
+      void (async () => {
+        try {
+          await upsertStructuredRecord('billing_record', record, 'billingRecords', {
+            created_by: toOptionalNumber(user?.id),
+          });
+        } catch (error) {
+          console.error('addBillingRecord failed:', error);
+        }
+      })();
+    },
     getClinicalNotes: (patientId) => data.clinicalNotes.filter((note) => note.patientId === patientId),
     getPatientProblems: (patientId) => data.patientProblems.filter((problem) => problem.patientId === patientId),
     getAllBillingRecords: () => data.billingRecords,
@@ -1279,60 +1577,130 @@ export const AppDataProvider: React.FC<{ children: React.ReactNode }> = ({ child
     
     // Smart Appointment Reminders
     appointmentReminders: data.appointmentReminders,
-    generateAppointmentReminders: (appointmentId, reminderTypes) => updateData((current) => {
-      const appointment = current.appointments.find((apt) => apt.id === appointmentId);
-      if (!appointment) return current;
-      
-      const newReminders: AppointmentReminder[] = reminderTypes.map((reminderType) => ({
-        id: `reminder-${Date.now()}-${Math.random()}`,
-        appointmentId,
-        patientId: appointment.patientId,
-        patientName: appointment.patientName,
-        doctorId: appointment.doctorId,
-        doctorName: appointment.doctorName,
-        reminderType,
-        notificationMethod: 'in-app' as const,
-        status: 'pending' as const,
-        appointmentDate: appointment.date,
-        appointmentTime: appointment.time,
-        message: `Reminder: You have an appointment with ${appointment.doctorName} on ${appointment.date} at ${appointment.time}.`,
-        appointmentMode: appointment.appointmentMode,
-        sentAt: undefined,
-        acknowledgedAt: undefined,
-        createdAt: new Date().toISOString(),
-      }));
-      return { ...current, appointmentReminders: [...newReminders, ...current.appointmentReminders] };
-    }),
+    generateAppointmentReminders: (appointmentId, reminderTypes) => {
+      void (async () => {
+        const appointment = dataRef.current.appointments.find((apt) => apt.id === appointmentId);
+        if (!appointment) return;
+
+        try {
+          await Promise.all(reminderTypes.map((reminderType) => {
+            const reminderId = `reminder-${appointmentId}-${reminderType}`;
+            const reminder: AppointmentReminder = {
+              id: reminderId,
+              appointmentId,
+              patientId: appointment.patientId,
+              patientName: appointment.patientName,
+              doctorId: appointment.doctorId,
+              doctorName: appointment.doctorName,
+              reminderType,
+              notificationMethod: 'in-app',
+              status: 'pending',
+              appointmentDate: appointment.date,
+              appointmentTime: appointment.time,
+              message: `Reminder: You have an appointment with ${appointment.doctorName} on ${appointment.date} at ${appointment.time}.`,
+              appointmentMode: appointment.appointmentMode,
+              sentAt: undefined,
+              acknowledgedAt: undefined,
+              createdAt: new Date().toISOString(),
+            };
+
+            const scope = {
+              patient_id: toOptionalNumber(appointment.patientId),
+              provider_id: toOptionalNumber(appointment.doctorId),
+              appointment_id: toOptionalNumber(appointmentId),
+              status: 'pending',
+              created_by: toOptionalNumber(user?.id),
+            };
+
+            const exists = dataRef.current.appointmentReminders.some((item) => item.id === reminderId);
+            if (exists) {
+              return recordsApi.updateRecord(reminderId, {
+                ...scope,
+                payload: reminder,
+              });
+            }
+
+            return recordsApi.createRecord<AppointmentReminder>({
+              id: reminderId,
+              record_type: 'appointment_reminder',
+              ...scope,
+              payload: reminder,
+            });
+          }));
+          await loadAPIData(true);
+        } catch (error) {
+          console.error('generateAppointmentReminders failed:', error);
+        }
+      })();
+    },
     
-    sendReminder: (reminderId, method) => updateData((current) => ({
-      ...current,
-      appointmentReminders: current.appointmentReminders.map((reminder) =>
-        reminder.id === reminderId
-          ? { ...reminder, notificationMethod: method, status: 'sent' as const, sentAt: new Date().toISOString() }
-          : reminder,
-      ),
-    })),
+    sendReminder: (reminderId, method) => {
+      void (async () => {
+        const reminder = dataRef.current.appointmentReminders.find((item) => item.id === reminderId);
+        if (!reminder) return;
+        const next: AppointmentReminder = {
+          ...reminder,
+          notificationMethod: method,
+          status: 'sent',
+          sentAt: new Date().toISOString(),
+        };
+        try {
+          await updateStructuredRecord('appointment_reminder', next, 'appointmentReminders', {
+            patient_id: toOptionalNumber(next.patientId),
+            provider_id: toOptionalNumber(next.doctorId),
+            appointment_id: toOptionalNumber(next.appointmentId),
+            status: next.status,
+          });
+        } catch (error) {
+          console.error('sendReminder failed:', error);
+        }
+      })();
+    },
     
-    acknowledgeReminder: (reminderId, patientId) => updateData((current) => ({
-      ...current,
-      appointmentReminders: current.appointmentReminders.map((reminder) =>
-        reminder.id === reminderId && reminder.patientId === patientId
-          ? { ...reminder, status: 'acknowledged' as const, acknowledgedAt: new Date().toISOString() }
-          : reminder,
-      ),
-    })),
+    acknowledgeReminder: (reminderId, patientId) => {
+      void (async () => {
+        const reminder = dataRef.current.appointmentReminders.find((item) => item.id === reminderId && item.patientId === patientId);
+        if (!reminder) return;
+        const next: AppointmentReminder = {
+          ...reminder,
+          status: 'acknowledged',
+          acknowledgedAt: new Date().toISOString(),
+        };
+        try {
+          await updateStructuredRecord('appointment_reminder', next, 'appointmentReminders', {
+            patient_id: toOptionalNumber(next.patientId),
+            provider_id: toOptionalNumber(next.doctorId),
+            appointment_id: toOptionalNumber(next.appointmentId),
+            status: next.status,
+          });
+        } catch (error) {
+          console.error('acknowledgeReminder failed:', error);
+        }
+      })();
+    },
     
     getPatientReminders: (patientId) => data.appointmentReminders.filter((reminder) => reminder.patientId === patientId),
     
     getReminderByAppointment: (appointmentId) => data.appointmentReminders.filter((reminder) => reminder.appointmentId === appointmentId),
     
-    updateReminderStatus: (reminderId, status) => updateData((current) => ({
-      ...current,
-      appointmentReminders: current.appointmentReminders.map((reminder) =>
-        reminder.id === reminderId ? { ...reminder, status } : reminder,
-      ),
-    })),
-  }), [data, user, updateData, loadAPIData, refreshAppData]);
+    updateReminderStatus: (reminderId, status) => {
+      void (async () => {
+        const reminder = dataRef.current.appointmentReminders.find((item) => item.id === reminderId);
+        if (!reminder) return;
+        const next: AppointmentReminder = { ...reminder, status };
+        try {
+          await updateStructuredRecord('appointment_reminder', next, 'appointmentReminders', {
+            patient_id: toOptionalNumber(next.patientId),
+            provider_id: toOptionalNumber(next.doctorId),
+            appointment_id: toOptionalNumber(next.appointmentId),
+            status: next.status,
+          });
+        } catch (error) {
+          console.error('updateReminderStatus failed:', error);
+        }
+      })();
+    },
+  }), [data, user, loadAPIData, refreshAppData, upsertStructuredRecord, updateStructuredRecord, persistBillingRecord]);
 
   return (
     <AppDataContext.Provider value={contextValue}>

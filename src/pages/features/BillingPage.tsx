@@ -2,16 +2,17 @@ import React, { useMemo, useState } from 'react';
 import { motion } from 'framer-motion';
 import { Eye, Download, AlertCircle, Check, Clock, DollarSign, CreditCard } from 'lucide-react';
 import { Button } from '@/components/ui/button';
+import { useAuth } from '@/contexts/useAuth';
 import { useAppData } from '@/contexts/useAppData';
 import type { Invoice } from '@/data/mockData';
 
 const BillingPage: React.FC = () => {
+  const { user } = useAuth();
   const { invoices, getPatientBalance } = useAppData();
   const [selectedInvoice, setSelectedInvoice] = useState<Invoice | null>(null);
   const [filterStatus, setFilterStatus] = useState<'all' | 'paid' | 'outstanding' | 'overdue'>('all');
 
-  // Use mock patient ID (in real app, get from auth context)
-  const patientId = localStorage.getItem('currentUser')?.split('-')[0] || 'p-001';
+  const patientId = user?.role === 'patient' ? user.id : '';
 
   const patientInvoices = invoices.filter((inv) => inv.patientId === patientId);
   const totalBalance = getPatientBalance(patientId);

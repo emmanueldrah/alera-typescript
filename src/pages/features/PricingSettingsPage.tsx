@@ -2,18 +2,19 @@ import React, { useState } from 'react';
 import { motion } from 'framer-motion';
 import { Plus, Edit2, Trash2, DollarSign, AlertCircle, Check } from 'lucide-react';
 import { Button } from '@/components/ui/button';
+import { useAuth } from '@/contexts/useAuth';
 import { useAppData } from '@/contexts/useAppData';
 import type { ProviderPricing } from '@/data/mockData';
 
 const PricingSettingsPage: React.FC = () => {
-  const { providerPricing, setProviderPricing } = useAppData();
+  const { user } = useAuth();
+  const { providerPricing, setProviderPricing, deleteProviderPricing } = useAppData();
   const [showForm, setShowForm] = useState(false);
   const [editingId, setEditingId] = useState<string | null>(null);
   const [successMsg, setSuccessMsg] = useState<string>('');
   
-  // Use mock doctor ID (in real app, get from auth context)
-  const doctorId = localStorage.getItem('currentUser')?.split('-')[1] || 'd-001';
-  const doctorName = 'Dr. Current Provider'; // In real app, get from auth context
+  const doctorId = user?.role === 'doctor' ? user.id : '';
+  const doctorName = user?.name || 'Current Provider';
   
   const myPricing = providerPricing.filter((p) => p.providerId === doctorId);
   
@@ -34,6 +35,10 @@ const PricingSettingsPage: React.FC = () => {
   ];
 
   const handleAddPrice = () => {
+    if (!doctorId) {
+      alert('You must be signed in as a provider to manage pricing');
+      return;
+    }
     if (!formData.serviceDescription || formData.priceGHS <= 0) {
       alert('Please fill in all fields with valid amounts');
       return;
@@ -72,8 +77,9 @@ const PricingSettingsPage: React.FC = () => {
 
   const handleDelete = (id: string) => {
     if (confirm('Delete this pricing? This cannot be undone.')) {
-      // Note: We'll need to add a delete method in context
-      window.location.reload(); // Temporary - ideally use context method
+      deleteProviderPricing(id);
+      setSuccessMsg('Price deleted successfully!');
+      setTimeout(() => setSuccessMsg(''), 3000);
     }
   };
 

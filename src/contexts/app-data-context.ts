@@ -77,6 +77,7 @@ export interface AppDataContextType {
   
   // Billing & Payment System (Ghana-specific)
   setProviderPricing: (pricing: ProviderPricing) => void;
+  deleteProviderPricing: (pricingId: string) => void;
   getProviderPricing: (providerId: string) => ProviderPricing[];
   createServiceCharge: (charge: ServiceCharge) => void;
   createInvoice: (invoice: Invoice) => void;

@@ -253,7 +253,7 @@ export interface AppointmentReminder {
 export interface BillingRecord {
   id: string;
   timestamp: string;
-  action: 'pricing-created' | 'pricing-updated' | 'charge-created' | 'invoice-created' | 'payment-recorded' | 'invoice-cancelled';
+  action: 'pricing-created' | 'pricing-updated' | 'pricing-deleted' | 'charge-created' | 'invoice-created' | 'payment-recorded' | 'invoice-cancelled';
   actionBy: string; // admin or provider id
   actionByName: string;
   affectedPatientId?: string;
