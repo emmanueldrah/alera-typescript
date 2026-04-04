@@ -1,8 +1,9 @@
-from sqlalchemy import create_engine, event, inspect, text
+from sqlalchemy import create_engine, event, inspect, text, Enum as SQLEnum
 from sqlalchemy.orm import sessionmaker, Session, declarative_base
 from sqlalchemy.pool import NullPool, StaticPool
 from config import settings
 from app.utils.time import utcnow
+from app.utils.db_types import enum_value_renames
 from datetime import datetime
 from typing import Generator
 import sys
@@ -148,13 +149,74 @@ def _patch_users_account_recovery_columns():
             print(f"WARNING: Could not patch users.{column_name} column: {e}")
 
 
+def _collect_sqlalchemy_enum_specs() -> dict[str, list[str]]:
+    """Collect the desired persisted labels for every SQLAlchemy enum in metadata."""
+
+    specs: dict[str, list[str]] = {}
+    for table in Base.metadata.tables.values():
+        for column in table.columns:
+            column_type = getattr(column, "type", None)
+            if not isinstance(column_type, SQLEnum):
+                continue
+            if not getattr(column_type, "native_enum", True):
+                continue
+
+            type_name = getattr(column_type, "name", None)
+            labels = getattr(column_type, "enums", None)
+            if not type_name or not labels:
+                continue
+
+            specs[type_name] = list(labels)
+
+    return specs
+
+
+def _patch_postgres_enum_values():
+    """Normalize legacy PostgreSQL enum labels to the current lowercase values."""
+
+    if not str(database_url).startswith("postgresql"):
+        return
+
+    try:
+        enum_specs = inspect(engine).get_enums(schema="public")
+    except Exception as e:
+        print(f"WARNING: Could not inspect PostgreSQL enums: {e}")
+        return
+
+    existing_enums = {enum["name"]: list(enum.get("labels") or []) for enum in enum_specs}
+    desired_enums = _collect_sqlalchemy_enum_specs()
+
+    rename_count = 0
+    try:
+        with engine.begin() as conn:
+            for type_name, desired_labels in desired_enums.items():
+                current_labels = existing_enums.get(type_name)
+                if not current_labels:
+                    continue
+
+                for old_label, new_label in enum_value_renames(current_labels, desired_labels):
+                    conn.exec_driver_sql(
+                        f'ALTER TYPE "{type_name}" RENAME VALUE {old_label!r} TO {new_label!r}'
+                    )
+                    rename_count += 1
+    except Exception as e:
+        print(f"WARNING: Could not normalize PostgreSQL enum values: {e}")
+        return
+
+    if rename_count:
+        print(f"✓ Normalized {rename_count} PostgreSQL enum label(s)")
+
+
 def init_db():
     """Initialize database - create all tables and seed default admin"""
     try:
+        import app.models  # noqa: F401
+
         Base.metadata.create_all(bind=engine)
         _patch_referrals_referral_type_column()
         _patch_users_session_version_column()
         _patch_users_account_recovery_columns()
+        _patch_postgres_enum_values()
         print("✓ Database tables initialized successfully")
     except Exception as e:
         print(f"ERROR: Failed to initialize database tables: {e}")

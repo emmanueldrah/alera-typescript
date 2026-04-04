@@ -43,6 +43,7 @@ from app.schemas import (
 )
 from app.schemas.additional_features import AppointmentReminderCreate, PatientConsentCreate
 from app.utils.dependencies import get_current_user
+from app.utils.db_types import enum_value_renames
 from app.utils.time import utcnow
 from database import SessionLocal
 
@@ -140,6 +141,19 @@ def test_public_registration_rejects_admin_and_verifies_patients_by_default(db_s
     assert user.role == "patient"
     assert user.is_verified is True
     assert user.is_active is True
+
+
+def test_enum_value_renames_detect_legacy_uppercase_labels():
+    renames = enum_value_renames(
+        ["PATIENT", "PROVIDER", "ADMIN"],
+        ["patient", "provider", "admin"],
+    )
+
+    assert renames == [
+        ("PATIENT", "patient"),
+        ("PROVIDER", "provider"),
+        ("ADMIN", "admin"),
+    ]
 
 
 def test_verification_email_hits_sendgrid_api_when_configured(monkeypatch):
