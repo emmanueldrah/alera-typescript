@@ -20,6 +20,11 @@ def _revoke_user_sessions(user: User) -> None:
     user.session_version = int(user.session_version or 0) + 1
 
 
+def _workforce_users_query(db: Session):
+    role_text = normalized_enum_text(User.role)
+    return db.query(User).filter(role_text.in_([role.value for role in WORKFORCE_ROLES]))
+
+
 @router.get("/dashboard/stats")
 async def get_dashboard_stats(
     current_user: User = Depends(get_current_admin),
@@ -375,14 +380,22 @@ async def get_pending_verifications(
     """List providers awaiting professional verification"""
     
     # All non-patient workforce roles remain pending until an admin approves them.
-    role_text = normalized_enum_text(User.role)
-    providers = db.query(User).filter(
-        role_text.in_([role.value for role in WORKFORCE_ROLES]),
+    providers = _workforce_users_query(db).filter(
         User.is_verified.is_(False),
         User.is_active.is_(True)
     ).all()
     
     return providers
+
+
+@router.get("/verifications/", response_model=list[UserResponse])
+async def list_verifications(
+    current_user: User = Depends(get_current_admin),
+    db: Session = Depends(get_db)
+):
+    """List all workforce verification records, including approved and rejected accounts."""
+
+    return _workforce_users_query(db).order_by(User.created_at.desc()).all()
 
 
 @router.put("/verifications/{user_id}/approve")

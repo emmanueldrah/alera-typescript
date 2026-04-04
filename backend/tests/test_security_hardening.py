@@ -15,7 +15,7 @@ from app.models.ambulance import AmbulanceRequest, AmbulanceRequestStatus, Emerg
 from app.models.appointment import Appointment, AppointmentStatus, AppointmentType
 from app.models.lab_imaging import ImagingScan, ImagingScanStatus, LabTest, LabTestStatus
 from app.models.user import User, UserRole
-from app.routes.admin import approve_provider, deactivate_user
+from app.routes.admin import approve_provider, deactivate_user, list_verifications
 from app.routes.appointments import create_appointment
 from app.routes.auth import (
     change_password,
@@ -403,6 +403,9 @@ def test_verified_provider_filtering_and_scoped_patient_data(db_session):
     pending_doctors = run(list_doctors(current_user=patient_user, db=db_session))
     assert pending_doctors == []
 
+    verifications_before = run(list_verifications(current_user=admin_user, db=db_session))
+    assert any(item.id == provider_user.id and item.is_verified is False for item in verifications_before)
+
     with pytest.raises(HTTPException) as exc_info:
         run(create_reminder(
             AppointmentReminderCreate(
@@ -421,6 +424,9 @@ def test_verified_provider_filtering_and_scoped_patient_data(db_session):
 
     run(approve_provider(user_id=provider_user.id, current_user=admin_user, db=db_session))
     db_session.refresh(provider_user)
+
+    verifications_after = run(list_verifications(current_user=admin_user, db=db_session))
+    assert any(item.id == provider_user.id and item.is_verified is True for item in verifications_after)
 
     document = seed_document(db_session, patient_id=patient_user.id, uploaded_by=patient_user.id, is_private=False)
 

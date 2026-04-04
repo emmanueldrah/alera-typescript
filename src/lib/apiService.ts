@@ -576,6 +576,11 @@ export const adminApi = {
     return response.data;
   },
 
+  listVerifications: async () => {
+    const response = await apiClient.get<AdminUserRow[]>('/admin/verifications/');
+    return response.data;
+  },
+
   approveProvider: async (userId: string | number) => {
     const response = await apiClient.put(`/admin/verifications/${userId}/approve`);
     return response.data;

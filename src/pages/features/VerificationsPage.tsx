@@ -39,14 +39,14 @@ const VerificationsPage = () => {
   const fetchVerifications = async () => {
     setIsLoading(true);
     try {
-      const data = await api.admin.getPendingVerifications();
+      const data = await api.admin.listVerifications();
       // Map backend User objects to verification items
       const mapped = data.map(u => ({
         id: u.id,
         name: `${u.first_name} ${u.last_name}`,
         email: u.email,
         role: normalizeUserRole(u.role) ?? 'doctor',
-        status: u.is_verified ? 'approved' : 'pending',
+        status: u.is_verified ? 'approved' : (!u.is_active ? 'rejected' : 'pending'),
         appliedDate: new Date(u.created_at).toLocaleDateString(),
         documents: `License: ${u.license_number || 'N/A'} (${u.license_state || 'Any'})`,
         notes: u.bio,
