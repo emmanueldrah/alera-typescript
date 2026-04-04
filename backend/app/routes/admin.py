@@ -337,8 +337,8 @@ async def get_pending_verifications(
             UserRole.IMAGING.value, 
             UserRole.AMBULANCE.value
         ]),
-        User.is_verified == False,
-        User.license_number != None
+        User.is_verified.is_(False),
+        User.license_number.is_not(None)
     ).all()
     
     return providers
@@ -411,16 +411,16 @@ async def get_ecosystem_activity(
             activity.append({
                 "type": "prescription",
                 "time": s.created_at,
-                "description": f"New prescription issued: {s.medication}",
+                "description": f"New prescription issued: {s.medication_name}",
                 "status": s.status
             })
             
         # Recent Lab/Imaging
-        labs = db.query(LabTest).order_by(LabTest.requested_at.desc()).limit(10).all()
+        labs = db.query(LabTest).order_by(LabTest.ordered_at.desc()).limit(10).all()
         for l in labs:
             activity.append({
                 "type": "lab_test",
-                "time": l.requested_at,
+                "time": l.ordered_at,
                 "description": f"Lab test requested: {l.test_name}",
                 "status": l.status.value if hasattr(l.status, 'value') else l.status
             })

@@ -57,6 +57,45 @@ def test_stats():
         ).count()
         print(f"Active emergencies: {active_emergencies}")
         
+        print("\n--- Verifying Logic Fixes ---")
+        
+        # 5. Test Verifications query specifically (Standardized filters)
+        try:
+            pending_providers = db.query(User).filter(
+                User.role.in_([
+                    UserRole.PROVIDER.value, 
+                    UserRole.LABORATORY.value, 
+                    UserRole.IMAGING.value, 
+                    UserRole.AMBULANCE.value
+                ]),
+                User.is_verified.is_(False),
+                User.license_number.is_not(None)
+            ).count()
+            print(f"✓ Verifications query successful: {pending_providers} found")
+        except Exception as e:
+            print(f"✗ Verifications query failed: {e}")
+
+        # 6. Test Activity Feed field compatibility
+        try:
+            # Check LabTest ordered_at
+            lt_count = db.query(LabTest).count()
+            print(f"✓ LabTest table accessible (count: {lt_count})")
+            
+            # Check Prescription medication_name
+            p_count = db.query(Prescription).count()
+            print(f"✓ Prescription table accessible (count: {p_count})")
+            
+            # Verify specific field existence via query building
+            db.query(LabTest).order_by(LabTest.ordered_at.desc()).first()
+            print("✓ LabTest.ordered_at field verified")
+            
+            db.query(Prescription).filter(Prescription.medication_name != None).first()
+            print("✓ Prescription.medication_name field verified")
+            
+        except Exception as e:
+            print(f"✗ Activity feed field check failed: {e}")
+            raise e
+            
     except Exception as e:
         import traceback
         print(f"ERROR: {e}")

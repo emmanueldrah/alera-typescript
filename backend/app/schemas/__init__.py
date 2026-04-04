@@ -69,6 +69,11 @@ class UserResponse(BaseModel):
     created_at: datetime
     last_login: Optional[datetime]
     
+    # Professional Verification Fields
+    license_number: Optional[str] = None
+    specialty: Optional[str] = None
+    license_state: Optional[str] = None
+    
     class Config:
         from_attributes = True
 
