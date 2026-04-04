@@ -106,6 +106,16 @@ async def create_appointment(
         description=f"Booked appointment with provider {provider.id}",
         status="created",
     )
+
+    # Send appointment confirmation notification
+    from app.utils.notification_utils import NotificationManager
+    await NotificationManager.send_appointment_reminder(
+        user=current_user,
+        appointment_title=apt.title,
+        appointment_time=apt.scheduled_time.isoformat(),
+        provider_name=provider_name,
+    )
+
     return serialize_appointment(apt)
 
 

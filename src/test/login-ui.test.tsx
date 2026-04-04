@@ -30,10 +30,10 @@ describe('Login page', () => {
       statusText: 'Forbidden',
       headers: {},
       config: {},
-    } as any;
+    };
 
     loginMock.mockRejectedValueOnce(
-      new AxiosError('Request failed with status code 403', 'ERR_BAD_REQUEST', {} as any, {} as any, response)
+      new AxiosError('Request failed with status code 403', 'ERR_BAD_REQUEST', undefined, undefined, response)
     );
 
     render(

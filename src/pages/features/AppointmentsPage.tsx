@@ -86,8 +86,8 @@ const AppointmentsPage = () => {
         if (cancelled) return;
         setDoctorUsers([]);
         setDoctorsLoadError('Failed to load doctors.');
-      } finally {
-        if (cancelled) return;
+      }
+      if (!cancelled) {
         setIsLoadingDoctors(false);
       }
     };

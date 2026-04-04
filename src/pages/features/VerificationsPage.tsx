@@ -6,7 +6,7 @@ import {
 } from 'lucide-react';
 import { useAuth } from '@/contexts/useAuth';
 import { Button } from '@/components/ui/button';
-import { api } from '@/lib/apiService';
+import { api, AdminUserRow } from '@/lib/apiService';
 import { handleApiError } from '@/lib/errorHandler';
 import { useToast } from '@/hooks/use-toast';
 import { normalizeUserRole } from '@/lib/roleUtils';
@@ -37,7 +37,7 @@ const roleLabels: Record<string, string> = {
 const VerificationsPage = () => {
   const { user } = useAuth();
   const { toast } = useToast();
-  const [verifications, setVerifications] = useState<any[]>([]);
+  const [verifications, setVerifications] = useState<AdminUserRow[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [statusFilter, setStatusFilter] = useState('all');
   const statusTabs = ['all', 'pending', 'verified', 'rejected'] as const;

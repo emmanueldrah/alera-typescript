@@ -103,9 +103,9 @@ const mapBackendUser = (data: ApiUser): User => {
       dateOfBirth: data.date_of_birth,
       bio: data.bio,
       avatar: data.avatar || data.profile_image_url,
-      notificationEmail: true,
-      notificationSms: false,
-      privacyPublicProfile: false,
+      notificationEmail: data.notification_email ?? true,
+      notificationSms: data.notification_sms ?? false,
+      privacyPublicProfile: data.privacy_public_profile ?? false,
     }
   };
 };
@@ -116,11 +116,6 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const [isLoading, setIsLoading] = useState(true);
 
   const loadAccessibleUsers = useCallback(async () => {
-    if (!getAccessToken()) {
-      setUsers([]);
-      return [];
-    }
-
     try {
       const response = await usersApi.getAccessibleUsers();
       const mapped = Array.isArray(response) ? response.filter(isApiUser).map(mapBackendUser) : [];
@@ -163,18 +158,14 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   }, []);
 
   const login = useCallback(async (email: string, password: string) => {
-    try {
-      const response = await authApi.login(email, password);
-      // Backend now sets cookies automatically, no tokens in response
-      if (!isApiUser(response.user)) {
-        throw new Error('Login response did not include a valid user');
-      }
-      setUser(mapBackendUser(response.user));
-      void loadAccessibleUsers();
-    } catch (error) {
-      throw error;
+    const response = await authApi.login(email, password);
+    // Backend now sets cookies automatically, no tokens in response
+    if (!isApiUser(response.user)) {
+      throw new Error('Login response did not include a valid user');
     }
-  }, [loadAccessibleUsers]);
+    setUser(mapBackendUser(response.user));
+    void loadAccessibleUsers();
+  }, []);
 
   const signup = useCallback(async (
     name: string,
@@ -190,49 +181,45 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     state?: string,
     zipCode?: string,
   ) => {
-    try {
-      const [firstName = '', ...lastNameParts] = name.split(' ');
-      const lastName = lastNameParts.join(' ') || 'User';
-      
-      // Map frontend roles to backend roles
-      const roleMap: Record<SignupRole, BackendRole> = {
-        patient: 'patient',
-        doctor: 'provider',
-        hospital: 'hospital',
-        laboratory: 'laboratory',
-        imaging: 'imaging',
-        pharmacy: 'pharmacist',
-        ambulance: 'ambulance',
-      };
-      const backendRole = roleMap[role] || 'patient';
-      
-      // Generate username from email (remove domain)
-      const username = email.split('@')[0] || name.toLowerCase().replace(/\s+/g, '.');
-      
-      const response = await authApi.register({
-        email,
-        password,
-        username,
-        first_name: firstName,
-        last_name: lastName,
-        role: backendRole,
-        phone: phone || undefined,
-        address: address || undefined,
-        city: city || undefined,
-        state: state || undefined,
-        zip_code: zipCode || undefined,
-        license_number: role === 'patient' ? undefined : licenseNumber,
-        license_state: role === 'patient' ? undefined : licenseState,
-        specialty: role === 'patient' ? undefined : specialty,
-      });
-      
-      // Backend now sets cookies automatically, no tokens in response
-      if (isApiUser(response.user)) {
-        setUser(mapBackendUser(response.user));
-        void loadAccessibleUsers();
-      }
-    } catch (error) {
-      throw error;
+    const [firstName = '', ...lastNameParts] = name.split(' ');
+    const lastName = lastNameParts.join(' ') || 'User';
+
+    // Map frontend roles to backend roles
+    const roleMap: Record<SignupRole, BackendRole> = {
+      patient: 'patient',
+      doctor: 'provider',
+      hospital: 'hospital',
+      laboratory: 'laboratory',
+      imaging: 'imaging',
+      pharmacy: 'pharmacist',
+      ambulance: 'ambulance',
+    };
+    const backendRole = roleMap[role] || 'patient';
+
+    // Generate username from email (remove domain)
+    const username = email.split('@')[0] || name.toLowerCase().replace(/\s+/g, '.');
+
+    const response = await authApi.register({
+      email,
+      password,
+      username,
+      first_name: firstName,
+      last_name: lastName,
+      role: backendRole,
+      phone: phone || undefined,
+      address: address || undefined,
+      city: city || undefined,
+      state: state || undefined,
+      zip_code: zipCode || undefined,
+      license_number: role === 'patient' ? undefined : licenseNumber,
+      license_state: role === 'patient' ? undefined : licenseState,
+      specialty: role === 'patient' ? undefined : specialty,
+    });
+
+    // Backend now sets cookies automatically, no tokens in response
+    if (isApiUser(response.user)) {
+      setUser(mapBackendUser(response.user));
+      void loadAccessibleUsers();
     }
   }, [loadAccessibleUsers]);
 
@@ -261,6 +248,9 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       date_of_birth: profile.dateOfBirth,
       bio: profile.bio,
       profile_image_url: profile.avatar,
+      notification_email: profile.notificationEmail,
+      notification_sms: profile.notificationSms,
+      privacy_public_profile: profile.privacyPublicProfile,
     });
 
     if (isApiUser(response)) {
@@ -305,8 +295,6 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   }, [user, updateProfile]);
 
   const refreshCurrentUser = useCallback(async () => {
-    if (!getAccessToken()) return null;
-
     try {
       const userData = await authApi.getCurrentUser();
       if (isApiUser(userData)) {
@@ -394,10 +382,10 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     return (
       <AuthContext.Provider value={{
         user,
-        // During initialization `user` may still be null, but we can still consider
-        // the session authenticated if we have a token. This prevents ProtectedRoute
-        // from bouncing feature routes through /login.
-        isAuthenticated: Boolean(getAccessToken()),
+        // During initialization `user` may still be null, but we want to avoid
+        // redirecting protected routes before auth initialization completes.
+        isAuthenticated: true,
+        isLoading,
         login,
         signup,
         logout,
@@ -421,6 +409,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     <AuthContext.Provider value={{ 
       user, 
       isAuthenticated: !!user, 
+      isLoading,
       login, 
       signup, 
       logout, 

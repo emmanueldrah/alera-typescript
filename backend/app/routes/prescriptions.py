@@ -107,6 +107,15 @@ async def create_prescription(
         description=f"Created prescription {loaded.id} for patient {loaded.patient_id}",
         status="created",
     )
+
+    # Send prescription notification to patient
+    from app.utils.notification_utils import NotificationManager
+    await NotificationManager.send_prescription_notification(
+        user=patient,
+        medication_name=loaded.medication_name,
+        provider_name=_display_name(loaded.provider),
+    )
+
     return serialize_prescription(loaded)
 
 

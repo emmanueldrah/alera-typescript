@@ -126,6 +126,9 @@ export const authApi = {
     zip_code?: string;
     bio?: string;
     profile_image_url?: string;
+    notification_email?: boolean;
+    notification_sms?: boolean;
+    privacy_public_profile?: boolean;
     specialization?: string;
   }) => {
     const response = await apiClient.put('/users/me', userData);
@@ -209,6 +212,9 @@ export const usersApi = {
     zip_code?: string;
     bio?: string;
     profile_image_url?: string;
+    notification_email?: boolean;
+    notification_sms?: boolean;
+    privacy_public_profile?: boolean;
     specialization?: string;
   }) => {
     const response = await apiClient.put('/users/me', userData);

@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { motion } from 'framer-motion';
 import { useAuth } from '@/contexts/useAuth';
 import { Button } from '@/components/ui/button';
@@ -68,6 +68,22 @@ const ProfilePage = () => {
   // Privacy State
   const [publicProfile, setPublicProfile] = useState(profile?.privacyPublicProfile ?? false);
 
+  useEffect(() => {
+    if (!profile) return;
+    setFirstName(profile.firstName || '');
+    setLastName(profile.lastName || '');
+    setAvatar(profile.avatar || '');
+    setPhone(profile.phone || '');
+    setAddress(profile.address || '');
+    setCity(profile.city || '');
+    setState(profile.state || '');
+    setZipCode(profile.zipCode || '');
+    setBio(profile.bio || '');
+    setNotifEmail(profile.notificationEmail ?? true);
+    setNotifSms(profile.notificationSms ?? false);
+    setPublicProfile(profile.privacyPublicProfile ?? false);
+  }, [profile]);
+
   // Delete Account State
   const [deletePassword, setDeletePassword] = useState('');
   const [showDeletePassword, setShowDeletePassword] = useState(false);
@@ -113,7 +129,7 @@ const ProfilePage = () => {
     setError('');
     
     // Phone validation if provided
-    if (phone.trim() && !/^\+?[\d\s\-\(\)]{10,}$/.test(phone.trim())) {
+    if (phone.trim() && !/^\+?[\d\s\-()]{10,}$/.test(phone.trim())) {
       setError('Please enter a valid phone number');
       return;
     }

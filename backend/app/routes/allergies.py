@@ -195,6 +195,15 @@ async def create_allergy(
         description=f"Created allergy for patient {loaded.patient_id}",
         status="created",
     )
+
+    # Send allergy alert notification to patient
+    from app.utils.notification_utils import NotificationManager
+    await NotificationManager.send_allergy_alert(
+        user=patient,
+        allergen=loaded.allergen,
+        severity=loaded.severity,
+    )
+
     return allergy_to_response(loaded)
 
 

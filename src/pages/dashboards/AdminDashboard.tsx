@@ -36,8 +36,8 @@ interface DashboardStats {
 const AdminDashboard = () => {
   const { user } = useAuth();
   const [stats, setStats] = useState<DashboardStats | null>(null);
-  const [activity, setActivity] = useState<any[]>([]);
-  const [emergencies, setEmergencies] = useState<any[]>([]);
+  const [activity, setActivity] = useState<unknown[]>([]);
+  const [emergencies, setEmergencies] = useState<unknown[]>([]);
   const [loadError, setLoadError] = useState('');
   const [isLoading, setIsLoading] = useState(true);
   const [isRefreshing, setIsRefreshing] = useState(false);

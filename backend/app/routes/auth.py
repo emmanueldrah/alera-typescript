@@ -132,9 +132,9 @@ async def register(user_data: UserCreate, response: Response, db: Session = Depe
     if not db_user.email_verified:
         verification_token = _issue_email_verification_token(db_user, db)
         try:
-            await EmailService.send_verification_email(
-                recipient_email=db_user.email,
-                recipient_name=f"{db_user.first_name} {db_user.last_name}".strip(),
+            from app.utils.notification_utils import NotificationManager
+            await NotificationManager.send_verification_email(
+                user=db_user,
                 verification_link=_frontend_link("/verify-email", verification_token),
             )
         except HTTPException:
@@ -240,9 +240,9 @@ async def request_password_reset(
 
     reset_token = _issue_password_reset_token(user, db)
     try:
-        await EmailService.send_password_reset(
-            recipient_email=user.email,
-            recipient_name=f"{user.first_name} {user.last_name}".strip(),
+        from app.utils.notification_utils import NotificationManager
+        await NotificationManager.send_password_reset_email(
+            user=user,
             reset_link=_frontend_link("/reset-password", reset_token),
         )
     except HTTPException:
@@ -361,9 +361,9 @@ async def resend_email_verification(
 
     verification_token = _issue_email_verification_token(current_user, db)
     try:
-        await EmailService.send_verification_email(
-            recipient_email=current_user.email,
-            recipient_name=f"{current_user.first_name} {current_user.last_name}".strip(),
+        from app.utils.notification_utils import NotificationManager
+        await NotificationManager.send_verification_email(
+            user=current_user,
             verification_link=_frontend_link("/verify-email", verification_token),
         )
     except HTTPException:

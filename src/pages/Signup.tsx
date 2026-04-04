@@ -47,15 +47,15 @@ const Signup = () => {
     
     // Password validation
     if (password.trim().length < 8) { setError('Password must be at least 8 characters.'); return; }
-    if (!/(?=.*[a-z])(?=.*[A-Z])(?=.*\d)/.test(password)) { 
-      setError('Password must contain at least one uppercase letter, one lowercase letter, and one number'); 
-      return; 
+    if (!/(?=.*[a-z])(?=.*[A-Z])(?=.*\d)/.test(password)) {
+      setError('Password must contain at least one uppercase letter, one lowercase letter, and one number');
+      return;
     }
     
     // Phone validation (optional but if provided, must be valid)
-    if (phone.trim() && !/^\+?[\d\s\-\(\)]{10,}$/.test(phone.trim())) {
-      setError('Please enter a valid phone number'); 
-      return; 
+    if (phone.trim() && !/^\+?[\d\s\-()]{10,}$/.test(phone.trim())) {
+      setError('Please enter a valid phone number');
+      return;
     }
     
     // Professional account validations
