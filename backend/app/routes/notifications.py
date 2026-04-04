@@ -3,11 +3,34 @@ from sqlalchemy.orm import Session
 from database import get_db
 from app.models.notification import Notification
 from app.models.user import User
-from app.schemas import NotificationResponse
+from app.schemas import NotificationCreate, NotificationResponse
 from app.utils.dependencies import get_current_user
 from app.utils.time import utcnow
 
 router = APIRouter(prefix="/api/notifications", tags=["notifications"])
+
+
+@router.post("/", response_model=NotificationResponse, status_code=status.HTTP_201_CREATED)
+async def create_notification(
+    body: NotificationCreate,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    """Create a notification for the current user."""
+
+    notification = Notification(
+        user_id=current_user.id,
+        title=body.title,
+        message=body.message,
+        notification_type=body.notification_type,
+        related_id=body.related_id,
+        related_type=body.related_type,
+        action_url=body.action_url,
+    )
+    db.add(notification)
+    db.commit()
+    db.refresh(notification)
+    return notification
 
 
 @router.get("/", response_model=list[NotificationResponse])
@@ -155,6 +178,18 @@ async def delete_notification(
     db.commit()
     
     return {"message": "Notification deleted"}
+
+
+@router.delete("/", status_code=status.HTTP_204_NO_CONTENT)
+async def delete_all_notifications(
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    """Delete all notifications for the current user."""
+
+    db.query(Notification).filter(Notification.user_id == current_user.id).delete(synchronize_session=False)
+    db.commit()
+    return None
 
 
 @router.put("/mark-all/read")

@@ -1,7 +1,7 @@
 import React, { useState, useCallback, useEffect } from 'react';
 import { clearAleraStorage } from '@/lib/storageKeys';
 import { AuthContext } from './auth-context';
-import { authApi, type ApiUser } from '@/lib/apiService';
+import { authApi, usersApi, type ApiUser } from '@/lib/apiService';
 import { setTokens, getAccessToken, clearTokens } from '@/lib/apiClient';
 
 export type UserRole =
@@ -112,7 +112,26 @@ const mapBackendUser = (data: ApiUser): User => {
 
 export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const [user, setUser] = useState<User | null>(null);
+  const [users, setUsers] = useState<User[]>([]);
   const [isLoading, setIsLoading] = useState(true);
+
+  const loadAccessibleUsers = useCallback(async () => {
+    if (!getAccessToken()) {
+      setUsers([]);
+      return [];
+    }
+
+    try {
+      const response = await usersApi.getAccessibleUsers();
+      const mapped = Array.isArray(response) ? response.filter(isApiUser).map(mapBackendUser) : [];
+      setUsers(mapped);
+      return mapped;
+    } catch (error) {
+      console.error('Failed to load accessible users:', error);
+      setUsers([]);
+      return [];
+    }
+  }, []);
 
   // Initialize auth state from stored token
   useEffect(() => {
@@ -159,11 +178,12 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         throw new Error('Login response did not include a valid user');
       }
       setUser(mapBackendUser(userData));
+      void loadAccessibleUsers();
     } catch (error) {
       clearTokens();
       throw error;
     }
-  }, []);
+  }, [loadAccessibleUsers]);
 
   const signup = useCallback(async (
     name: string,
@@ -210,12 +230,13 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       setTokens(access_token, refresh_token);
       if (isApiUser(userData)) {
         setUser(mapBackendUser(userData));
+        void loadAccessibleUsers();
       }
     } catch (error) {
       clearTokens();
       throw error;
     }
-  }, []);
+  }, [loadAccessibleUsers]);
 
   const logout = useCallback(async () => {
     try {
@@ -225,6 +246,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     } finally {
       clearTokens();
       setUser(null);
+      setUsers([]);
     }
   }, []);
 
@@ -291,6 +313,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       if (isApiUser(userData)) {
         const updatedUser = mapBackendUser(userData);
         setUser(updatedUser);
+        void loadAccessibleUsers();
         return updatedUser;
       }
       return null;
@@ -308,7 +331,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
       return null;
     }
-  }, []);
+  }, [loadAccessibleUsers]);
 
   const deleteAccount = useCallback(async (password: string) => {
     if (!user) throw new Error('No user logged in');
@@ -327,6 +350,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     clearAleraStorage();
     clearTokens();
     setUser(null);
+    setUsers([]);
   }, []);
 
   // Mock functions for backward compatibility - to be replaced by API calls
@@ -334,10 +358,16 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     throw new Error('Use signup instead');
   }, []);
 
-  const getUsers = useCallback((): User[] => {
-    console.warn('getUsers is deprecated. Use proper API endpoints.');
-    return [];
-  }, []);
+  const getUsers = useCallback((): User[] => users, [users]);
+
+  useEffect(() => {
+    if (!user) {
+      setUsers([]);
+      return;
+    }
+
+    void loadAccessibleUsers();
+  }, [loadAccessibleUsers, user]);
 
   useEffect(() => {
     const syncUser = () => {

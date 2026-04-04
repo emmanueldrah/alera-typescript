@@ -5,7 +5,7 @@ from fastapi.responses import JSONResponse
 import os
 from config import settings
 from database import init_db
-from app.routes import auth, users, appointments, prescriptions, allergies, notifications, telemedicine, admin, documents, consents, reminders_templates, audit, lab_tests, imaging, ambulance, referrals
+from app.routes import auth, users, appointments, prescriptions, allergies, notifications, telemedicine, admin, documents, consents, reminders_templates, audit, lab_tests, imaging, ambulance, referrals, records
 
 # Create FastAPI app
 app = FastAPI(
@@ -49,6 +49,7 @@ app.include_router(lab_tests.router)
 app.include_router(imaging.router)
 app.include_router(ambulance.router)
 app.include_router(referrals.router)
+app.include_router(records.router)
 
 
 @app.on_event("startup")

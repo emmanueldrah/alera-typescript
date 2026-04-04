@@ -17,6 +17,7 @@ from .additional_features import (
     SMSTemplate,
     DocumentType,
 )
+from .structured_record import StructuredRecord
 
 __all__ = [
     "User",
@@ -44,6 +45,7 @@ __all__ = [
     "EmailTemplate",
     "SMSTemplate",
     "DocumentType",
+    "StructuredRecord",
 ]
 
 import sys

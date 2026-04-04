@@ -1,9 +1,8 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import type { AmbulanceRequest, Appointment, ImagingScan, LabTest, Prescription, VitalSigns, HealthMetric, InventoryItem, AmbulanceVehicle, Referral, ProviderVerification, PatientAllergy, PatientMedicalHistory, PatientConsent, DrugInteraction, ClinicalNote, PatientProblem, MedicationAdherence, ProviderPricing, ServiceCharge, Invoice, BillingRecord, AppointmentReminder } from '@/data/mockData';
-import { ambulances as mockAmbulances, inventoryItems as mockInventoryItems, referrals as mockReferrals, providerVerifications as mockVerifications, drugInteractionDatabase as mockDrugInteractions, patientAllergies as mockAllergies, medicalHistories as mockMedicalHistories, patientConsents as mockConsents } from '@/data/mockData';
-import { getAppDataStorageKey, storageKeys } from '@/lib/storageKeys';
+import { drugInteractionDatabase as mockDrugInteractions } from '@/data/mockData';
 import { AppDataContext, type AppDataContextType } from './app-data-context';
-import { appointmentsApi, prescriptionsApi, allergiesApi, api, referralsApi } from '@/lib/apiService';
+import { appointmentsApi, prescriptionsApi, allergiesApi, api, referralsApi, recordsApi, ambulanceApi } from '@/lib/apiService';
 import { useAuth } from './useAuth';
 import { buildScheduledIso } from '@/lib/appointmentUtils';
 import { getReferralDepartmentId } from '@/lib/referralUtils';
@@ -117,21 +116,6 @@ const emptyData: StoredAppData = {
   appointmentReminders: [],
 };
 
-const safeParse = (raw: string | null): StoredAppData => {
-  if (!raw) {
-    return { ...emptyData };
-  }
-  try {
-    const parsed = JSON.parse(raw) as StoredAppData;
-    return { ...emptyData, ...parsed };
-  } catch {
-    return { ...emptyData };
-  }
-};
-
-// No-op - moved import to top
-
-
 type BackendLabTest = {
   id: number;
   test_name: string;
@@ -185,6 +169,42 @@ type BackendReferral = {
   updated_at: string;
   patient_name?: string | null;
   from_doctor_name?: string | null;
+};
+
+type BackendAmbulanceRequest = {
+  id: number;
+  patient_id?: number | null;
+  location_name: string;
+  address?: string | null;
+  latitude?: number | null;
+  longitude?: number | null;
+  description?: string | null;
+  status: string;
+  priority: string;
+  requested_at: string;
+  dispatched_at?: string | null;
+  completed_at?: string | null;
+};
+
+type StructuredRecordRow<T> = {
+  id: string;
+  record_type: string;
+  patient_id?: number | null;
+  provider_id?: number | null;
+  created_by?: number | null;
+  appointment_id?: number | null;
+  status?: string | null;
+  payload: T;
+  created_at: string;
+  updated_at: string;
+};
+
+type PrescriptionRefillRequest = {
+  id: string;
+  prescriptionId: string;
+  requestDate: string;
+  status: 'pending' | 'approved' | 'dispensed';
+  dispensedDate?: string;
 };
 
 const mapBackendStatus = (raw?: string): Appointment['status'] => {
@@ -347,6 +367,30 @@ const mapBackendReferral = (r: BackendReferral): Referral => {
   };
 };
 
+const mapBackendAmbulanceRequest = (request: BackendAmbulanceRequest, fallbackPatientName?: string): AmbulanceRequest => ({
+  id: String(request.id),
+  patientName: fallbackPatientName || `Patient #${request.patient_id ?? 'unknown'}`,
+  patientId: String(request.patient_id ?? ''),
+  location: request.location_name || request.address || 'Unknown location',
+  date: (request.requested_at || '').slice(0, 10),
+  time: (request.requested_at || '').slice(11, 16),
+  status: (() => {
+    const status = (request.status || 'requested').toLowerCase();
+    if (status === 'dispatched') return 'dispatched';
+    if (status === 'completed') return 'completed';
+    if (status === 'en_route') return 'en-route';
+    return 'requested';
+  })(),
+  priority: (() => {
+    const priority = (request.priority || 'medium').toLowerCase();
+    if (priority === 'critical') return 'critical';
+    if (priority === 'high') return 'high';
+    if (priority === 'low') return 'low';
+    return 'medium';
+  })(),
+  vehicleId: undefined,
+});
+
 const labStatusToApi = (s: LabTest['status']): string => {
   if (s === 'requested') return 'ordered';
   if (s === 'in-progress') return 'processing';
@@ -386,9 +430,78 @@ const imagingPayloadFromDelta = (prev: ImagingScan, next: ImagingScan): Record<s
   return p;
 };
 
+const unwrapRecordPayloads = <T,>(items: Array<{ payload: T }>): T[] => items.map((item) => item.payload);
+
+const loadStructuredPayloads = async <T extends { id?: string }>(recordType: string): Promise<T[]> => {
+  try {
+    const response = await recordsApi.listRecords<T>(recordType, { skip: 0, limit: 500 });
+    return getListPayload<StructuredRecordRow<T>>(response).map((record) => {
+      const payload = record.payload;
+      if (payload && typeof payload === 'object') {
+        return {
+          ...payload,
+          id: String((payload as { id?: string }).id ?? record.id),
+        } as T;
+      }
+      return payload;
+    });
+  } catch (error) {
+    console.error(`Failed to load structured records for ${recordType}:`, error);
+    return [];
+  }
+};
+
+const createReminderFlags = (appointments: Appointment[], reminders: AppointmentReminder[]): Appointment[] => {
+  const reminderMap = new Map<string, AppointmentReminder[]>();
+  reminders.forEach((reminder) => {
+    const bucket = reminderMap.get(reminder.appointmentId) ?? [];
+    bucket.push(reminder);
+    reminderMap.set(reminder.appointmentId, bucket);
+  });
+
+  return appointments.map((appointment) => {
+    const appointmentReminders = reminderMap.get(appointment.id) ?? [];
+    return {
+      ...appointment,
+      reminder24hSent: appointmentReminders.some((reminder) => reminder.reminderType === '24h' && reminder.status !== 'pending'),
+      reminder1hSent: appointmentReminders.some((reminder) => reminder.reminderType === '1h' && reminder.status !== 'pending'),
+      reminder15mSent: appointmentReminders.some((reminder) => reminder.reminderType === '15m' && reminder.status !== 'pending'),
+    };
+  });
+};
+
+const attachPrescriptionRefills = (
+  prescriptions: Prescription[],
+  refillRequests: PrescriptionRefillRequest[],
+): Prescription[] => {
+  const grouped = new Map<string, PrescriptionRefillRequest[]>();
+  refillRequests.forEach((request) => {
+    const bucket = grouped.get(request.prescriptionId) ?? [];
+    bucket.push(request);
+    grouped.set(request.prescriptionId, bucket);
+  });
+
+  return prescriptions.map((prescription) => {
+    const total = prescription.refillsAllowed ?? prescription.refillsUsed ?? 0;
+    const used = prescription.refillsUsed ?? Math.max(0, total - (prescription.refillsAllowed ?? total));
+    return {
+      ...prescription,
+      refillsAllowed: total,
+      refillsUsed: used,
+      refillRequests: grouped.get(prescription.id) ?? [],
+    };
+  });
+};
+
+type StructuredRecordScope = {
+  patient_id?: number | null;
+  provider_id?: number | null;
+  appointment_id?: number | null;
+  status?: string | null;
+};
+
 export const AppDataProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
-  const { user } = useAuth();
-  const storageKey = user ? getAppDataStorageKey(user.email) : storageKeys.appData;
+  const { user, getUsers } = useAuth();
 
   const [data, setData] = useState<StoredAppData>(emptyData);
   const [isLoadingAPI, setIsLoadingAPI] = useState(true);
@@ -397,104 +510,196 @@ export const AppDataProvider: React.FC<{ children: React.ReactNode }> = ({ child
     dataRef.current = data;
   }, [data]);
 
-  // Load data from API
   const loadAPIData = useCallback(async (isPolling = false) => {
-    try {
-      const stored = safeParse(localStorage.getItem(storageKey));
-      const token = localStorage.getItem('access_token');
-      if (!token) {
-        if (!isPolling) {
-          setIsLoadingAPI(false);
-          setData(stored);
-        }
-        return;
+    if (!user) {
+      if (!isPolling) {
+        setData(emptyData);
+        setIsLoadingAPI(false);
       }
+      return;
+    }
 
-      const [appointmentsRes, prescriptionsRes, allergiesRes, labRes, imagingRes, referralsRes] = await Promise.allSettled([
-        appointmentsApi.listAppointments(0, 100),
-        prescriptionsApi.listPrescriptions(0, 100),
-        allergiesApi.listAllergies({ skip: 0, limit: 200 }),
-        api.labTests.listLabTests(0, 100),
-        api.imaging.listImagingScans(0, 100),
-        referralsApi.listReferrals(0, 200),
+    try {
+      const [
+        appointmentsRaw,
+        prescriptionsRaw,
+        allergiesRaw,
+        labRaw,
+        imagingRaw,
+        referralsRaw,
+        ambulanceRaw,
+        vitalSigns,
+        healthMetrics,
+        inventoryItems,
+        ambulances,
+        patientConsents,
+        medicalHistories,
+        clinicalNotes,
+        patientProblems,
+        medicationAdherence,
+        providerPricing,
+        serviceCharges,
+        invoices,
+        billingRecords,
+        appointmentReminders,
+        prescriptionRefillRequests,
+      ] = await Promise.all([
+        appointmentsApi.listAppointments(0, 200).catch(() => []),
+        prescriptionsApi.listPrescriptions(0, 200).catch(() => []),
+        allergiesApi.listAllergies({ skip: 0, limit: 200 }).catch(() => []),
+        api.labTests.listLabTests(0, 200).catch(() => []),
+        api.imaging.listImagingScans(0, 200).catch(() => []),
+        referralsApi.listReferrals(0, 200).catch(() => []),
+        ambulanceApi.listRequests(0, 200).catch(() => []),
+        loadStructuredPayloads<VitalSigns>('vital_sign'),
+        loadStructuredPayloads<HealthMetric>('health_metric'),
+        loadStructuredPayloads<InventoryItem>('inventory_item'),
+        loadStructuredPayloads<AmbulanceVehicle>('ambulance_vehicle'),
+        loadStructuredPayloads<PatientConsent>('patient_consent'),
+        loadStructuredPayloads<PatientMedicalHistory>('medical_history'),
+        loadStructuredPayloads<ClinicalNote>('clinical_note'),
+        loadStructuredPayloads<PatientProblem>('patient_problem'),
+        loadStructuredPayloads<MedicationAdherence>('medication_adherence'),
+        loadStructuredPayloads<ProviderPricing>('provider_pricing'),
+        loadStructuredPayloads<ServiceCharge>('service_charge'),
+        loadStructuredPayloads<Invoice>('invoice'),
+        loadStructuredPayloads<BillingRecord>('billing_record'),
+        loadStructuredPayloads<AppointmentReminder>('appointment_reminder'),
+        loadStructuredPayloads<PrescriptionRefillRequest>('prescription_refill_request'),
       ]);
 
-      const appointments = appointmentsRes.status === 'fulfilled'
-        ? getListPayload<BackendAppointment>(appointmentsRes.value).map(mapBackendAppointment)
-        : [];
+      const appointments = createReminderFlags(
+        getListPayload<BackendAppointment>(appointmentsRaw).map(mapBackendAppointment),
+        appointmentReminders,
+      );
 
-      const prescriptions = prescriptionsRes.status === 'fulfilled'
-        ? getListPayload<BackendPrescription>(prescriptionsRes.value).map(mapBackendPrescription)
-        : [];
+      const prescriptions = attachPrescriptionRefills(
+        getListPayload<BackendPrescription>(prescriptionsRaw).map(mapBackendPrescription),
+        prescriptionRefillRequests,
+      );
 
-      const patientAllergies = allergiesRes.status === 'fulfilled'
-        ? getListPayload<BackendAllergy>(allergiesRes.value).map(mapBackendAllergy)
-        : [];
+      const patientAllergies = getListPayload<BackendAllergy>(allergiesRaw).map(mapBackendAllergy);
+      const labTests = getListPayload<BackendLabTest>(labRaw).map(mapBackendLabTest);
+      const imagingScans = getListPayload<BackendImagingScan>(imagingRaw).map(mapBackendImagingScan);
+      const referrals = getListPayload<BackendReferral>(referralsRaw).map(mapBackendReferral);
+      const ambulanceRequests = getListPayload<BackendAmbulanceRequest>(ambulanceRaw).map((request) => {
+        const patient = getUsers().find((account) => account.id === String(request.patient_id));
+        return mapBackendAmbulanceRequest(request, patient?.name);
+      });
 
-      const labTests = labRes.status === 'fulfilled'
-        ? getListPayload<BackendLabTest>(labRes.value).map(mapBackendLabTest)
-        : [];
-
-      const imagingScans = imagingRes.status === 'fulfilled'
-        ? getListPayload<BackendImagingScan>(imagingRes.value).map(mapBackendImagingScan)
-        : [];
-
-      const referrals = referralsRes.status === 'fulfilled'
-        ? getListPayload<BackendReferral>(referralsRes.value).map(mapBackendReferral)
-        : stored.referrals;
-
-      setData((current) => ({
-        ...current,
+      setData({
+        ...emptyData,
         appointments,
         prescriptions,
-        patientAllergies,
         labTests,
         imagingScans,
+        ambulanceRequests,
+        vitalSigns,
+        healthMetrics,
+        inventoryItems,
+        ambulances,
         referrals,
-        // These may be local-only for now; keep what we already had cached for this user.
-        ambulances: stored.ambulances,
-        inventoryItems: stored.inventoryItems,
-        providerVerifications: stored.providerVerifications,
-      }));
+        patientAllergies,
+        medicalHistories,
+        patientConsents,
+        clinicalNotes,
+        patientProblems,
+        medicationAdherence,
+        providerPricing,
+        serviceCharges,
+        invoices,
+        billingRecords,
+        appointmentReminders,
+        providerVerifications: [],
+      });
     } catch (error) {
       if (!isPolling) console.error('Failed to load API data:', error);
     } finally {
       if (!isPolling) setIsLoadingAPI(false);
     }
-  }, [storageKey]);
+  }, [getUsers, user]);
 
   const refreshAppData = useCallback(async () => {
     await loadAPIData(true);
   }, [loadAPIData]);
 
-  // Initial load and polling
-  useEffect(() => {
-    loadAPIData();
+  const upsertStructuredRecord = useCallback(async <T extends { id: string }>(
+    recordType: string,
+    entity: T,
+    collectionKey: keyof StoredAppData,
+    scope: StructuredRecordScope = {},
+  ) => {
+    const collection = dataRef.current[collectionKey];
+    const exists = Array.isArray(collection) && collection.some((item) => typeof item === 'object' && item !== null && String((item as { id?: string }).id) === entity.id);
 
-    const interval = setInterval(() => {
-      loadAPIData(true);
-    }, 30000); // Poll every 30 seconds for real-time updates
-
-    const handleStorage = (event: StorageEvent) => {
-      if (event.key !== 'access_token') return;
-      loadAPIData(); // Reload data if auth changes
+    const payload = {
+      id: entity.id,
+      record_type: recordType,
+      patient_id: scope.patient_id ?? null,
+      provider_id: scope.provider_id ?? null,
+      appointment_id: scope.appointment_id ?? null,
+      status: scope.status ?? null,
+      payload: entity,
     };
 
-    window.addEventListener('storage', handleStorage);
+    if (exists) {
+      await recordsApi.updateRecord(entity.id, payload);
+    } else {
+      await recordsApi.createRecord(payload);
+    }
+
+    await loadAPIData(true);
+  }, [loadAPIData]);
+
+  const updateStructuredRecord = useCallback(async <T extends { id: string }>(
+    recordType: string,
+    entity: T,
+    collectionKey: keyof StoredAppData,
+    scope: StructuredRecordScope = {},
+  ) => {
+    const collection = dataRef.current[collectionKey];
+    const exists = Array.isArray(collection) && collection.some((item) => typeof item === 'object' && item !== null && String((item as { id?: string }).id) === entity.id);
+
+    const payload = {
+      patient_id: scope.patient_id ?? null,
+      provider_id: scope.provider_id ?? null,
+      appointment_id: scope.appointment_id ?? null,
+      status: scope.status ?? null,
+      payload: entity,
+    };
+
+    if (exists) {
+      await recordsApi.updateRecord(entity.id, payload);
+    } else {
+      await recordsApi.createRecord({
+        id: entity.id,
+        record_type: recordType,
+        ...payload,
+      });
+    }
+
+    await loadAPIData(true);
+  }, [loadAPIData]);
+
+  useEffect(() => {
+    let active = true;
+    void loadAPIData();
+
+    const interval = window.setInterval(() => {
+      if (active) {
+        void loadAPIData(true);
+      }
+    }, 30000);
+
     return () => {
-      clearInterval(interval);
-      window.removeEventListener('storage', handleStorage);
+      active = false;
+      window.clearInterval(interval);
     };
   }, [loadAPIData]);
 
-
   const updateData = useCallback((updater: (current: StoredAppData) => StoredAppData) => {
-    setData((current) => {
-      const next = updater(current);
-      localStorage.setItem(storageKey, JSON.stringify(next));
-      return next;
-    });
-  }, [storageKey]);
+    setData((current) => updater(current));
+  }, []);
 
   const contextValue = useMemo<AppDataContextType>(() => ({
     appointments: data.appointments,
@@ -520,11 +725,128 @@ export const AppDataProvider: React.FC<{ children: React.ReactNode }> = ({ child
     billingRecords: data.billingRecords,
     drugInteractionDatabase: mockDrugInteractions,
     
-    addAppointment: (appointment) => updateData((current) => ({ ...current, appointments: [appointment, ...current.appointments] })),
-    updateAppointment: (id, update) => updateData((current) => ({
-      ...current,
-      appointments: current.appointments.map((appointment) => appointment.id === id ? update(appointment) : appointment),
-    })),
+    addAppointment: (appointment) => {
+      void (async () => {
+        try {
+          await appointmentsApi.createAppointment({
+            provider_id: Number(appointment.doctorId),
+            title: appointment.type,
+            description: appointment.notes,
+            appointment_type: appointment.appointmentMode === 'telemedicine' ? 'telehealth' : 'in_person',
+            scheduled_time: buildScheduledIso(appointment.date, appointment.time),
+            duration_minutes: 30,
+            location: appointment.appointmentMode === 'in-person' ? appointment.notes : undefined,
+            notes: appointment.notes,
+          });
+          await loadAPIData(true);
+        } catch (error) {
+          console.error('addAppointment failed:', error);
+        }
+      })();
+    },
+    updateAppointment: (id, update) => {
+      void (async () => {
+        const prev = dataRef.current.appointments.find((appointment) => appointment.id === id);
+        if (!prev) return;
+        const next = update(prev);
+
+        const payload: Record<string, unknown> = {};
+        if (next.type !== prev.type) payload.title = next.type;
+        if (next.notes !== prev.notes) payload.notes = next.notes ?? null;
+        if (next.date !== prev.date || next.time !== prev.time) {
+          payload.scheduled_time = buildScheduledIso(next.date, next.time);
+        }
+        if (next.status !== prev.status) {
+          payload.status = next.status === 'confirmed-by-doctor' ? 'confirmed' : next.status;
+        }
+        if (next.notes !== prev.notes) payload.description = next.notes ?? null;
+        if (next.appointmentMode !== prev.appointmentMode) {
+          payload.appointment_type = next.appointmentMode === 'telemedicine' ? 'telehealth' : 'in_person';
+        }
+
+        try {
+          if (Object.keys(payload).length > 0) {
+            await appointmentsApi.updateAppointment(id, payload as Parameters<typeof appointmentsApi.updateAppointment>[1]);
+          }
+
+          const reminderOps: Promise<unknown>[] = [];
+          const reminderBase = {
+            appointmentId: id,
+            patientId: next.patientId,
+            patientName: next.patientName,
+            doctorId: next.doctorId,
+            doctorName: next.doctorName,
+            appointmentDate: next.date,
+            appointmentTime: next.time,
+            appointmentMode: next.appointmentMode,
+            message: `Reminder: You have an appointment with ${next.doctorName} on ${next.date} at ${next.time}.`,
+            notificationMethod: 'in-app' as const,
+          };
+
+          if (!prev.reminder24hSent && next.reminder24hSent) {
+            reminderOps.push(recordsApi.createRecord<AppointmentReminder>({
+              id: `reminder-${id}-24h`,
+              record_type: 'appointment_reminder',
+              patient_id: Number(next.patientId),
+              provider_id: Number(next.doctorId),
+              appointment_id: Number(id),
+              status: 'sent',
+              payload: {
+                ...reminderBase,
+                id: `reminder-${id}-24h`,
+                reminderType: '24h',
+                status: 'sent',
+                sentAt: new Date().toISOString(),
+              },
+            }));
+          }
+
+          if (!prev.reminder1hSent && next.reminder1hSent) {
+            reminderOps.push(recordsApi.createRecord<AppointmentReminder>({
+              id: `reminder-${id}-1h`,
+              record_type: 'appointment_reminder',
+              patient_id: Number(next.patientId),
+              provider_id: Number(next.doctorId),
+              appointment_id: Number(id),
+              status: 'sent',
+              payload: {
+                ...reminderBase,
+                id: `reminder-${id}-1h`,
+                reminderType: '1h',
+                status: 'sent',
+                sentAt: new Date().toISOString(),
+              },
+            }));
+          }
+
+          if (!prev.reminder15mSent && next.reminder15mSent) {
+            reminderOps.push(recordsApi.createRecord<AppointmentReminder>({
+              id: `reminder-${id}-15m`,
+              record_type: 'appointment_reminder',
+              patient_id: Number(next.patientId),
+              provider_id: Number(next.doctorId),
+              appointment_id: Number(id),
+              status: 'sent',
+              payload: {
+                ...reminderBase,
+                id: `reminder-${id}-15m`,
+                reminderType: '15m',
+                status: 'sent',
+                sentAt: new Date().toISOString(),
+              },
+            }));
+          }
+
+          if (reminderOps.length > 0) {
+            await Promise.all(reminderOps);
+          }
+
+          await loadAPIData(true);
+        } catch (error) {
+          console.error('updateAppointment failed:', error);
+        }
+      })();
+    },
     cancelAppointment: (id, reason, cancelledBy) => {
       void (async () => {
         try {
@@ -565,20 +887,110 @@ export const AppDataProvider: React.FC<{ children: React.ReactNode }> = ({ child
     },
     refreshAppData,
     
-    addPrescription: (prescription) => updateData((current) => ({ ...current, prescriptions: [prescription, ...current.prescriptions] })),
-    updatePrescription: (id, update) => updateData((current) => ({
-      ...current,
-      prescriptions: current.prescriptions.map((prescription) => prescription.id === id ? update(prescription) : prescription),
-    })),
-    requestPrescriptionRefill: (prescriptionId) => updateData((current) => ({
-      ...current,
-      prescriptions: current.prescriptions.map((prescription) => {
-        if (prescription.id !== prescriptionId) return prescription;
-        const refillRequests = prescription.refillRequests ?? [];
-        const newRefill = { id: `refill-${Date.now()}`, requestDate: new Date().toISOString().split('T')[0], status: 'pending' as const };
-        return { ...prescription, refillRequests: [...refillRequests, newRefill] };
-      }),
-    })),
+    addPrescription: (prescription) => {
+      void (async () => {
+        try {
+          await prescriptionsApi.createPrescription({
+            patient_id: Number(prescription.patientId),
+            medication_name: prescription.medications[0]?.name || 'Medication',
+            dosage: prescription.medications[0]?.dosage || 'As directed',
+            dosage_unit: prescription.medications[0]?.dosage.split(' ').slice(1).join(' ') || 'unit',
+            frequency: prescription.medications[0]?.frequency || 'As directed',
+            route: 'oral',
+            instructions: prescription.medications[0]?.duration,
+            quantity: undefined,
+            refills: prescription.refillsAllowed ?? 0,
+            start_date: new Date(`${prescription.date}T00:00:00Z`).toISOString(),
+            end_date: undefined,
+          });
+          await loadAPIData(true);
+        } catch (error) {
+          console.error('addPrescription failed:', error);
+        }
+      })();
+    },
+    updatePrescription: (id, update) => {
+      void (async () => {
+        const prev = dataRef.current.prescriptions.find((prescription) => prescription.id === id);
+        if (!prev) return;
+        const next = update(prev);
+
+        const firstMedication = next.medications[0] ?? prev.medications[0];
+        const payload: Record<string, unknown> = {};
+        if (firstMedication?.name && firstMedication.name !== prev.medications[0]?.name) {
+          payload.medication_name = firstMedication.name;
+        }
+        if (firstMedication?.dosage && firstMedication.dosage !== prev.medications[0]?.dosage) {
+          payload.dosage = firstMedication.dosage;
+        }
+        if (firstMedication?.frequency && firstMedication.frequency !== prev.medications[0]?.frequency) {
+          payload.frequency = firstMedication.frequency;
+        }
+        if (firstMedication?.duration && firstMedication.duration !== prev.medications[0]?.duration) {
+          payload.instructions = firstMedication.duration;
+        }
+        if (next.status !== prev.status) {
+          payload.status = next.status;
+        }
+
+        const refillsAllowed = next.refillsAllowed ?? prev.refillsAllowed ?? 0;
+        const refillsUsed = next.refillsUsed ?? prev.refillsUsed ?? 0;
+        if (refillsAllowed !== (prev.refillsAllowed ?? 0)) payload.refills = refillsAllowed;
+        if (refillsUsed !== (prev.refillsUsed ?? 0)) payload.refills_remaining = Math.max(0, refillsAllowed - refillsUsed);
+
+        try {
+          if (Object.keys(payload).length > 0) {
+            await prescriptionsApi.updatePrescription(Number(id), payload);
+          }
+
+          const previousRefills = prev.refillRequests ?? [];
+          const nextRefills = next.refillRequests ?? [];
+          const refillUpdates = nextRefills.filter((refill) => {
+            const prior = previousRefills.find((item) => item.id === refill.id);
+            return !prior || prior.status !== refill.status || prior.dispensedDate !== refill.dispensedDate;
+          });
+
+          if (refillUpdates.length > 0) {
+            await Promise.all(refillUpdates.map((refill) => recordsApi.updateRecord(refill.id, {
+              payload: {
+                ...refill,
+                prescriptionId: id,
+              },
+            })));
+          }
+
+          await loadAPIData(true);
+        } catch (error) {
+          console.error('updatePrescription failed:', error);
+        }
+      })();
+    },
+    requestPrescriptionRefill: (prescriptionId) => {
+      void (async () => {
+        const prescription = dataRef.current.prescriptions.find((item) => item.id === prescriptionId);
+        if (!prescription) return;
+        const newRefill: PrescriptionRefillRequest = {
+          id: `refill-${Date.now()}`,
+          requestDate: new Date().toISOString().split('T')[0],
+          status: 'pending',
+        };
+        try {
+          await recordsApi.createRecord<PrescriptionRefillRequest>({
+            id: newRefill.id,
+            record_type: 'prescription_refill_request',
+            patient_id: Number(prescription.patientId),
+            provider_id: Number(prescription.doctorId),
+            payload: {
+              ...newRefill,
+              prescriptionId,
+            },
+          });
+          await loadAPIData(true);
+        } catch (error) {
+          console.error('requestPrescriptionRefill failed:', error);
+        }
+      })();
+    },
     
     addLabTest: (test) => {
       void (async () => {

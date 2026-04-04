@@ -39,6 +39,19 @@ export interface ApiListResponse<T> {
   items?: T[];
 }
 
+export interface StructuredRecordResponse<T = Record<string, unknown>> {
+  id: string;
+  record_type: string;
+  patient_id?: number | null;
+  provider_id?: number | null;
+  created_by?: number | null;
+  appointment_id?: number | null;
+  status?: string | null;
+  payload: T;
+  created_at: string;
+  updated_at: string;
+}
+
 /** Row from `GET /api/admin/users/` (matches backend UserResponse). */
 export interface AdminUserRow {
   id: number;
@@ -208,6 +221,11 @@ export const usersApi = {
     const response = await apiClient.get('/users/', { params: { skip, limit } });
     return response.data;
   },
+
+  getAccessibleUsers: async () => {
+    const response = await apiClient.get<ApiUser[]>('/users/accessible');
+    return response.data;
+  },
 };
 
 // ============================================================================
@@ -259,6 +277,53 @@ export const appointmentsApi = {
 
   deleteAppointment: async (appointmentId: string | number) => {
     const response = await apiClient.delete(`/appointments/${appointmentId}`);
+    return response.data;
+  },
+};
+
+// ============================================================================
+// AMBULANCE ENDPOINTS
+// ============================================================================
+
+export const ambulanceApi = {
+  createRequest: async (requestData: {
+    patient_id?: number;
+    location_name: string;
+    address?: string;
+    latitude?: number;
+    longitude?: number;
+    description?: string;
+    priority?: 'low' | 'medium' | 'high' | 'critical';
+  }) => {
+    const response = await apiClient.post('/ambulance/', requestData);
+    return response.data;
+  },
+
+  listRequests: async (skip: number = 0, limit: number = 100) => {
+    const response = await apiClient.get('/ambulance/', { params: { skip, limit } });
+    return response.data;
+  },
+
+  getRequest: async (requestId: string | number) => {
+    const response = await apiClient.get(`/ambulance/${requestId}`);
+    return response.data;
+  },
+
+  updateRequest: async (
+    requestId: string | number,
+    updateData: {
+      status?: string;
+      priority?: string;
+      dispatched_at?: string;
+      completed_at?: string;
+      location_name?: string;
+      address?: string;
+      latitude?: number;
+      longitude?: number;
+      description?: string;
+    },
+  ) => {
+    const response = await apiClient.put(`/ambulance/${requestId}`, updateData);
     return response.data;
   },
 };
@@ -397,6 +462,18 @@ export const medicalHistoryApi = {
 // ============================================================================
 
 export const notificationsApi = {
+  createNotification: async (notification: {
+    title: string;
+    message: string;
+    notification_type: string;
+    related_id?: number;
+    related_type?: string;
+    action_url?: string;
+  }) => {
+    const response = await apiClient.post('/notifications/', notification);
+    return response.data;
+  },
+
   listNotifications: async (skip: number = 0, limit: number = 20) => {
     const response = await apiClient.get('/notifications', { params: { skip, limit } });
     return response.data;
@@ -419,6 +496,11 @@ export const notificationsApi = {
 
   deleteNotification: async (notificationId: string) => {
     const response = await apiClient.delete(`/notifications/${notificationId}`);
+    return response.data;
+  },
+
+  deleteAllNotifications: async () => {
+    const response = await apiClient.delete('/notifications/');
     return response.data;
   },
 
@@ -498,11 +580,30 @@ export const messagingApi = {
   updateMessage: async (
     messageId: string,
     updateData: {
-      is_read?: boolean;
-      is_archived?: boolean;
+      is_read?: boolean | 'Y' | 'N';
+      is_archived?: boolean | 'Y' | 'N';
     }
   ) => {
-    const response = await apiClient.put(`/telemedicine/messages/${messageId}`, updateData);
+    const payload = {
+      ...updateData,
+      is_read:
+        updateData.is_read === undefined
+          ? undefined
+          : updateData.is_read === true
+            ? 'Y'
+            : updateData.is_read === false
+              ? 'N'
+              : updateData.is_read,
+      is_archived:
+        updateData.is_archived === undefined
+          ? undefined
+          : updateData.is_archived === true
+            ? 'Y'
+            : updateData.is_archived === false
+              ? 'N'
+              : updateData.is_archived,
+    };
+    const response = await apiClient.put(`/telemedicine/messages/${messageId}`, payload);
     return response.data;
   },
 
@@ -696,6 +797,57 @@ export const referralsApi = {
 };
 
 // ============================================================================
+// STRUCTURED RECORD ENDPOINTS
+// ============================================================================
+
+export const recordsApi = {
+  listRecords: async <T = Record<string, unknown>>(recordType: string, params?: {
+    skip?: number;
+    limit?: number;
+  }) => {
+    const response = await apiClient.get<{ total: number; items: StructuredRecordResponse<T>[] }>('/records/', {
+      params: {
+        record_type: recordType,
+        skip: params?.skip ?? 0,
+        limit: params?.limit ?? 100,
+      },
+    });
+    return response.data;
+  },
+
+  createRecord: async <T = Record<string, unknown>>(body: {
+    id?: string;
+    record_type: string;
+    patient_id?: number | null;
+    provider_id?: number | null;
+    created_by?: number | null;
+    appointment_id?: number | null;
+    status?: string | null;
+    payload: T;
+  }) => {
+    const response = await apiClient.post<StructuredRecordResponse<T>>('/records/', body);
+    return response.data;
+  },
+
+  updateRecord: async <T = Record<string, unknown>>(recordId: string, body: {
+    patient_id?: number | null;
+    provider_id?: number | null;
+    created_by?: number | null;
+    appointment_id?: number | null;
+    status?: string | null;
+    payload?: T;
+  }) => {
+    const response = await apiClient.put<StructuredRecordResponse<T>>(`/records/${recordId}`, body);
+    return response.data;
+  },
+
+  deleteRecord: async (recordId: string) => {
+    const response = await apiClient.delete(`/records/${recordId}`);
+    return response.data;
+  },
+};
+
+// ============================================================================
 // EXPORT ALL APIS
 // ============================================================================
 
@@ -713,4 +865,6 @@ export const api = {
   labTests: labTestsApi,
   imaging: imagingApi,
   referrals: referralsApi,
+  ambulance: ambulanceApi,
+  records: recordsApi,
 };

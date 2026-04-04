@@ -4,7 +4,7 @@ from database import get_db
 from app.models.user import User, UserRole
 from app.schemas import UserResponse, UserUpdate
 from app.utils.dependencies import get_current_user
-from app.utils.access import normalized_enum_text
+from app.utils.access import normalized_enum_text, provider_panel_patient_ids, is_workforce_role
 
 router = APIRouter(prefix="/api/users", tags=["users"])
 
@@ -60,6 +60,61 @@ async def list_doctors(
         User.is_verified.is_(True),
     ).all()
     return doctors
+
+
+@router.get("/accessible", response_model=list[UserResponse])
+async def list_accessible_users(
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    """Return the users relevant to the authenticated session."""
+
+    role_text = normalized_enum_text(User.role)
+
+    if current_user.role.value == "admin":
+        return db.query(User).filter(User.is_active.is_(True)).all()
+
+    if current_user.role.value == "patient":
+        return (
+            db.query(User)
+            .filter(
+                User.is_active.is_(True),
+                User.is_verified.is_(True),
+                role_text.in_(
+                    [
+                        UserRole.PROVIDER.value,
+                        UserRole.PHARMACIST.value,
+                        UserRole.HOSPITAL.value,
+                        UserRole.LABORATORY.value,
+                        UserRole.IMAGING.value,
+                        UserRole.AMBULANCE.value,
+                    ]
+                ),
+            )
+            .all()
+        )
+
+    if current_user.role.value == "provider":
+        patient_ids = provider_panel_patient_ids(db, current_user.id)
+        query = db.query(User).filter(User.is_active.is_(True))
+        if patient_ids:
+            query = query.filter(User.id.in_(patient_ids))
+        else:
+            query = query.filter(User.id == current_user.id)
+        return query.all()
+
+    if is_workforce_role(current_user.role):
+        return (
+            db.query(User)
+            .filter(
+                User.is_active.is_(True),
+                User.is_verified.is_(True),
+                role_text == UserRole.PATIENT.value,
+            )
+            .all()
+        )
+
+    return []
 
 
 @router.get("/{user_id}", response_model=UserResponse)

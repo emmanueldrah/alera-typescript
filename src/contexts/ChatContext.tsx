@@ -1,9 +1,9 @@
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import { useAuth } from './useAuth';
-import { useAppData } from './useAppData';
 import { useNotifications } from './useNotifications';
-import { storageKeys } from '@/lib/storageKeys';
 import { ChatContext } from './chat-context';
+import { messagingApi } from '@/lib/apiService';
+import { normalizeUserRole } from '@/lib/roleUtils';
 
 export interface ChatMessage {
   id: string;
@@ -39,20 +39,18 @@ export interface ChatContact {
   lastTimestamp?: Date;
 }
 
-type StoredChatMessage = Omit<ChatMessage, 'timestamp'> & { timestamp: string };
-const STORAGE_KEY = storageKeys.chatMessages;
-
-const safeParseMessages = (raw: string | null): ChatMessage[] => {
-  if (!raw) return [];
-  try {
-    const parsed = JSON.parse(raw) as StoredChatMessage[];
-    return parsed.map((message) => ({
-      ...message,
-      timestamp: new Date(message.timestamp),
-    }));
-  } catch {
-    return [];
-  }
+type BackendMessage = {
+  id: number;
+  sender_id: number;
+  recipient_id: number;
+  content: string;
+  subject?: string | null;
+  is_read: string;
+  is_archived: string;
+  created_at: string;
+  read_at?: string | null;
+  sender?: { id: number; name: string; email?: string | null; role?: string | null };
+  recipient?: { id: number; name: string; email?: string | null; role?: string | null };
 };
 
 const sortByTimestamp = (messages: ChatMessage[]) =>
@@ -60,61 +58,82 @@ const sortByTimestamp = (messages: ChatMessage[]) =>
 
 export const ChatProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const { user, getUsers } = useAuth();
-  const { appointments } = useAppData();
   const { addNotification } = useNotifications();
-  const [messages, setMessages] = useState<ChatMessage[]>(() => safeParseMessages(localStorage.getItem(STORAGE_KEY)));
+  const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [activeThread, setActiveThreadState] = useState<string | null>(null);
 
-  const persistMessages = useCallback((next: ChatMessage[]) => {
-    const serializable: StoredChatMessage[] = next.map((message) => ({
-      ...message,
-      timestamp: message.timestamp.toISOString(),
-    }));
-    localStorage.setItem(STORAGE_KEY, JSON.stringify(serializable));
-  }, []);
+  const loadMessages = useCallback(async () => {
+    if (!user) {
+      setMessages([]);
+      setActiveThreadState(null);
+      return [];
+    }
 
-  useEffect(() => {
-    const handleStorage = (event: StorageEvent) => {
-      if (event.key !== STORAGE_KEY) return;
-      setMessages(safeParseMessages(event.newValue));
-    };
+    try {
+      const response = await messagingApi.listMessages(0, 200);
+      const usersById = new Map(
+        getUsers().map((account) => [
+          account.id,
+          {
+            name: account.name,
+            email: account.email,
+            role: account.role,
+          },
+        ]),
+      );
 
-    window.addEventListener('storage', handleStorage);
-    return () => window.removeEventListener('storage', handleStorage);
-  }, []);
+      const mapped = (Array.isArray(response) ? response : []).map((item) => {
+        const message = item as BackendMessage;
+        const sender = usersById.get(String(message.sender_id));
+        const recipient = usersById.get(String(message.recipient_id));
 
-  const updateMessages = useCallback((updater: (current: ChatMessage[]) => ChatMessage[]) => {
-    setMessages((current) => {
-      const next = updater(current);
-      if (next === current) {
-        return current;
-      }
-      persistMessages(next);
-      return next;
-    });
-  }, [persistMessages]);
-
-  const markThreadRead = useCallback((participantId: string) => {
-    if (!user) return;
-
-    updateMessages((current) => {
-      let changed = false;
-      const next = current.map((message) => {
-        if (message.receiverId === user.id && message.senderId === participantId && !message.read) {
-          changed = true;
-          return { ...message, read: true };
-        }
-        return message;
+        return {
+          id: String(message.id),
+          senderId: String(message.sender_id),
+          senderName: sender?.name ?? message.sender?.name ?? `User ${message.sender_id}`,
+          senderRole: sender?.role ?? normalizeUserRole(message.sender?.role) ?? 'patient',
+          receiverId: String(message.recipient_id),
+          receiverName: recipient?.name ?? message.recipient?.name ?? `User ${message.recipient_id}`,
+          content: message.content,
+          timestamp: new Date(message.created_at),
+          read: message.is_read === 'Y' || message.is_read === 'y' || message.is_read === 'true',
+        } satisfies ChatMessage;
       });
 
-      return changed ? next : current;
-    });
-  }, [updateMessages, user]);
+      setMessages(mapped);
+      return mapped;
+    } catch (error) {
+      console.error('Failed to load chat messages:', error);
+      setMessages([]);
+      return [];
+    }
+  }, [getUsers, user]);
+
+  useEffect(() => {
+    void loadMessages();
+  }, [loadMessages]);
+
+  const markThreadRead = useCallback(async (participantId: string) => {
+    if (!user) return;
+
+    const unreadMessages = messages.filter(
+      (message) => message.receiverId === user.id && message.senderId === participantId && !message.read,
+    );
+
+    if (unreadMessages.length === 0) return;
+
+    try {
+      await Promise.all(unreadMessages.map((message) => messagingApi.updateMessage(message.id, { is_read: 'Y' })));
+      await loadMessages();
+    } catch (error) {
+      console.error('Failed to mark thread read:', error);
+    }
+  }, [loadMessages, messages, user]);
 
   const setActiveThread = useCallback((id: string | null) => {
     setActiveThreadState(id);
     if (id) {
-      markThreadRead(id);
+      void markThreadRead(id);
     }
   }, [markThreadRead]);
 
@@ -130,9 +149,10 @@ export const ChatProvider: React.FC<{ children: React.ReactNode }> = ({ children
     relevant.forEach((message) => {
       const isOutgoing = message.senderId === user.id;
       const participantId = isOutgoing ? message.receiverId : message.senderId;
+      const participant = usersById.get(participantId);
       const participantName = isOutgoing ? message.receiverName : message.senderName;
-      const participantRole = isOutgoing ? usersById.get(message.receiverId)?.role ?? 'patient' : message.senderRole;
-      const participantEmail = usersById.get(participantId)?.email;
+      const participantRole = participant?.role ?? message.senderRole;
+      const participantEmail = participant?.email;
 
       threadMap.set(participantId, {
         id: participantId,
@@ -188,21 +208,6 @@ export const ChatProvider: React.FC<{ children: React.ReactNode }> = ({ children
             lastTimestamp: existing?.lastTimestamp,
           });
         });
-
-      appointments
-        .filter((appointment) => appointment.patientId === user.id)
-        .forEach((appointment) => {
-          const existing = contactMap.get(appointment.doctorId);
-          contactMap.set(appointment.doctorId, {
-            participantId: appointment.doctorId,
-            participantName: appointment.doctorName,
-            participantRole: 'doctor',
-            participantEmail: existing?.participantEmail,
-            subtitle: appointment.type,
-            hasConversation: existing?.hasConversation ?? false,
-            lastTimestamp: existing?.lastTimestamp,
-          });
-        });
     }
 
     if (user.role === 'doctor') {
@@ -220,21 +225,6 @@ export const ChatProvider: React.FC<{ children: React.ReactNode }> = ({ children
             lastTimestamp: existing?.lastTimestamp,
           });
         });
-
-      appointments
-        .filter((appointment) => appointment.doctorId === user.id)
-        .forEach((appointment) => {
-          const existing = contactMap.get(appointment.patientId);
-          contactMap.set(appointment.patientId, {
-            participantId: appointment.patientId,
-            participantName: appointment.patientName,
-            participantRole: 'patient',
-            participantEmail: existing?.participantEmail,
-            subtitle: appointment.type,
-            hasConversation: existing?.hasConversation ?? false,
-            lastTimestamp: existing?.lastTimestamp,
-          });
-        });
     }
 
     return Array.from(contactMap.values()).sort((a, b) => {
@@ -246,12 +236,7 @@ export const ChatProvider: React.FC<{ children: React.ReactNode }> = ({ children
       }
       return a.participantName.localeCompare(b.participantName);
     });
-  }, [appointments, getUsers, threads, user]);
-
-  useEffect(() => {
-    if (!activeThread) return;
-    markThreadRead(activeThread);
-  }, [activeThread, markThreadRead, messages]);
+  }, [getUsers, threads, user]);
 
   useEffect(() => {
     if (activeThread && !contacts.some((contact) => contact.participantId === activeThread)) {
@@ -259,56 +244,45 @@ export const ChatProvider: React.FC<{ children: React.ReactNode }> = ({ children
     }
   }, [activeThread, contacts]);
 
-  const sendMessage = useCallback((receiverId: string, receiverName: string, content: string) => {
+  const sendMessage = useCallback(async (receiverId: string, receiverName: string, content: string) => {
     if (!user || !content.trim()) return;
 
-    const receiver = contacts.find((contact) => contact.participantId === receiverId);
-    const newMessage: ChatMessage = {
-      id: `msg-${crypto.randomUUID()}`,
-      senderId: user.id,
-      senderName: user.name,
-      senderRole: user.role,
-      receiverId,
-      receiverName: receiver?.participantName ?? receiverName,
-      content: content.trim(),
-      timestamp: new Date(),
-      read: false,
-    };
+    try {
+      await messagingApi.sendMessage({
+        recipient_id: receiverId,
+        subject: 'Secure message',
+        content,
+      });
+      await loadMessages();
 
-    updateMessages((current) => [...current, newMessage]);
-    setActiveThreadState(receiverId);
-
-    if (receiver?.participantEmail) {
       addNotification({
         title: `New message from ${user.name}`,
-        message: newMessage.content,
+        message: content,
         type: 'chat',
-        priority: 'medium',
         audience: 'personal',
-        actionUrl: `/dashboard/messages?thread=${user.id}`,
-        actionLabel: 'Reply',
-        targetEmails: [receiver.participantEmail],
+        actionUrl: '/dashboard/messages',
+        actionLabel: `Open ${receiverName}`,
       });
+    } catch (error) {
+      console.error('Failed to send message:', error);
+      throw error;
     }
-  }, [addNotification, contacts, updateMessages, user]);
+  }, [addNotification, loadMessages, user]);
 
-  const totalUnread = useMemo(() => {
-    if (!user) return 0;
-    return messages.filter((message) => message.receiverId === user.id && !message.read).length;
-  }, [messages, user]);
+  const totalUnread = useMemo(() => messages.filter((message) => message.receiverId === user?.id && !message.read).length, [messages, user?.id]);
+
+  const contextValue = useMemo(() => ({
+    threads,
+    contacts,
+    activeThread,
+    messages,
+    setActiveThread,
+    sendMessage,
+    totalUnread,
+  }), [activeThread, contacts, messages, sendMessage, setActiveThread, threads, totalUnread]);
 
   return (
-    <ChatContext.Provider
-      value={{
-        threads,
-        contacts,
-        activeThread,
-        messages,
-        setActiveThread,
-        sendMessage,
-        totalUnread,
-      }}
-    >
+    <ChatContext.Provider value={contextValue}>
       {children}
     </ChatContext.Provider>
   );

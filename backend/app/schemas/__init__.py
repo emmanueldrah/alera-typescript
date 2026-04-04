@@ -261,6 +261,9 @@ class NotificationResponse(NotificationBase):
     is_read: bool
     is_archived: bool
     created_at: datetime
+    related_id: Optional[int] = None
+    related_type: Optional[str] = None
+    action_url: Optional[str] = None
     
     model_config = ConfigDict(from_attributes=True)
 
