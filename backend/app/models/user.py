@@ -12,6 +12,7 @@ class UserRole(str, enum.Enum):
     PROVIDER = "provider"  # Doctor
     PHARMACIST = "pharmacist"
     ADMIN = "admin"
+    SUPER_ADMIN = "super_admin"
     HOSPITAL = "hospital"
     LABORATORY = "laboratory"
     IMAGING = "imaging"
@@ -25,7 +26,7 @@ class User(Base):
     email = Column(String(255), unique=True, index=True, nullable=False)
     username = Column(String(255), unique=True, index=True, nullable=False)
     hashed_password = Column(String(255), nullable=False)
-    
+
     # Profile Information
     first_name = Column(String(255), nullable=False)
     last_name = Column(String(255), nullable=False)
@@ -35,7 +36,7 @@ class User(Base):
     city = Column(String(100), nullable=True)
     state = Column(String(100), nullable=True)
     zip_code = Column(String(20), nullable=True)
-    
+
     # Account Information
     role = Column(SQLEnum(UserRole, values_callable=enum_values), default=UserRole.PATIENT, nullable=False)
     is_active = Column(Boolean, default=True)
@@ -54,17 +55,17 @@ class User(Base):
     email_verification_expires_at = Column(DateTime, nullable=True)
     password_reset_token_hash = Column(String(255), nullable=True)
     password_reset_expires_at = Column(DateTime, nullable=True)
-    
+
     # License Information (for providers)
     license_number = Column(String(255), nullable=True)
     specialty = Column(String(255), nullable=True)
     license_state = Column(String(100), nullable=True)
-    
+
     # Timestamps
     created_at = Column(DateTime, default=utcnow, nullable=False)
     updated_at = Column(DateTime, default=utcnow, onupdate=utcnow, nullable=False)
     last_login = Column(DateTime, nullable=True)
-    
+
     # Relationships
     appointments_as_patient = relationship("Appointment", foreign_keys="Appointment.patient_id", back_populates="patient")
     appointments_as_provider = relationship("Appointment", foreign_keys="Appointment.provider_id", back_populates="provider")
@@ -74,7 +75,7 @@ class User(Base):
     medical_histories = relationship("MedicalHistory", back_populates="patient")
     notifications = relationship("Notification", back_populates="user")
     audit_logs = relationship("AuditLog", back_populates="user")
-    
+
     # Indexes
     __table_args__ = (
         Index('idx_user_email', 'email'),
@@ -82,6 +83,14 @@ class User(Base):
         Index('idx_user_role', 'role'),
         Index('idx_user_created_at', 'created_at'),
     )
+
+    def is_admin_or_super(self) -> bool:
+        """Returns True if this user has any admin-level role."""
+        return self.role in (UserRole.ADMIN, UserRole.SUPER_ADMIN)
+
+    def is_super_admin(self) -> bool:
+        """Returns True only for super admin."""
+        return self.role == UserRole.SUPER_ADMIN
 
     def __repr__(self):
         return f"<User(id={self.id}, email={self.email}, role={self.role})>"

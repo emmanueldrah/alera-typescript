@@ -1,7 +1,7 @@
 from fastapi import Depends, HTTPException, status, Request
 from sqlalchemy.orm import Session
 from database import get_db
-from app.models.user import User
+from app.models.user import User, UserRole
 from app.utils.auth import decode_token, get_user_id_from_payload
 from app.utils.access import require_verified_workforce_member
 
@@ -54,7 +54,7 @@ async def get_current_user(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="Session expired",
         )
-    
+
     return user
 
 
@@ -74,7 +74,7 @@ async def get_current_provider(
     current_user: User = Depends(get_current_user)
 ) -> User:
     """Get current user and verify they are a provider"""
-    if current_user.role.value not in ["provider", "admin"]:
+    if current_user.role.value not in ["provider", "admin", "super_admin"]:
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
             detail="Only providers can access this resource"
@@ -87,11 +87,23 @@ async def get_current_provider(
 async def get_current_admin(
     current_user: User = Depends(get_current_user)
 ) -> User:
-    """Get current user and verify they are an admin"""
-    if current_user.role.value != "admin":
+    """Get current user and verify they are an admin (regular or super)"""
+    if current_user.role.value not in ("admin", "super_admin"):
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
             detail="Only admins can access this resource"
+        )
+    return current_user
+
+
+async def get_current_super_admin(
+    current_user: User = Depends(get_current_user)
+) -> User:
+    """Get current user and verify they are a super admin"""
+    if current_user.role.value != "super_admin":
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Only super admins can access this resource"
         )
     return current_user
 
@@ -100,7 +112,7 @@ async def get_current_pharmacist(
     current_user: User = Depends(get_current_user)
 ) -> User:
     """Get current user and verify they are a pharmacist"""
-    if current_user.role.value not in ["pharmacist", "admin"]:
+    if current_user.role.value not in ["pharmacist", "admin", "super_admin"]:
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
             detail="Only pharmacists can access this resource"

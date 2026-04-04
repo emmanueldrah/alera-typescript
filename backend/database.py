@@ -201,7 +201,7 @@ def _patch_admin_accounts_email_verified():
                         is_verified = TRUE,
                         email_verification_token_hash = NULL,
                         email_verification_expires_at = NULL
-                    WHERE role = 'admin'
+                    WHERE role IN ('admin', 'super_admin')
                     """
                 ),
                 {"now": utcnow()},
