@@ -341,7 +341,7 @@ async def resend_email_verification(
 ):
     """Resend the current user's verification email."""
 
-    if current_user.email_verified:
+    if current_user.role == UserRole.ADMIN or current_user.email_verified:
         return {"message": "Email is already verified"}
 
     verification_token = _issue_email_verification_token(current_user, db)

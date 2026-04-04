@@ -46,6 +46,7 @@ from app.utils.dependencies import get_current_user
 from app.utils.db_types import enum_value_renames
 from app.utils.time import utcnow
 from database import SessionLocal
+import database
 
 
 ADMIN_EMAIL = "admin@alera.health"
@@ -141,6 +142,25 @@ def test_public_registration_rejects_admin_and_verifies_patients_by_default(db_s
     assert user.role == "patient"
     assert user.is_verified is True
     assert user.is_active is True
+
+
+def test_admin_accounts_are_backfilled_as_verified(db_session):
+    admin = load_user(db_session, ADMIN_EMAIL)
+    admin.email_verified = False
+    admin.email_verified_at = None
+    admin.is_verified = False
+    admin.email_verification_token_hash = "stale-token"
+    admin.email_verification_expires_at = utcnow() + timedelta(hours=1)
+    db_session.commit()
+
+    database._patch_admin_accounts_email_verified()
+    db_session.refresh(admin)
+
+    assert admin.email_verified is True
+    assert admin.email_verified_at is not None
+    assert admin.is_verified is True
+    assert admin.email_verification_token_hash is None
+    assert admin.email_verification_expires_at is None
 
 
 def test_enum_value_renames_detect_legacy_uppercase_labels():
@@ -502,6 +522,16 @@ def test_email_verification_flow_and_resend(db_session, monkeypatch):
     assert user.email_verified_at is not None
     assert user.email_verification_token_hash is None
     assert user.email_verification_expires_at is None
+
+
+def test_admin_resend_verification_is_a_noop(db_session):
+    admin = load_user(db_session, ADMIN_EMAIL)
+    admin.email_verified = False
+    db_session.commit()
+
+    result = run(resend_email_verification(current_user=admin, db=db_session))
+
+    assert result["message"] == "Email is already verified"
 
 
 def test_password_reset_flow_revokes_sessions_and_allows_new_login(db_session, monkeypatch):

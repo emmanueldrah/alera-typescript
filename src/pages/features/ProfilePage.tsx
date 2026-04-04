@@ -71,7 +71,7 @@ const ProfilePage = () => {
   const [confirmClearCache, setConfirmClearCache] = useState(false);
   const [sendingVerification, setSendingVerification] = useState(false);
   const isPendingVerification = Boolean(user && user.role !== 'patient' && user.isVerified === false);
-  const isEmailUnverified = Boolean(user && user.emailVerified === false);
+  const isEmailUnverified = Boolean(user && user.role !== 'admin' && user.emailVerified === false);
 
   if (!user) return null;
 

@@ -291,6 +291,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
   const resendEmailVerification = useCallback(async () => {
     if (!user) throw new Error('No user logged in');
+    if (user.role === 'admin' || user.emailVerified) return;
 
     await authApi.resendVerificationEmail();
   }, [user]);

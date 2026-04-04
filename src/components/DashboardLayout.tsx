@@ -104,7 +104,7 @@ const DashboardLayout = ({ children }: DashboardLayoutProps) => {
   const roleKey = normalizeUserRole(user.role) ?? user.role;
   const navItems = roleNavItems[roleKey] || [];
   const isPendingVerification = user.role !== 'patient' && user.isVerified === false;
-  const isEmailUnverified = user.emailVerified === false;
+  const isEmailUnverified = user.role !== 'admin' && user.emailVerified === false;
   const handleSignOut = async () => {
     await logout();
     navigate('/login', { replace: true });

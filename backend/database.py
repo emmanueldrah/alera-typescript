@@ -149,6 +149,46 @@ def _patch_users_account_recovery_columns():
             print(f"WARNING: Could not patch users.{column_name} column: {e}")
 
 
+def _patch_admin_accounts_email_verified():
+    """Backfill seeded/admin accounts so they never get stuck behind email verification."""
+    try:
+        columns = {column["name"] for column in inspect(engine).get_columns("users")}
+    except Exception:
+        return
+
+    required = {
+        "role",
+        "email_verified",
+        "email_verified_at",
+        "is_verified",
+        "email_verification_token_hash",
+        "email_verification_expires_at",
+    }
+    if not required.issubset(columns):
+        return
+
+    try:
+        with engine.begin() as conn:
+            result = conn.execute(
+                text(
+                    """
+                    UPDATE users
+                    SET email_verified = TRUE,
+                        email_verified_at = COALESCE(email_verified_at, :now),
+                        is_verified = TRUE,
+                        email_verification_token_hash = NULL,
+                        email_verification_expires_at = NULL
+                    WHERE role = 'admin'
+                    """
+                ),
+                {"now": utcnow()},
+            )
+            if result.rowcount:
+                print(f"✓ Normalized {result.rowcount} admin account(s) as verified")
+    except Exception as e:
+        print(f"WARNING: Could not patch admin verification state: {e}")
+
+
 def _collect_sqlalchemy_enum_specs() -> dict[str, list[str]]:
     """Collect the desired persisted labels for every SQLAlchemy enum in metadata."""
 
@@ -217,6 +257,7 @@ def init_db():
         _patch_users_session_version_column()
         _patch_users_account_recovery_columns()
         _patch_postgres_enum_values()
+        _patch_admin_accounts_email_verified()
         print("✓ Database tables initialized successfully")
     except Exception as e:
         print(f"ERROR: Failed to initialize database tables: {e}")

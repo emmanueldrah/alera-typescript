@@ -11,7 +11,7 @@ let authState: {
     id: string;
     email: string;
     name: string;
-    role: 'doctor';
+    role: 'doctor' | 'admin';
     isVerified: boolean;
     emailVerified: boolean;
   } | null;
@@ -68,6 +68,29 @@ describe('DashboardLayout', () => {
 
     expect(screen.getByText(/email verification pending/i)).toBeInTheDocument();
     expect(screen.getByText(/pending verification/i)).toBeInTheDocument();
+    expect(screen.getByText(/dashboard content/i)).toBeInTheDocument();
+  });
+
+  it('does not show the email verification banner for admin users', () => {
+    authState.user = {
+      id: 'admin-1',
+      email: 'admin@example.com',
+      name: 'Alera Admin',
+      role: 'admin',
+      isVerified: true,
+      emailVerified: false,
+    };
+
+    render(
+      <MemoryRouter initialEntries={['/dashboard']}>
+        <DashboardLayout>
+          <div>Dashboard content</div>
+        </DashboardLayout>
+      </MemoryRouter>
+    );
+
+    expect(screen.queryByText(/email verification pending/i)).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: /resend email/i })).not.toBeInTheDocument();
     expect(screen.getByText(/dashboard content/i)).toBeInTheDocument();
   });
 });
