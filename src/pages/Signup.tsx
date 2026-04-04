@@ -30,6 +30,9 @@ const Signup = () => {
   const [city, setCity] = useState('');
   const [state, setState] = useState('');
   const [zipCode, setZipCode] = useState('');
+  const [specialty, setSpecialty] = useState('');
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
   const { signup } = useAuth();
   const navigate = useNavigate();
 
@@ -187,6 +190,8 @@ const Signup = () => {
                   className="w-full h-11 px-4 rounded-xl border border-input bg-background text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-primary/30 transition" />
               </div>
             </div>
+
+            {selectedRole && selectedRole !== 'patient' && (
               <div className="space-y-4 rounded-2xl border border-border bg-secondary/30 p-4">
                 <div className="text-sm font-semibold text-card-foreground">License details</div>
                 <div>
