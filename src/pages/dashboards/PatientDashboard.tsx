@@ -8,7 +8,7 @@ const card = (i: number) => ({ initial: { opacity: 0, y: 15 }, animate: { opacit
 
 const PatientDashboard = () => {
   const { user } = useAuth();
-  const { appointments, prescriptions, labTests, imagingScans } = useAppData();
+  const { appointments, prescriptions, labTests, imagingScans, isLoading } = useAppData();
 
   // Get upcoming (scheduled) appointments
   const upcomingAppointments = appointments.filter((apt) => apt.status === 'scheduled' && apt.patientId === user?.id);
@@ -57,10 +57,10 @@ const PatientDashboard = () => {
 
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
         {[
-          { icon: <Calendar className="w-5 h-5" />, label: 'Upcoming', value: totalUpcoming, color: 'text-primary', bg: 'bg-primary/10', link: '/dashboard/appointments' },
-          { icon: <Pill className="w-5 h-5" />, label: 'Active Rx', value: totalActivePrescriptions, color: 'text-info', bg: 'bg-info/10', link: '/dashboard/prescriptions' },
-          { icon: <FlaskConical className="w-5 h-5" />, label: 'Lab Tests', value: totalLabTests, color: 'text-success', bg: 'bg-success/10', link: '/dashboard/lab-results' },
-          { icon: <Activity className="w-5 h-5" />, label: 'Timeline', value: timelineEvents.length, color: 'text-accent', bg: 'bg-accent/10', link: '/dashboard/timeline' },
+          { icon: <Calendar className="w-5 h-5" />, label: 'Upcoming', value: isLoading ? '...' : totalUpcoming, color: 'text-primary', bg: 'bg-primary/10', link: '/dashboard/appointments' },
+          { icon: <Pill className="w-5 h-5" />, label: 'Active Rx', value: isLoading ? '...' : totalActivePrescriptions, color: 'text-info', bg: 'bg-info/10', link: '/dashboard/prescriptions' },
+          { icon: <FlaskConical className="w-5 h-5" />, label: 'Lab Tests', value: isLoading ? '...' : totalLabTests, color: 'text-success', bg: 'bg-success/10', link: '/dashboard/lab-results' },
+          { icon: <Activity className="w-5 h-5" />, label: 'Timeline', value: isLoading ? '...' : timelineEvents.length, color: 'text-accent', bg: 'bg-accent/10', link: '/dashboard/timeline' },
         ].map((s, i) => (
           <motion.div key={i} {...card(i)}>
             <Link to={s.link} className="block p-5 rounded-2xl bg-card border border-border hover:border-primary/30 hover:shadow-glow transition-all">

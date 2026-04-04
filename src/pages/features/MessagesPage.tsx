@@ -1,10 +1,12 @@
-import { useState, useRef, useEffect, useMemo } from 'react';
+import { useState, useRef, useEffect, useMemo, Suspense } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { MessageSquare, Send, Heart, Users, Circle, Search, Video } from 'lucide-react';
 import { useSearchParams } from 'react-router-dom';
 import { useChat } from '@/contexts/useChat';
 import { useAuth } from '@/contexts/useAuth';
-import VideoCall from '@/components/VideoCall';
+import { lazy } from 'react';
+
+const VideoCall = lazy(() => import('@/components/VideoCall'));
 
 const MessagesPage = () => {
   const { user } = useAuth();
@@ -88,11 +90,27 @@ const MessagesPage = () => {
     <div className="h-[calc(100vh-7rem)]">
       <AnimatePresence>
         {videoCallTarget && (
-          <VideoCall
-            participantName={videoCallTarget.name}
-            participantRole={videoCallTarget.role}
-            onEnd={() => setVideoCallTarget(null)}
-          />
+          <Suspense fallback={
+            <motion.div 
+              initial={{ opacity: 0, scale: 0.95 }} 
+              animate={{ opacity: 1, scale: 1 }} 
+              exit={{ opacity: 0, scale: 0.95 }}
+              className="fixed inset-0 z-[100] bg-background/95 backdrop-blur-sm flex items-center justify-center"
+            >
+              <div className="w-full h-full max-w-6xl max-h-[90vh] mx-auto flex items-center justify-center">
+                <div className="text-center">
+                  <div className="animate-spin w-8 h-8 border-2 border-primary border-t-transparent rounded-full mx-auto mb-4"></div>
+                  <p className="text-foreground">Loading video call...</p>
+                </div>
+              </div>
+            </motion.div>
+          }>
+            <VideoCall
+              participantName={videoCallTarget.name}
+              participantRole={videoCallTarget.role}
+              onEnd={() => setVideoCallTarget(null)}
+            />
+          </Suspense>
         )}
       </AnimatePresence>
       <div className="flex h-full bg-card rounded-2xl border border-border overflow-hidden">

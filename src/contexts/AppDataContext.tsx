@@ -727,6 +727,7 @@ export const AppDataProvider: React.FC<{ children: React.ReactNode }> = ({ child
   }, [loadAPIData]);
 
   const contextValue = useMemo<AppDataContextType>(() => ({
+    isLoading: isLoadingAPI,
     appointments: data.appointments,
     prescriptions: data.prescriptions,
     labTests: data.labTests,
