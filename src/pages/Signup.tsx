@@ -25,9 +25,11 @@ const Signup = () => {
   const [selectedRole, setSelectedRole] = useState<SignupRole | null>(null);
   const [licenseNumber, setLicenseNumber] = useState('');
   const [licenseState, setLicenseState] = useState('');
-  const [specialty, setSpecialty] = useState('');
-  const [loading, setLoading] = useState(false);
-  const [error, setError] = useState('');
+  const [phone, setPhone] = useState('');
+  const [address, setAddress] = useState('');
+  const [city, setCity] = useState('');
+  const [state, setState] = useState('');
+  const [zipCode, setZipCode] = useState('');
   const { signup } = useAuth();
   const navigate = useNavigate();
 
@@ -35,11 +37,30 @@ const Signup = () => {
     e.preventDefault();
     if (!selectedRole) { setError('Please select a role'); return; }
     if (!name.trim() || !email.trim() || !password.trim()) { setError('All fields are required'); return; }
+    
+    // Email validation
+    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+    if (!emailRegex.test(email.trim())) { setError('Please enter a valid email address'); return; }
+    
+    // Password validation
     if (password.trim().length < 8) { setError('Password must be at least 8 characters.'); return; }
+    if (!/(?=.*[a-z])(?=.*[A-Z])(?=.*\d)/.test(password)) { 
+      setError('Password must contain at least one uppercase letter, one lowercase letter, and one number'); 
+      return; 
+    }
+    
+    // Phone validation (optional but if provided, must be valid)
+    if (phone.trim() && !/^\+?[\d\s\-\(\)]{10,}$/.test(phone.trim())) {
+      setError('Please enter a valid phone number'); 
+      return; 
+    }
+    
+    // Professional account validations
     if (selectedRole !== 'patient' && (!licenseNumber.trim() || !licenseState.trim())) {
       setError('License number and license state are required for professional accounts');
       return;
     }
+    
     setLoading(true);
     setError('');
     try {
@@ -51,6 +72,11 @@ const Signup = () => {
         selectedRole === 'patient' ? undefined : licenseNumber.trim(),
         selectedRole === 'patient' ? undefined : licenseState.trim(),
         selectedRole === 'patient' ? undefined : specialty.trim() || undefined,
+        phone.trim() || undefined,
+        address.trim() || undefined,
+        city.trim() || undefined,
+        state.trim() || undefined,
+        zipCode.trim() || undefined,
       );
       navigate('/dashboard');
     } catch (error) {
@@ -131,17 +157,36 @@ const Signup = () => {
             </div>
 
             <div>
-              <label className="text-sm font-medium text-card-foreground mb-1.5 block">Password</label>
-              <div className="relative">
-                <input type={showPassword ? 'text' : 'password'} value={password} onChange={e => setPassword(e.target.value)} placeholder="Create a password"
-                  className="w-full h-11 px-4 pr-11 rounded-xl border border-input bg-background text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-primary/30 transition" />
-                <button type="button" onClick={() => setShowPassword(!showPassword)} className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground">
-                  {showPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
-                </button>
+              <label className="text-sm font-medium text-card-foreground mb-1.5 block">Phone Number <span className="text-muted-foreground">(optional)</span></label>
+              <input type="tel" value={phone} onChange={e => setPhone(e.target.value)} placeholder="+1 (555) 123-4567"
+                className="w-full h-11 px-4 rounded-xl border border-input bg-background text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-primary/30 transition" />
+            </div>
+
+            <div className="grid md:grid-cols-3 gap-4">
+              <div className="md:col-span-2">
+                <label className="text-sm font-medium text-card-foreground mb-1.5 block">Address <span className="text-muted-foreground">(optional)</span></label>
+                <input type="text" value={address} onChange={e => setAddress(e.target.value)} placeholder="Street address"
+                  className="w-full h-11 px-4 rounded-xl border border-input bg-background text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-primary/30 transition" />
+              </div>
+              <div>
+                <label className="text-sm font-medium text-card-foreground mb-1.5 block">City <span className="text-muted-foreground">(optional)</span></label>
+                <input type="text" value={city} onChange={e => setCity(e.target.value)} placeholder="City"
+                  className="w-full h-11 px-4 rounded-xl border border-input bg-background text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-primary/30 transition" />
               </div>
             </div>
 
-            {selectedRole && selectedRole !== 'patient' && (
+            <div className="grid md:grid-cols-2 gap-4">
+              <div>
+                <label className="text-sm font-medium text-card-foreground mb-1.5 block">State <span className="text-muted-foreground">(optional)</span></label>
+                <input type="text" value={state} onChange={e => setState(e.target.value)} placeholder="State"
+                  className="w-full h-11 px-4 rounded-xl border border-input bg-background text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-primary/30 transition" />
+              </div>
+              <div>
+                <label className="text-sm font-medium text-card-foreground mb-1.5 block">ZIP Code <span className="text-muted-foreground">(optional)</span></label>
+                <input type="text" value={zipCode} onChange={e => setZipCode(e.target.value)} placeholder="12345"
+                  className="w-full h-11 px-4 rounded-xl border border-input bg-background text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-primary/30 transition" />
+              </div>
+            </div>
               <div className="space-y-4 rounded-2xl border border-border bg-secondary/30 p-4">
                 <div className="text-sm font-semibold text-card-foreground">License details</div>
                 <div>

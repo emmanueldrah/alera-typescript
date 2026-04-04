@@ -2,6 +2,8 @@ import { createContext } from 'react';
 import type { AmbulanceRequest, AmbulanceVehicle, Appointment, HealthMetric, ImagingScan, InventoryItem, LabTest, Prescription, ProviderVerification, Referral, VitalSigns, PatientAllergy, PatientMedicalHistory, PatientConsent, DrugInteraction, ClinicalNote, PatientProblem, MedicationAdherence, ProviderPricing, ServiceCharge, Invoice, BillingRecord, AppointmentReminder } from '@/data/mockData';
 
 export interface AppDataContextType {
+  // Loading state
+  isLoading: boolean;
   appointments: Appointment[];
   prescriptions: Prescription[];
   labTests: LabTest[];

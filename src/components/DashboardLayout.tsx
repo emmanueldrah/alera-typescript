@@ -14,6 +14,7 @@ import {
   Pill, Ambulance, Users, Building2, ShieldCheck, Activity, Bell,
   LogOut, Menu, X, Clock, MessageSquare, Settings, HeartPulse, Mail
 } from 'lucide-react';
+import { memo } from 'react';
 
 const roleNavItems: Record<string, { label: string; icon: React.ReactNode; path: string }[]> = {
   patient: [
@@ -93,7 +94,7 @@ interface DashboardLayoutProps {
   children: React.ReactNode;
 }
 
-const DashboardLayout = ({ children }: DashboardLayoutProps) => {
+const DashboardLayout = memo(({ children }: DashboardLayoutProps) => {
   const { user, logout, resendEmailVerification } = useAuth();
   const { unreadCount, feedLabel, isLive } = useNotifications();
   const location = useLocation();
@@ -262,6 +263,6 @@ const DashboardLayout = ({ children }: DashboardLayoutProps) => {
       <ChatWidget />
     </div>
   );
-};
+});
 
-export default DashboardLayout;
+export default memo(DashboardLayout);

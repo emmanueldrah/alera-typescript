@@ -16,7 +16,18 @@ const Login = () => {
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!email.trim() || !password.trim()) { setError('All fields are required'); return; }
+    if (!email.trim() || !password.trim()) { 
+      setError('Email and password are required'); 
+      return; 
+    }
+    
+    // Email validation
+    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+    if (!emailRegex.test(email.trim())) { 
+      setError('Please enter a valid email address'); 
+      return; 
+    }
+    
     setLoading(true);
     setError('');
     try {
@@ -54,20 +65,34 @@ const Login = () => {
           <h2 className="text-2xl font-display font-bold text-card-foreground mb-1">Sign in</h2>
           <p className="text-muted-foreground mb-6">Enter your credentials to access your dashboard</p>
 
-          {error && <div className="mb-4 p-3 rounded-lg bg-destructive/10 text-destructive text-sm">{error}</div>}
+          {error && <div id="login-error" className="mb-4 p-3 rounded-lg bg-destructive/10 text-destructive text-sm">{error}</div>}
 
           <form onSubmit={handleSubmit} className="space-y-5">
             <div>
               <label className="text-sm font-medium text-card-foreground mb-1.5 block">Email</label>
-              <input type="email" value={email} onChange={e => setEmail(e.target.value)} placeholder="you@example.com"
-                className="w-full h-11 px-4 rounded-xl border border-input bg-background text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-primary/30 transition" />
+              <input 
+                type="email" 
+                value={email} 
+                onChange={e => setEmail(e.target.value)} 
+                placeholder="you@example.com"
+                aria-describedby={error ? "login-error" : undefined}
+                aria-invalid={!!error}
+                className="w-full h-11 px-4 rounded-xl border border-input bg-background text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-primary/30 transition" 
+              />
             </div>
 
             <div>
               <label className="text-sm font-medium text-card-foreground mb-1.5 block">Password</label>
               <div className="relative">
-                <input type={showPassword ? 'text' : 'password'} value={password} onChange={e => setPassword(e.target.value)} placeholder="Enter your password"
-                  className="w-full h-11 px-4 pr-11 rounded-xl border border-input bg-background text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-primary/30 transition" />
+                <input 
+                  type={showPassword ? 'text' : 'password'} 
+                  value={password} 
+                  onChange={e => setPassword(e.target.value)} 
+                  placeholder="Enter your password"
+                  aria-describedby={error ? "login-error" : undefined}
+                  aria-invalid={!!error}
+                  className="w-full h-11 px-4 pr-11 rounded-xl border border-input bg-background text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-primary/30 transition" 
+                />
                 <button type="button" onClick={() => setShowPassword(!showPassword)} className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground">
                   {showPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
                 </button>
@@ -79,8 +104,12 @@ const Login = () => {
               </div>
             </div>
 
-            <button type="submit" disabled={loading}
-              className="w-full h-12 rounded-xl bg-gradient-primary text-primary-foreground font-semibold flex items-center justify-center gap-2 hover:opacity-90 transition disabled:opacity-50">
+            <button 
+              type="submit" 
+              disabled={loading}
+              aria-describedby={error ? "login-error" : undefined}
+              className="w-full h-12 rounded-xl bg-gradient-primary text-primary-foreground font-semibold flex items-center justify-center gap-2 hover:opacity-90 transition disabled:opacity-50"
+            >
               {loading ? 'Signing in...' : <><span>Sign In</span><ArrowRight className="w-4 h-4" /></>}
             </button>
           </form>

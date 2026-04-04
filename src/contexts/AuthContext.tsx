@@ -193,6 +193,11 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     licenseNumber?: string,
     licenseState?: string,
     specialty?: string,
+    phone?: string,
+    address?: string,
+    city?: string,
+    state?: string,
+    zipCode?: string,
   ) => {
     try {
       const [firstName = '', ...lastNameParts] = name.split(' ');
@@ -220,7 +225,11 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         first_name: firstName,
         last_name: lastName,
         role: backendRole,
-        phone: undefined,
+        phone: phone || undefined,
+        address: address || undefined,
+        city: city || undefined,
+        state: state || undefined,
+        zip_code: zipCode || undefined,
         license_number: role === 'patient' ? undefined : licenseNumber,
         license_state: role === 'patient' ? undefined : licenseState,
         specialty: role === 'patient' ? undefined : specialty,

@@ -10,6 +10,7 @@ import { ChatProvider } from "@/contexts/ChatContext";
 import { useAuth } from "@/contexts/useAuth";
 import ProtectedRoute from "@/components/ProtectedRoute";
 import MainLayout from "./components/MainLayout";
+import ErrorBoundary from "./components/ErrorBoundary";
 import LandingHome from "./pages/Landing/Home";
 import LandingHowItWorks from "./pages/Landing/HowItWorks";
 import LandingFeatures from "./pages/Landing/Features";
@@ -46,8 +47,9 @@ const featureRoutes = [
 const App = () => {
   try {
     return (
-      <QueryClientProvider client={queryClient}>
-        <AuthProvider>
+      <ErrorBoundary>
+        <QueryClientProvider client={queryClient}>
+          <AuthProvider>
           <AppDataProvider>
             <NotificationProvider>
               <ChatProvider>
@@ -82,6 +84,7 @@ const App = () => {
           </AppDataProvider>
         </AuthProvider>
       </QueryClientProvider>
+      </ErrorBoundary>
     );
   } catch (error) {
     return <div style={{ color: 'red', padding: '20px' }}>ERROR: {String(error)}</div>;

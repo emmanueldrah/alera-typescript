@@ -111,6 +111,19 @@ const ProfilePage = () => {
 
   const handleSaveContact = async () => {
     setError('');
+    
+    // Phone validation if provided
+    if (phone.trim() && !/^\+?[\d\s\-\(\)]{10,}$/.test(phone.trim())) {
+      setError('Please enter a valid phone number');
+      return;
+    }
+    
+    // ZIP code validation if provided
+    if (zipCode.trim() && !/^\d{5}(-\d{4})?$/.test(zipCode.trim())) {
+      setError('Please enter a valid ZIP code (e.g., 12345 or 12345-6789)');
+      return;
+    }
+    
     setIsLoading(true);
     try {
       await updateProfile({ phone, address, city, state, zipCode, bio });
@@ -131,6 +144,10 @@ const ProfilePage = () => {
     if (newPassword.length < 8) {
       setError('New password must be at least 8 characters');
       return;
+    }
+    if (!/(?=.*[a-z])(?=.*[A-Z])(?=.*\d)/.test(newPassword)) { 
+      setError('New password must contain at least one uppercase letter, one lowercase letter, and one number'); 
+      return; 
     }
     if (newPassword !== confirmPassword) {
       setError('Passwords do not match');
