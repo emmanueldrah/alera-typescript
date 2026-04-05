@@ -91,7 +91,7 @@ async def register(user_data: UserCreate, response: Response, db: Session = Depe
             detail="Email or username already registered"
         )
 
-    if user_data.role == UserRole.ADMIN:
+    if user_data.role in (UserRole.ADMIN, UserRole.SUPER_ADMIN):
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
             detail="Admin accounts cannot be created through public registration",
@@ -356,7 +356,7 @@ async def resend_email_verification(
 ):
     """Resend the current user's verification email."""
 
-    if current_user.role == UserRole.ADMIN or current_user.email_verified:
+    if current_user.role in (UserRole.ADMIN, UserRole.SUPER_ADMIN) or current_user.email_verified:
         return {"message": "Email is already verified"}
 
     verification_token = _issue_email_verification_token(current_user, db)

@@ -270,6 +270,27 @@ def _patch_postgres_enum_values():
         print(f"✓ Normalized {rename_count} PostgreSQL enum label(s)")
 
 
+def _patch_super_admin_enum_value():
+    """Add super_admin to the userrole enum in PostgreSQL if not already present."""
+    if not str(database_url).startswith("postgresql"):
+        # SQLite uses VARCHAR, so no enum alteration needed
+        return
+    try:
+        enum_specs = inspect(engine).get_enums(schema="public")
+        for enum in enum_specs:
+            if enum.get("name", "").lower() in ("userrole", "user_role"):
+                labels = list(enum.get("labels") or [])
+                if "super_admin" not in labels:
+                    with engine.begin() as conn:
+                        conn.exec_driver_sql(
+                            "ALTER TYPE "userrole" ADD VALUE IF NOT EXISTS 'super_admin'"
+                        )
+                    print("✓ Added 'super_admin' to PostgreSQL userrole enum")
+                break
+    except Exception as e:
+        print(f"WARNING: Could not patch super_admin enum value: {e}")
+
+
 def init_db():
     """Initialize database - create all tables and seed default admin"""
     try:
@@ -280,6 +301,7 @@ def init_db():
         _patch_users_session_version_column()
         _patch_users_account_recovery_columns()
         _patch_users_notification_preferences_columns()
+        _patch_super_admin_enum_value()
         _patch_postgres_enum_values()
         _patch_admin_accounts_email_verified()
         print("✓ Database tables initialized successfully")
@@ -295,34 +317,63 @@ def init_db():
 
 
 def _seed_admin():
-    """Create the default admin user if one doesn't exist yet."""
+    """Create the default admin and super_admin users if they don't exist yet."""
     from app.models.user import User, UserRole
     from app.utils.auth import hash_password
 
     db = SessionLocal()
     try:
+        # ── regular admin ──────────────────────────────────────────────────
         admin_email = os.environ.get("ADMIN_EMAIL", "admin@alera.health")
         admin_password = os.environ.get("ADMIN_PASSWORD", "admin_alera_2026!")
 
-        existing = db.query(User).filter(User.email == admin_email).first()
-        if existing:
-            return  # Already seeded
+        if not db.query(User).filter(User.email == admin_email).first():
+            admin = User(
+                email=admin_email,
+                username="admin",
+                hashed_password=hash_password(admin_password),
+                first_name="Alera",
+                last_name="Admin",
+                role=UserRole.ADMIN,
+                is_active=True,
+                is_verified=True,
+                email_verified=True,
+                email_verified_at=utcnow(),
+                session_version=0,
+                notification_email=True,
+                notification_sms=False,
+                privacy_public_profile=False,
+            )
+            db.add(admin)
+            db.flush()
+            print(f"✓ Default admin seeded: {admin_email}")
 
-        admin = User(
-            email=admin_email,
-            username="admin",
-            hashed_password=hash_password(admin_password),
-            first_name="Alera",
-            last_name="Admin",
-            role=UserRole.ADMIN,
-            is_active=True,
-            is_verified=True,
-            email_verified=True,
-            email_verified_at=utcnow(),
-        )
-        db.add(admin)
+        # ── super admin ────────────────────────────────────────────────────
+        super_email = os.environ.get("SUPER_ADMIN_EMAIL", "superadmin@alera.health")
+        super_password = os.environ.get("SUPER_ADMIN_PASSWORD", "superadmin_alera_2026!")
+
+        if not db.query(User).filter(User.email == super_email).first():
+            super_admin = User(
+                email=super_email,
+                username="superadmin",
+                hashed_password=hash_password(super_password),
+                first_name="Alera",
+                last_name="SuperAdmin",
+                role=UserRole.SUPER_ADMIN,
+                is_active=True,
+                is_verified=True,
+                email_verified=True,
+                email_verified_at=utcnow(),
+                session_version=0,
+                notification_email=True,
+                notification_sms=False,
+                privacy_public_profile=False,
+            )
+            db.add(super_admin)
+            db.flush()
+            print(f"✓ Default super admin seeded: {super_email}")
+
         db.commit()
-        print(f"✓ Default admin seeded: {admin_email}")
     except Exception as e:
         db.rollback()
         print(f"WARNING: Could not seed admin: {e}")
