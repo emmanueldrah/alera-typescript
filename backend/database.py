@@ -274,12 +274,8 @@ def _patch_userrole_enum_values():
     """Add missing user role enum values and rename uppercase to lowercase for PostgreSQL userrole type."""
     if not str(database_url).startswith("postgresql"):
         # SQLite uses VARCHAR, so no enum alteration needed
-        return
-
-def _patch_userrole_enum_values():
-    """Add missing user role enum values and rename uppercase to lowercase for PostgreSQL userrole type."""
-    if not str(database_url).startswith("postgresql"):
-        # SQLite uses VARCHAR, so no enum alteration needed
+        # But we still need to normalize any existing uppercase values
+        _normalize_uppercase_roles_sqlite()
         return
 
     try:
@@ -319,7 +315,7 @@ def _patch_userrole_enum_values():
                     "AMBULANCE": "ambulance"
                 }
                 
-                # Update data to lowercase
+                # Update data to lowercase first
                 for old_value, new_value in renames.items():
                     try:
                         result = conn.execute(text(f"UPDATE users SET role = '{new_value}' WHERE role = '{old_value}'"))
@@ -361,6 +357,49 @@ def _patch_userrole_enum_values():
         print(f"WARNING: Could not patch userrole enum values: {e}")
         import traceback
         print(f"DEBUG: Exception traceback: {traceback.format_exc()}")
+
+
+def _normalize_uppercase_roles_sqlite():
+    """Normalize any uppercase role values in SQLite to lowercase."""
+    if not str(database_url).startswith("sqlite"):
+        return
+
+    try:
+        uppercase_roles = {
+            "PATIENT": "patient",
+            "PROVIDER": "provider",
+            "PHARMACIST": "pharmacist",
+            "ADMIN": "admin",
+            "SUPER_ADMIN": "super_admin",
+            "HOSPITAL": "hospital",
+            "LABORATORY": "laboratory",
+            "IMAGING": "imaging",
+            "AMBULANCE": "ambulance"
+        }
+        
+        with engine.begin() as conn:
+            # Check if users table exists
+            try:
+                result = conn.execute(text("SELECT 1 FROM users LIMIT 1"))
+                result.fetchone()
+            except Exception:
+                # Table doesn't exist yet
+                return
+            
+            # Update each uppercase role to lowercase
+            update_count = 0
+            for old_role, new_role in uppercase_roles.items():
+                result = conn.execute(text(f"UPDATE users SET role = '{new_role}' WHERE role = '{old_role}'"))
+                updated = result.rowcount
+                if updated > 0:
+                    print(f"DEBUG: Updated {updated} users from {old_role} to {new_role}")
+                    update_count += updated
+            
+            if update_count > 0:
+                print(f"✓ Normalized {update_count} role value(s) to lowercase in SQLite")
+    except Exception as e:
+        print(f"WARNING: Could not normalize uppercase roles in SQLite: {e}")
+
 
 
 def init_db():
