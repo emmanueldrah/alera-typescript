@@ -2,7 +2,7 @@ import React, { useState, useCallback, useEffect } from 'react';
 import { clearAleraStorage } from '@/lib/storageKeys';
 import { AuthContext } from './auth-context';
 import { authApi, usersApi, type ApiUser } from '@/lib/apiService';
-import { setTokens, getAccessToken, clearTokens } from '@/lib/apiClient';
+import { setTokens, getAccessToken, clearTokens, setGlobalLogoutCallback } from '@/lib/apiClient';
 
 export type UserRole =
   | 'patient'
@@ -118,6 +118,14 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const [users, setUsers] = useState<User[]>([]);
   const [isLoading, setIsLoading] = useState(true);
 
+  // Set global logout callback for apiClient
+  useEffect(() => {
+    setGlobalLogoutCallback(() => {
+      setUser(null);
+      setUsers([]);
+    });
+  }, []);
+
   const loadAccessibleUsers = useCallback(async () => {
     try {
       const response = await usersApi.getAccessibleUsers();
@@ -228,7 +236,10 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
   const logout = useCallback(async () => {
     try {
-      await authApi.logout();
+      // Only call logout API if we have a user (avoid 401 on already logged out state)
+      if (user) {
+        await authApi.logout();
+      }
     } catch (error) {
       console.error('Logout error:', error);
     } finally {
@@ -237,7 +248,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       setUsers([]);
       clearTokens();
     }
-  }, []);
+  }, [user]);
 
   const updateProfile = useCallback(async (profile: Partial<UserProfile>) => {
     if (!user) throw new Error('No user logged in');
@@ -313,8 +324,10 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         : undefined;
 
       if (status === 401 || status === 403) {
-        clearTokens();
+        // Clear auth state on authentication failure
         setUser(null);
+        setUsers([]);
+        clearTokens();
       } else {
         console.error('Failed to refresh current user:', error);
       }

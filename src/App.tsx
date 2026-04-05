@@ -1,5 +1,5 @@
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { BrowserRouter, Route, Routes, Navigate } from "react-router-dom";
+import { BrowserRouter, Route, Routes, Navigate, useLocation } from "react-router-dom";
 import { Toaster as Sonner } from "@/components/ui/sonner";
 import { Toaster } from "@/components/ui/toaster";
 import { TooltipProvider } from "@/components/ui/tooltip";
@@ -29,7 +29,12 @@ const queryClient = new QueryClient();
 
 const AuthRedirect = ({ children }: { children: React.ReactNode }) => {
   const { isAuthenticated, isLoading } = useAuth();
-  if (!isLoading && isAuthenticated) return <Navigate to="/dashboard" replace />;
+  const location = useLocation();
+
+  // Don't redirect if user is already on auth pages
+  const isOnAuthPage = ['/login', '/signup', '/forgot-password', '/reset-password', '/verify-email'].includes(location.pathname);
+
+  if (!isLoading && isAuthenticated && !isOnAuthPage) return <Navigate to="/dashboard" replace />;
   return <>{children}</>;
 };
 
