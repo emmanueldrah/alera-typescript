@@ -276,22 +276,40 @@ def _patch_userrole_enum_values():
         # SQLite uses VARCHAR, so no enum alteration needed
         return
 
+def _patch_userrole_enum_values():
+    """Add missing user role enum values and rename uppercase to lowercase for PostgreSQL userrole type."""
+    if not str(database_url).startswith("postgresql"):
+        # SQLite uses VARCHAR, so no enum alteration needed
+        return
+
     try:
-        # Get all enums without specifying schema
-        enum_specs = inspect(engine).get_enums()
-        print(f"DEBUG: Found {len(enum_specs)} enum types in database")
-        for enum in enum_specs:
-            print(f"DEBUG: Enum: {enum.get('name')} with labels: {enum.get('labels')}")
-        
-        for enum in enum_specs:
-            if enum.get("name", "").lower() in ("userrole", "user_role"):
-                labels = list(enum.get("labels") or [])
-                print(f"DEBUG: Patching userrole enum with labels: {labels}")
+        with engine.begin() as conn:
+            # Get enum info using raw SQL
+            result = conn.execute(text("""
+                SELECT n.nspname AS schema_name, t.typname AS type_name, 
+                       array_agg(e.enumlabel ORDER BY e.enumsortorder) AS labels
+                FROM pg_type t
+                JOIN pg_enum e ON t.oid = e.enumtypid
+                JOIN pg_namespace n ON t.typnamespace = n.oid
+                WHERE t.typname = 'userrole'
+                GROUP BY n.nspname, t.typname
+            """))
+            enum_info = result.fetchone()
+            
+            if enum_info:
+                schema_name, type_name, labels = enum_info
+                print(f"DEBUG: Found userrole enum in schema {schema_name} with labels: {labels}")
+                
+                # Convert labels to list if it's an array
+                if hasattr(labels, '__iter__') and not isinstance(labels, str):
+                    labels = list(labels)
+                else:
+                    labels = [labels] if labels else []
                 
                 # First, update any existing data to use lowercase
                 renames = {
                     "PATIENT": "patient",
-                    "PROVIDER": "provider",
+                    "PROVIDER": "provider", 
                     "PHARMACIST": "pharmacist",
                     "ADMIN": "admin",
                     "SUPER_ADMIN": "super_admin",
@@ -301,44 +319,44 @@ def _patch_userrole_enum_values():
                     "AMBULANCE": "ambulance"
                 }
                 
-                with engine.begin() as conn:
-                    # Update data to lowercase
-                    for old_value, new_value in renames.items():
+                # Update data to lowercase
+                for old_value, new_value in renames.items():
+                    try:
+                        result = conn.execute(text(f"UPDATE users SET role = '{new_value}' WHERE role = '{old_value}'"))
+                        updated = result.rowcount
+                        if updated > 0:
+                            print(f"DEBUG: Updated {updated} users from {old_value} to {new_value}")
+                    except Exception as e:
+                        print(f"WARNING: Could not update role {old_value} to {new_value}: {e}")
+                
+                # Rename enum labels
+                rename_count = 0
+                for old_label, new_label in renames.items():
+                    if old_label in labels:
                         try:
-                            result = conn.execute(text(f"UPDATE users SET role = '{new_value}' WHERE role = '{old_value}'"))
-                            updated = result.rowcount
-                            if updated > 0:
-                                print(f"DEBUG: Updated {updated} users from {old_value} to {new_value}")
+                            conn.execute(text(f"ALTER TYPE {schema_name}.userrole RENAME VALUE '{old_label}' TO '{new_label}'"))
+                            rename_count += 1
+                            print(f"DEBUG: Renamed enum value {old_label} to {new_label}")
                         except Exception as e:
-                            print(f"WARNING: Could not update role {old_value} to {new_value}: {e}")
-                    
-                    # Rename enum labels
-                    rename_count = 0
-                    for old_label, new_label in renames.items():
-                        if old_label in labels:
-                            try:
-                                conn.execute(text(f"ALTER TYPE userrole RENAME VALUE '{old_label}' TO '{new_label}'"))
-                                rename_count += 1
-                                print(f"DEBUG: Renamed enum value {old_label} to {new_label}")
-                            except Exception as e:
-                                print(f"WARNING: Could not rename {old_label} to {new_label}: {e}")
-                    
-                    if rename_count > 0:
-                        print(f"✓ Renamed {rename_count} PostgreSQL userrole enum label(s) to lowercase")
-                    
-                    # Add missing values
-                    missing_values = [value for value in ("admin", "super_admin") if value not in labels and value not in renames.values()]
-                    if missing_values:
-                        for value in missing_values:
-                            try:
-                                conn.execute(text(f"ALTER TYPE userrole ADD VALUE IF NOT EXISTS '{value}'"))
-                                print(f"DEBUG: Added {value} to userrole enum")
-                            except Exception as e:
-                                print(f"WARNING: Could not add {value} to userrole enum: {e}")
-                        print(f"✓ Added {', '.join(missing_values)} to PostgreSQL userrole enum")
-                break
-        else:
-            print("WARNING: userrole enum not found in database")
+                            print(f"WARNING: Could not rename {old_label} to {new_label}: {e}")
+                
+                if rename_count > 0:
+                    print(f"✓ Renamed {rename_count} PostgreSQL userrole enum label(s) to lowercase")
+                
+                # Add missing values
+                all_desired = set(renames.values())
+                missing_values = [value for value in ("admin", "super_admin") if value not in labels and value not in all_desired]
+                if missing_values:
+                    for value in missing_values:
+                        try:
+                            conn.execute(text(f"ALTER TYPE {schema_name}.userrole ADD VALUE IF NOT EXISTS '{value}'"))
+                            print(f"DEBUG: Added {value} to userrole enum")
+                        except Exception as e:
+                            print(f"WARNING: Could not add {value} to userrole enum: {e}")
+                    print(f"✓ Added {', '.join(missing_values)} to PostgreSQL userrole enum")
+            else:
+                print("WARNING: userrole enum not found in database via raw SQL")
+                
     except Exception as e:
         print(f"WARNING: Could not patch userrole enum values: {e}")
         import traceback
