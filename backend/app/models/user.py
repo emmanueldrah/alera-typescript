@@ -18,6 +18,9 @@ class UserRole(str, enum.Enum):
     IMAGING = "imaging"
     AMBULANCE = "ambulance"
 
+    def __str__(self) -> str:
+        return self.value
+
 
 class User(Base):
     __tablename__ = "users"

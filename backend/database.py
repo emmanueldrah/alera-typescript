@@ -270,23 +270,26 @@ def _patch_postgres_enum_values():
         print(f"✓ Normalized {rename_count} PostgreSQL enum label(s)")
 
 
-def _patch_super_admin_enum_value():
-    """Add super_admin to the userrole enum in PostgreSQL if not already present."""
+def _patch_userrole_enum_values():
+    """Add missing user role enum values to the PostgreSQL userrole type."""
     if not str(database_url).startswith("postgresql"):
         # SQLite uses VARCHAR, so no enum alteration needed
         return
+
     try:
         enum_specs = inspect(engine).get_enums(schema="public")
         for enum in enum_specs:
             if enum.get("name", "").lower() in ("userrole", "user_role"):
                 labels = list(enum.get("labels") or [])
-                if "super_admin" not in labels:
+                missing_values = [value for value in ("admin", "super_admin") if value not in labels]
+                if missing_values:
                     with engine.begin() as conn:
-                        conn.execute(text("ALTER TYPE userrole ADD VALUE IF NOT EXISTS 'super_admin'"))
-                    print("✓ Added 'super_admin' to PostgreSQL userrole enum")
+                        for value in missing_values:
+                            conn.execute(text(f"ALTER TYPE userrole ADD VALUE IF NOT EXISTS '{value}'"))
+                    print(f"✓ Added {', '.join(missing_values)} to PostgreSQL userrole enum")
                 break
     except Exception as e:
-        print(f"WARNING: Could not patch super_admin enum value: {e}")
+        print(f"WARNING: Could not patch userrole enum values: {e}")
 
 
 def init_db():
@@ -299,7 +302,7 @@ def init_db():
         _patch_users_session_version_column()
         _patch_users_account_recovery_columns()
         _patch_users_notification_preferences_columns()
-        _patch_super_admin_enum_value()
+        _patch_userrole_enum_values()
         _patch_postgres_enum_values()
         _patch_admin_accounts_email_verified()
         print("✓ Database tables initialized successfully")
