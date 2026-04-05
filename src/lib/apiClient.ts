@@ -137,3 +137,10 @@ let globalLogoutCallback: () => void = () => {};
 export const setGlobalLogoutCallback = (callback: () => void) => {
   globalLogoutCallback = callback;
 };
+
+export {
+  getAccessToken,
+  getRefreshToken,
+  setTokens,
+  clearTokens,
+};
