@@ -76,18 +76,28 @@ const roleNavItems: Record<string, { label: string; icon: React.ReactNode; path:
     { label: 'Analytics', icon: <Activity className="w-5 h-5" />, path: '/dashboard/analytics' },
     { label: 'Notifications', icon: <Bell className="w-5 h-5" />, path: '/dashboard/notifications' },
   ],
+  super_admin: [
+    { label: 'Dashboard', icon: <LayoutDashboard className="w-5 h-5" />, path: '/dashboard' },
+    { label: 'Users', icon: <Users className="w-5 h-5" />, path: '/dashboard/users' },
+    { label: 'Verifications', icon: <ShieldCheck className="w-5 h-5" />, path: '/dashboard/verifications' },
+    { label: 'Analytics', icon: <Activity className="w-5 h-5" />, path: '/dashboard/analytics' },
+    { label: 'Notifications', icon: <Bell className="w-5 h-5" />, path: '/dashboard/notifications' },
+    { label: 'Admin Billing', icon: <FileText className="w-5 h-5" />, path: '/dashboard/admin-billing' },
+    { label: 'Audit Logs', icon: <AlertCircle className="w-5 h-5" />, path: '/dashboard/audit' },
+    { label: 'Create Admin', icon: <ShieldCheck className="w-5 h-5" />, path: '/dashboard/admin/create' },
+  ],
 };
 
 const roleLabels: Record<string, string> = {
   patient: 'Patient', doctor: 'Doctor', hospital: 'Hospital', laboratory: 'Laboratory',
-  imaging: 'Imaging Center', pharmacy: 'Pharmacy', ambulance: 'Ambulance', admin: 'Admin',
+  imaging: 'Imaging Center', pharmacy: 'Pharmacy', ambulance: 'Ambulance', admin: 'Admin', super_admin: 'Super Admin',
 };
 
 const roleIcons: Record<string, React.ReactNode> = {
   patient: <Users className="w-5 h-5" />, doctor: <Heart className="w-5 h-5" />,
   hospital: <Building2 className="w-5 h-5" />, laboratory: <FlaskConical className="w-5 h-5" />,
   imaging: <ScanLine className="w-5 h-5" />, pharmacy: <Pill className="w-5 h-5" />,
-  ambulance: <Ambulance className="w-5 h-5" />, admin: <ShieldCheck className="w-5 h-5" />,
+  ambulance: <Ambulance className="w-5 h-5" />, admin: <ShieldCheck className="w-5 h-5" />, super_admin: <ShieldCheck className="w-5 h-5" />,
 };
 
 interface DashboardLayoutProps {
