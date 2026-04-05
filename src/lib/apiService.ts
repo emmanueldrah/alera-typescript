@@ -732,6 +732,22 @@ export const adminApi = {
     return response.data;
   },
 
+  createUser: async (userData: {
+    email: string;
+    username: string;
+    password: string;
+    first_name: string;
+    last_name: string;
+    phone?: string;
+    role: string;
+    license_number?: string;
+    license_state?: string;
+    specialty?: string;
+  }) => {
+    const response = await apiClient.post('/admin/users/create', userData);
+    return response.data;
+  },
+
   deleteUser: async (userId: string | number) => {
     const response = await apiClient.delete(`/admin/users/${userId}`);
     return response.data;

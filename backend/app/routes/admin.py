@@ -13,7 +13,7 @@ from app.utils.access import WORKFORCE_ROLES, normalized_enum_text
 from app.utils.time import utcnow
 from app.utils.auth import hash_password
 from datetime import datetime, timedelta, time
-from pydantic import BaseModel, EmailStr, Field
+from pydantic import BaseModel, EmailStr, Field, model_validator
 from typing import Optional
 
 router = APIRouter(prefix="/api/admin", tags=["admin"])
@@ -44,6 +44,26 @@ class CreateAdminRequest(BaseModel):
     last_name: str
     phone: Optional[str] = None
     role: str = "admin"  # "admin" or "super_admin"
+
+
+class CreateUserRequest(BaseModel):
+    email: EmailStr
+    username: str = Field(..., min_length=3)
+    password: str = Field(..., min_length=8)
+    first_name: str
+    last_name: str
+    phone: Optional[str] = None
+    role: UserRole = UserRole.PATIENT
+    license_number: Optional[str] = None
+    license_state: Optional[str] = None
+    specialty: Optional[str] = None
+
+    @model_validator(mode="after")
+    def validate_role_specific_fields(self):
+        if self.role not in (UserRole.PATIENT, UserRole.ADMIN, UserRole.SUPER_ADMIN):
+            if not self.license_number or not self.license_state:
+                raise ValueError("license_number and license_state are required for professional accounts")
+        return self
 
 
 # ─────────────────────────────────────────────────────────────────────────────
@@ -280,6 +300,67 @@ async def change_user_role(
         "message": f"User role changed from {old_role.value} to {new_role}",
         "user_id": user_id, "old_role": old_role.value, "new_role": new_role
     }
+
+
+@router.post("/users/create", response_model=UserResponse)
+async def create_user_account(
+    payload: CreateUserRequest,
+    current_user: User = Depends(get_current_admin),
+    db: Session = Depends(get_db)
+):
+    """Create a new user account through the admin console."""
+
+    if payload.role in (UserRole.ADMIN, UserRole.SUPER_ADMIN) and current_user.role != UserRole.SUPER_ADMIN:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Only super admins can create admin or super admin accounts"
+        )
+
+    existing = db.query(User).filter(
+        (User.email == payload.email) | (User.username == payload.username)
+    ).first()
+    if existing:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Email or username already in use"
+        )
+
+    new_user = User(
+        email=payload.email,
+        username=payload.username,
+        hashed_password=hash_password(payload.password),
+        first_name=payload.first_name,
+        last_name=payload.last_name,
+        phone=payload.phone,
+        role=payload.role,
+        license_number=payload.license_number,
+        specialty=payload.specialty,
+        license_state=payload.license_state,
+        is_active=True,
+        is_verified=payload.role in (UserRole.PATIENT, UserRole.ADMIN, UserRole.SUPER_ADMIN),
+        email_verified=True,
+        email_verified_at=utcnow(),
+        session_version=0,
+        notification_email=True,
+        notification_sms=False,
+        privacy_public_profile=False,
+    )
+    db.add(new_user)
+    db.commit()
+    db.refresh(new_user)
+
+    from app.routes.audit import log_action
+    await log_action(
+        db=db,
+        user_id=current_user.id,
+        action="admin.create_user",
+        resource_type="user",
+        resource_id=new_user.id,
+        description=f"Created account with role {new_user.role.value}: {new_user.email}",
+        status="created",
+    )
+
+    return new_user
 
 
 # ─────────────────────────────────────────────────────────────────────────────
