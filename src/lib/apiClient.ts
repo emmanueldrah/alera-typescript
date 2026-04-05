@@ -20,6 +20,7 @@ const API_BASE_URL = resolveApiBaseUrl();
 export const apiClient: AxiosInstance = axios.create({
   baseURL: API_BASE_URL,
   timeout: 10000,
+  withCredentials: true,
   headers: {
     'Content-Type': 'application/json',
   },
@@ -50,8 +51,8 @@ const clearTokens = (): void => {
 // Request interceptor - Cookies are sent automatically, no need to add Authorization header
 apiClient.interceptors.request.use(
   (config) => {
-    // Cookies with tokens are sent automatically by the browser
-    // No need to manually add Authorization header
+    // Ensure cookies are included in every request for auth flows
+    config.withCredentials = true;
     return config;
   },
   (error) => Promise.reject(error)
