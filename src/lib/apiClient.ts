@@ -114,12 +114,7 @@ apiClient.interceptors.response.use(
       } catch (refreshError) {
         clearTokens();
         // Call global logout callback to update AuthContext state
-        if (globalLogoutCallback) {
-          globalLogoutCallback();
-        } else {
-          // Fallback to direct redirect if callback not set
-          window.location.href = '/login';
-        }
+        globalLogoutCallback();
         processQueue(refreshError as AxiosError, null);
         return Promise.reject(refreshError);
       } finally {
@@ -136,7 +131,7 @@ apiClient.interceptors.response.use(
 );
 
 // Global logout callback - set by AuthContext
-let globalLogoutCallback: (() => void) | null = null;
+let globalLogoutCallback: () => void = () => {};
 
 export const setGlobalLogoutCallback = (callback: () => void) => {
   globalLogoutCallback = callback;
