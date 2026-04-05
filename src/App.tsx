@@ -31,10 +31,13 @@ const AuthRedirect = ({ children }: { children: React.ReactNode }) => {
   const { isAuthenticated, isLoading } = useAuth();
   const location = useLocation();
 
-  // Don't redirect if user is already on auth pages
+  // Don't redirect from auth pages - allow authenticated users to access login/signup if needed
   const isOnAuthPage = ['/login', '/signup', '/forgot-password', '/reset-password', '/verify-email'].includes(location.pathname);
 
-  if (!isLoading && isAuthenticated && !isOnAuthPage) return <Navigate to="/dashboard" replace />;
+  // Only redirect from landing pages if authenticated
+  const isOnLandingPage = ['/', '/how-it-works', '/features', '/trust', '/who-we-serve'].includes(location.pathname);
+
+  if (!isLoading && isAuthenticated && isOnLandingPage) return <Navigate to="/dashboard" replace />;
   return <>{children}</>;
 };
 
@@ -71,8 +74,8 @@ const App = () => {
                         <Route path="/trust" element={<LandingTrust />} />
                         <Route path="/who-we-serve" element={<LandingWhoWeServe />} />
                       </Route>
-                      <Route path="/login" element={<AuthRedirect><Login /></AuthRedirect>} />
-                      <Route path="/signup" element={<AuthRedirect><Signup /></AuthRedirect>} />
+                      <Route path="/login" element={<Login />} />
+                      <Route path="/signup" element={<Signup />} />
                       <Route path="/forgot-password" element={<ForgotPassword />} />
                       <Route path="/reset-password" element={<ResetPassword />} />
                       <Route path="/verify-email" element={<VerifyEmail />} />

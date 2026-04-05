@@ -308,7 +308,16 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     });
   }, [user, updateProfile]);
 
+  const [lastRefreshAttempt, setLastRefreshAttempt] = useState<number>(0);
+
   const refreshCurrentUser = useCallback(async () => {
+    const now = Date.now();
+    // Prevent refresh attempts more than once every 5 seconds
+    if (now - lastRefreshAttempt < 5000) {
+      return null;
+    }
+    setLastRefreshAttempt(now);
+
     try {
       const userData = await authApi.getCurrentUser();
       if (isApiUser(userData)) {
@@ -373,8 +382,14 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   }, [loadAccessibleUsers, user]);
 
   useEffect(() => {
+    let lastVisibilityCheck = Date.now();
+
     const syncUser = () => {
-      void refreshCurrentUser();
+      // Only refresh if we have a user and it's been at least 30 seconds since last check
+      if (user && Date.now() - lastVisibilityCheck > 30000) {
+        lastVisibilityCheck = Date.now();
+        void refreshCurrentUser();
+      }
     };
 
     const handleVisibilityChange = () => {
@@ -383,14 +398,13 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       }
     };
 
-    window.addEventListener('focus', syncUser);
+    // Only listen for visibility changes, not focus (too frequent)
     document.addEventListener('visibilitychange', handleVisibilityChange);
 
     return () => {
-      window.removeEventListener('focus', syncUser);
       document.removeEventListener('visibilitychange', handleVisibilityChange);
     };
-  }, [refreshCurrentUser]);
+  }, [refreshCurrentUser, user]);
 
   if (isLoading) {
     // Don't mock auth methods during initialization; we still need signup/login to work
