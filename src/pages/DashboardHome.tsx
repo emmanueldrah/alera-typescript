@@ -19,6 +19,7 @@ const dashboardMap: Record<string, React.ComponentType> = {
   pharmacy: PharmacyDashboard,
   ambulance: AmbulanceDashboard,
   admin: AdminDashboard,
+  super_admin: AdminDashboard,
   // Backend enum values (may differ from frontend labels)
   provider: DoctorDashboard,    // backend stores doctors as 'provider'
   pharmacist: PharmacyDashboard, // backend stores pharmacists as 'pharmacist'

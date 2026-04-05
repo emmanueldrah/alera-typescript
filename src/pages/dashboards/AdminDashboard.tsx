@@ -44,6 +44,9 @@ const AdminDashboard = () => {
   const [isExporting, setIsExporting] = useState(false);
   const [exportSuccess, setExportSuccess] = useState(false);
 
+  const isSuperAdmin = user?.role === 'super_admin';
+  const isAdmin = user?.role === 'admin' || isSuperAdmin;
+
   const fetchStats = useCallback(async (silent = false) => {
     if (!silent) setIsRefreshing(true);
     try {
@@ -122,7 +125,7 @@ const AdminDashboard = () => {
       <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
         <div>
           <h1 className="text-2xl font-display font-bold text-foreground flex items-center gap-2">
-            Admin Real-time Dashboard
+            {isSuperAdmin ? 'Super Admin' : 'Admin'} Real-time Dashboard
             {isRefreshing && <RefreshCcw className="w-4 h-4 text-primary animate-spin" />}
           </h1>
           <p className="text-muted-foreground mt-1">
@@ -209,7 +212,7 @@ const AdminDashboard = () => {
             { icon: <ScanLine className="w-4 h-4" />, label: 'Imaging', value: userCounts.imaging || 0 },
             { icon: <Pill className="w-4 h-4" />, label: 'Pharmacies', value: userCounts.pharmacist || 0 },
             { icon: <Ambulance className="w-4 h-4" />, label: 'Ambulance Units', value: userCounts.ambulance || 0 },
-            { icon: <ShieldCheck className="w-4 h-4" />, label: 'Admins', value: userCounts.admin || 0 },
+            { icon: <ShieldCheck className="w-4 h-4" />, label: 'Admins', value: (userCounts.admin || 0) + (userCounts.super_admin || 0) },
           ].map((item, i) => (
             <div key={i} className="flex items-center gap-3 p-4 rounded-xl bg-secondary/30 border border-border/50 hover:bg-secondary/50 transition-colors group">
               <span className="text-primary group-hover:scale-110 transition-transform">{item.icon}</span>
@@ -236,9 +239,29 @@ const AdminDashboard = () => {
                 <div className="w-8 h-8 rounded-lg bg-primary/10 flex items-center justify-center text-primary">
                   <Users className="w-4 h-4" />
                 </div>
-                Verify Users
+                Manage Users
               </div>
               <Activity className="w-4 h-4 text-muted-foreground group-hover:text-primary" />
+            </Link>
+            {isSuperAdmin && (
+              <Link to="/dashboard/admin/create" className="flex items-center justify-between p-3 rounded-xl hover:bg-secondary transition-colors border border-border/50 group">
+                <div className="flex items-center gap-3 text-sm font-medium">
+                  <div className="w-8 h-8 rounded-lg bg-destructive/10 flex items-center justify-center text-destructive">
+                    <ShieldCheck className="w-4 h-4" />
+                  </div>
+                  Create Admin
+                </div>
+                <Activity className="w-4 h-4 text-muted-foreground group-hover:text-destructive" />
+              </Link>
+            )}
+            <Link to="/dashboard/audit" className="flex items-center justify-between p-3 rounded-xl hover:bg-secondary transition-colors border border-border/50 group">
+              <div className="flex items-center gap-3 text-sm font-medium">
+                <div className="w-8 h-8 rounded-lg bg-warning/10 flex items-center justify-center text-warning">
+                  <FileText className="w-4 h-4" />
+                </div>
+                Audit Logs
+              </div>
+              <Activity className="w-4 h-4 text-muted-foreground group-hover:text-warning" />
             </Link>
             <button onClick={generateReport} className="w-full flex items-center justify-between p-3 rounded-xl hover:bg-secondary transition-colors border border-border/50 group text-left">
               <div className="flex items-center gap-3 text-sm font-medium">

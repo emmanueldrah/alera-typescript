@@ -26,16 +26,17 @@ def create_admin():
             return
 
         # Create the admin user
-        print("Creating default admin user...")
+        print("Creating default super admin user...")
         admin = User(
             email=admin_email,
             username="admin",
             hashed_password=hash_password("admin_alera_2026!"),
             first_name="Alera",
             last_name="Admin",
-            role=UserRole.ADMIN,
+            role=UserRole.SUPER_ADMIN,
             is_active=True,
-            is_verified=True
+            is_verified=True,
+            email_verified=True
         )
         
         db.add(admin)

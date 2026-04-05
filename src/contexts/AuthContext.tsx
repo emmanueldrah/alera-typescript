@@ -12,7 +12,8 @@ export type UserRole =
   | 'imaging'
   | 'pharmacy'
   | 'ambulance'
-  | 'admin';
+  | 'admin'
+  | 'super_admin';
 
 export type SignupRole = Exclude<UserRole, 'admin'>;
 
@@ -73,6 +74,8 @@ const mapBackendUser = (data: ApiUser): User => {
         return 'ambulance';
       case 'admin':
         return 'admin';
+      case 'super_admin':
+        return 'super_admin';
       default:
         return 'patient';
     }

@@ -91,7 +91,7 @@ async def get_audit_logs(
     - days: Number of days to look back (default: 30, max: 2555 for 7 years)
     """
     
-    if current_user.role.value != "admin":
+    if current_user.role.value not in ("admin", "super_admin"):
         raise HTTPException(status_code=403, detail="Only admins can view audit logs")
 
     # Clamp request parameters to safe ranges.
@@ -136,7 +136,7 @@ async def export_audit_logs(
     (Admin only)
     """
     
-    if current_user.role.value != "admin":
+    if current_user.role.value not in ("admin", "super_admin"):
         raise HTTPException(status_code=403, detail="Only admins can export logs")
 
     from fastapi.responses import StreamingResponse

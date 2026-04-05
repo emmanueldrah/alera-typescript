@@ -41,7 +41,7 @@ const featureRoutes = [
   'health-metrics', 'notifications', 'appointment-reminders', 'smart-appointment-reminders',
   'allergies', 'prescription-refills', 'medical-history', 'consent',
   'clinical-notes', 'problem-list', 'medication-adherence',
-  'pricing-settings', 'billing', 'admin-billing',
+  'pricing-settings', 'billing', 'admin-billing', 'audit', 'admin/create',
 ];
 
 const App = () => {

@@ -33,6 +33,8 @@ import { SmartAppointmentRemindersPage } from '@/pages/features/SmartAppointment
 import PricingSettingsPage from '@/pages/features/PricingSettingsPage';
 import BillingPage from '@/pages/features/BillingPage';
 import AdminBillingDashboard from '@/pages/features/AdminBillingDashboard';
+import AuditLogsPage from '@/pages/features/AuditLogsPage';
+import CreateAdminPage from '@/pages/features/CreateAdminPage';
 
 interface FeatureWrapperProps {
   page: string;
@@ -83,6 +85,8 @@ const pageMap: Record<string, FeatureConfig> = {
   'pricing-settings': { component: PricingSettingsPage },
   billing: { component: BillingPage },
   'admin-billing': { component: AdminBillingDashboard },
+  audit: { component: AuditLogsPage },
+  'admin/create': { component: CreateAdminPage },
 };
 
 const FeatureWrapper = ({ page }: FeatureWrapperProps) => {

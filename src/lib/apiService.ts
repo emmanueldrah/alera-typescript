@@ -6,7 +6,7 @@ export interface ApiUser {
   full_name?: string;
   first_name?: string;
   last_name?: string;
-  role: 'patient' | 'provider' | 'pharmacist' | 'admin' | 'hospital' | 'laboratory' | 'imaging' | 'ambulance';
+  role: 'patient' | 'provider' | 'pharmacist' | 'admin' | 'super_admin' | 'hospital' | 'laboratory' | 'imaging' | 'ambulance';
   is_active?: boolean;
   is_verified?: boolean;
   email_verified?: boolean;
@@ -715,6 +715,35 @@ export const adminApi = {
 
   getActiveEmergencyDispatch: async () => {
     const response = await apiClient.get('/admin/ops/emergencies/active');
+    return response.data;
+  },
+
+  // SUPER ADMIN ONLY ENDPOINTS
+  createAdmin: async (adminData: {
+    email: string;
+    username: string;
+    password: string;
+    first_name: string;
+    last_name: string;
+    phone?: string;
+    role: 'admin' | 'super_admin';
+  }) => {
+    const response = await apiClient.post('/admin/admins/create', adminData);
+    return response.data;
+  },
+
+  deleteUser: async (userId: string | number) => {
+    const response = await apiClient.delete(`/admin/users/${userId}`);
+    return response.data;
+  },
+
+  listAdmins: async (skip: number = 0, limit: number = 100) => {
+    const response = await apiClient.get('/admin/admins/', { params: { skip, limit } });
+    return response.data;
+  },
+
+  getSystemInfo: async () => {
+    const response = await apiClient.get('/admin/system/info');
     return response.data;
   },
 };

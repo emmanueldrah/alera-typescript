@@ -282,9 +282,7 @@ def _patch_super_admin_enum_value():
                 labels = list(enum.get("labels") or [])
                 if "super_admin" not in labels:
                     with engine.begin() as conn:
-                        conn.exec_driver_sql(
-                            "ALTER TYPE "userrole" ADD VALUE IF NOT EXISTS 'super_admin'"
-                        )
+                        conn.execute(text("ALTER TYPE userrole ADD VALUE IF NOT EXISTS 'super_admin'"))
                     print("✓ Added 'super_admin' to PostgreSQL userrole enum")
                 break
     except Exception as e:
