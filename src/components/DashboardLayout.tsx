@@ -11,7 +11,7 @@ import {
 } from '@/lib/verificationStatus';
 import {
   Heart, LayoutDashboard, Calendar, FileText, FlaskConical, ScanLine,
-  Pill, Ambulance, Users, Building2, ShieldCheck, Activity, Bell,
+  Pill, Ambulance, Users, Building2, ShieldCheck, Activity, Bell, AlertCircle,
   LogOut, Menu, X, Clock, MessageSquare, Settings, HeartPulse, Mail
 } from 'lucide-react';
 import { memo } from 'react';
