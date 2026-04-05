@@ -18,6 +18,9 @@ describe('feature access', () => {
     expect(canAccessFeature('health-metrics', 'doctor')).toBe(false);
     expect(canAccessFeature('scan-requests', 'imaging')).toBe(true);
     expect(canAccessFeature('scan-requests', 'patient')).toBe(false);
+    expect(canAccessFeature('health-metrics', 'super_admin')).toBe(true);
+    expect(canAccessFeature('pricing-settings', 'super_admin')).toBe(true);
+    expect(canAccessFeature('billing', 'super_admin')).toBe(true);
   });
 });
 

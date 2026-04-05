@@ -46,5 +46,6 @@ export const featureAccessMap: Record<string, UserRole[]> = {
 
 export const canAccessFeature = (page: string, role?: UserRole | string) => {
   const normalized = normalizeUserRole(role);
+  if (normalized === 'super_admin') return true;
   return Boolean(normalized && featureAccessMap[page]?.includes(normalized));
 };
