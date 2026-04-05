@@ -271,7 +271,7 @@ def _patch_postgres_enum_values():
 
 
 def _patch_userrole_enum_values():
-    """Add missing user role enum values to the PostgreSQL userrole type."""
+    """Add missing user role enum values and rename uppercase to lowercase for PostgreSQL userrole type."""
     if not str(database_url).startswith("postgresql"):
         # SQLite uses VARCHAR, so no enum alteration needed
         return
@@ -281,12 +281,50 @@ def _patch_userrole_enum_values():
         for enum in enum_specs:
             if enum.get("name", "").lower() in ("userrole", "user_role"):
                 labels = list(enum.get("labels") or [])
-                missing_values = [value for value in ("admin", "super_admin") if value not in labels]
-                if missing_values:
-                    with engine.begin() as conn:
+                
+                # First, update any existing data to use lowercase
+                renames = {
+                    "PATIENT": "patient",
+                    "PROVIDER": "provider",
+                    "PHARMACIST": "pharmacist",
+                    "ADMIN": "admin",
+                    "SUPER_ADMIN": "super_admin",
+                    "HOSPITAL": "hospital",
+                    "LABORATORY": "laboratory",
+                    "IMAGING": "imaging",
+                    "AMBULANCE": "ambulance"
+                }
+                
+                with engine.begin() as conn:
+                    # Update data to lowercase
+                    for old_value, new_value in renames.items():
+                        try:
+                            conn.execute(text(f"UPDATE users SET role = '{new_value}' WHERE role = '{old_value}'"))
+                        except Exception as e:
+                            print(f"WARNING: Could not update role {old_value} to {new_value}: {e}")
+                    
+                    # Rename enum labels
+                    rename_count = 0
+                    for old_label, new_label in renames.items():
+                        if old_label in labels:
+                            try:
+                                conn.execute(text(f"ALTER TYPE userrole RENAME VALUE '{old_label}' TO '{new_label}'"))
+                                rename_count += 1
+                            except Exception as e:
+                                print(f"WARNING: Could not rename {old_label} to {new_label}: {e}")
+                    
+                    if rename_count > 0:
+                        print(f"✓ Renamed {rename_count} PostgreSQL userrole enum label(s) to lowercase")
+                    
+                    # Add missing values
+                    missing_values = [value for value in ("admin", "super_admin") if value not in labels and value not in renames.values()]
+                    if missing_values:
                         for value in missing_values:
-                            conn.execute(text(f"ALTER TYPE userrole ADD VALUE IF NOT EXISTS '{value}'"))
-                    print(f"✓ Added {', '.join(missing_values)} to PostgreSQL userrole enum")
+                            try:
+                                conn.execute(text(f"ALTER TYPE userrole ADD VALUE IF NOT EXISTS '{value}'"))
+                            except Exception as e:
+                                print(f"WARNING: Could not add {value} to userrole enum: {e}")
+                        print(f"✓ Added {', '.join(missing_values)} to PostgreSQL userrole enum")
                 break
     except Exception as e:
         print(f"WARNING: Could not patch userrole enum values: {e}")
