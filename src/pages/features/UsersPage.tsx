@@ -223,11 +223,11 @@ const UsersPage = () => {
     }
   };
 
-  const isAdmin = currentUser?.role === 'admin';
+  const isAdminOrSuperAdmin = currentUser?.role === 'admin' || currentUser?.role === 'super_admin';
 
   const card = (i: number) => ({ initial: { opacity: 0, y: 15 }, animate: { opacity: 1, y: 0 }, transition: { delay: i * 0.05 } });
 
-  if (!isAdmin) {
+  if (!isAdminOrSuperAdmin) {
     return (
       <div className="space-y-6">
         <div>
