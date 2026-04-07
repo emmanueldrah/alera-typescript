@@ -16,6 +16,15 @@ const resolveApiBaseUrl = () => {
 
 const API_BASE_URL = resolveApiBaseUrl();
 
+const getCsrfTokenFromCookie = (): string | null => {
+  if (typeof document === 'undefined') return null;
+  const cookie = document.cookie
+    .split('; ')
+    .find((entry) => entry.startsWith('csrf_token='));
+  if (!cookie) return null;
+  return decodeURIComponent(cookie.split('=').slice(1).join('='));
+};
+
 // Create axios instance
 export const apiClient: AxiosInstance = axios.create({
   baseURL: API_BASE_URL,
@@ -53,6 +62,13 @@ apiClient.interceptors.request.use(
   (config) => {
     // Ensure cookies are included in every request for auth flows
     config.withCredentials = true;
+    const method = config.method?.toUpperCase();
+    if (method && ['POST', 'PUT', 'PATCH', 'DELETE'].includes(method)) {
+      const csrfToken = getCsrfTokenFromCookie();
+      if (csrfToken) {
+        config.headers.set('X-CSRF-Token', csrfToken);
+      }
+    }
     return config;
   },
   (error) => Promise.reject(error)

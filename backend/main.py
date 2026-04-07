@@ -1,4 +1,4 @@
-from fastapi import FastAPI
+from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.middleware.trustedhost import TrustedHostMiddleware
 from fastapi.responses import JSONResponse
@@ -6,6 +6,7 @@ import os
 from config import settings
 from database import init_db
 from app.routes import auth, users, appointments, prescriptions, allergies, notifications, telemedicine, admin, documents, consents, reminders_templates, audit, lab_tests, imaging, ambulance, referrals, records, location_ws, live_locations
+from app.utils.csrf import validate_csrf_token
 
 # Create FastAPI app
 app = FastAPI(
@@ -16,6 +17,18 @@ app = FastAPI(
     openapi_url="/api/openapi.json"
 )
 
+SAFE_METHODS = {"GET", "HEAD", "OPTIONS"}
+CSRF_EXEMPT_PATHS = {
+    "/api",
+    "/api/health",
+    "/api/auth/login",
+    "/api/auth/register",
+    "/api/auth/refresh",
+    "/api/auth/request-password-reset",
+    "/api/auth/reset-password",
+    "/api/auth/verify-email",
+}
+
 # CORS Middleware
 app.add_middleware(
     CORSMiddleware,
@@ -25,6 +38,24 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+
+@app.middleware("http")
+async def csrf_protection_middleware(request: Request, call_next):
+    path = request.url.path
+    if (
+        request.method not in SAFE_METHODS
+        and path.startswith("/api")
+        and path not in CSRF_EXEMPT_PATHS
+        and request.cookies.get("access_token")
+    ):
+        if not validate_csrf_token(request):
+            return JSONResponse(
+                status_code=403,
+                content={"detail": "CSRF token validation failed"},
+            )
+
+    return await call_next(request)
 
 # Trusted Host Middleware
 app.add_middleware(

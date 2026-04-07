@@ -77,7 +77,11 @@ def _serialize_user(user: User) -> UserResponse:
 
 
 @router.post("/register", status_code=status.HTTP_201_CREATED)
-async def register(user_data: UserCreate, response: Response, db: Session = Depends(get_db)):
+async def register(
+    user_data: UserCreate,
+    db: Session = Depends(get_db),
+    response: Response = None,
+):
     """Register a new user"""
 
     # Check if user already exists
@@ -150,12 +154,12 @@ async def register(user_data: UserCreate, response: Response, db: Session = Depe
 
     access_token, refresh_token = _build_token_pair(db_user)
 
-    # Set secure cookies
-    set_auth_cookies(response, access_token, refresh_token)
-
-    # Set CSRF token
     csrf_token = generate_csrf_token()
-    set_csrf_token(response, csrf_token)
+    if response is not None:
+        # Set secure cookies
+        set_auth_cookies(response, access_token, refresh_token)
+        # Set CSRF token
+        set_csrf_token(response, csrf_token)
 
     from app.routes.audit import log_action
 
@@ -172,12 +176,18 @@ async def register(user_data: UserCreate, response: Response, db: Session = Depe
     return {
         "message": "Account created successfully",
         "user": _serialize_user(db_user),
+        "access_token": access_token,
+        "refresh_token": refresh_token,
         "csrf_token": csrf_token,
     }
 
 
 @router.post("/login")
-async def login(credentials: LoginRequest, response: Response, db: Session = Depends(get_db)):
+async def login(
+    credentials: LoginRequest,
+    db: Session = Depends(get_db),
+    response: Response = None,
+):
     """Authenticate user and return access token"""
 
     # Find user by email
@@ -201,12 +211,12 @@ async def login(credentials: LoginRequest, response: Response, db: Session = Dep
     # Create tokens
     access_token, refresh_token = _build_token_pair(user)
 
-    # Set secure cookies
-    set_auth_cookies(response, access_token, refresh_token)
-
-    # Set CSRF token
     csrf_token = generate_csrf_token()
-    set_csrf_token(response, csrf_token)
+    if response is not None:
+        # Set secure cookies
+        set_auth_cookies(response, access_token, refresh_token)
+        # Set CSRF token
+        set_csrf_token(response, csrf_token)
 
     from app.routes.audit import log_action
 
@@ -223,6 +233,8 @@ async def login(credentials: LoginRequest, response: Response, db: Session = Dep
     return {
         "message": "Login successful",
         "user": _serialize_user(user),
+        "access_token": access_token,
+        "refresh_token": refresh_token,
         "csrf_token": csrf_token,
     }
 
@@ -502,17 +514,18 @@ async def change_password(
 
 @router.post("/logout")
 async def logout(
-    response: Response,
     current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db),
+    response: Response = None,
 ):
     """Logout user by revoking the current session version and clearing cookies."""
 
     current_user.session_version = int(current_user.session_version or 0) + 1
     db.commit()
 
-    clear_auth_cookies(response)
-    clear_csrf_token(response)
+    if response is not None:
+        clear_auth_cookies(response)
+        clear_csrf_token(response)
 
     from app.routes.audit import log_action
 

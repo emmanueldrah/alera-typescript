@@ -25,7 +25,7 @@ describe('Signup page', () => {
 
   it('shows professional license fields and excludes admin signup', () => {
     render(
-      <MemoryRouter>
+      <MemoryRouter future={{ v7_startTransition: true, v7_relativeSplatPath: true }}>
         <Signup />
       </MemoryRouter>
     );

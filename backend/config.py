@@ -1,12 +1,12 @@
 from pydantic_settings import BaseSettings, SettingsConfigDict
-from pydantic import field_validator, Field
+from pydantic import field_validator, Field, model_validator
 from typing import List
 import sys
 import secrets
 import os
 
 # Set default environment
-os.environ.setdefault('ENVIRONMENT', 'production')
+os.environ.setdefault('ENVIRONMENT', 'development')
 
 
 class Settings(BaseSettings):
@@ -19,7 +19,7 @@ class Settings(BaseSettings):
 
     # Security - Generate a strong default if not provided
     SECRET_KEY: str = Field(
-        default_factory=lambda: secrets.token_urlsafe(32),
+        default="dev-secret-key-change-me",
         description="Secret key for JWT tokens - MUST be set in production"
     )
     ALGORITHM: str = "HS256"
@@ -78,7 +78,7 @@ class Settings(BaseSettings):
 
     # HIPAA
     ENCRYPTION_KEY: str = Field(
-        default_factory=lambda: secrets.token_hex(16),
+        default="dev-encryption-key-change-me",
         description="Encryption key for sensitive data"
     )
     AUDIT_LOG_RETENTION_DAYS: int = 2555
@@ -106,6 +106,55 @@ class Settings(BaseSettings):
                 return False
 
         return bool(value)
+
+    @field_validator("SECRET_KEY")
+    @classmethod
+    def validate_secret_key(cls, value: str):
+        if not value or len(value.strip()) < 12:
+            raise ValueError("SECRET_KEY must be set to a strong value")
+        return value
+
+    @field_validator("ENCRYPTION_KEY")
+    @classmethod
+    def validate_encryption_key(cls, value: str):
+        if not value or len(value.strip()) < 12:
+            raise ValueError("ENCRYPTION_KEY must be set to a strong value")
+        return value
+
+    @field_validator("DATABASE_URL")
+    @classmethod
+    def validate_database_url(cls, value: str):
+        if not value:
+            raise ValueError("DATABASE_URL is required")
+        return value
+
+    @field_validator("FRONTEND_URL")
+    @classmethod
+    def validate_frontend_url(cls, value: str):
+        if not value:
+            raise ValueError("FRONTEND_URL is required")
+        return value
+
+    @classmethod
+    def _is_placeholder_secret(cls, value: str) -> bool:
+        return value in {"dev-secret-key-change-me", "dev-encryption-key-change-me"}
+
+    @classmethod
+    def _is_sqlite_url(cls, value: str) -> bool:
+        return value.startswith("sqlite")
+
+    @model_validator(mode="after")
+    def validate_production_requirements(self):
+        if self.ENVIRONMENT == "production":
+            if self._is_placeholder_secret(self.SECRET_KEY):
+                raise ValueError("SECRET_KEY must be explicitly configured in production")
+            if self._is_placeholder_secret(self.ENCRYPTION_KEY):
+                raise ValueError("ENCRYPTION_KEY must be explicitly configured in production")
+            if self._is_sqlite_url(self.DATABASE_URL):
+                raise ValueError("Production DATABASE_URL must use a persistent database, not SQLite")
+            if self.FRONTEND_URL.startswith("http://localhost"):
+                raise ValueError("FRONTEND_URL must be set to the production frontend origin")
+        return self
 
 
 try:

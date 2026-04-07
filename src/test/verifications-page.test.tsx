@@ -81,7 +81,7 @@ describe('VerificationsPage', () => {
     mocks.verifyProviderMock.mockResolvedValueOnce({ message: 'Provider verified successfully' });
 
     render(
-      <MemoryRouter>
+      <MemoryRouter future={{ v7_startTransition: true, v7_relativeSplatPath: true }}>
         <VerificationsPage />
       </MemoryRouter>
     );

@@ -1,5 +1,5 @@
 import { defineConfig } from 'vite';
-import react from '@vitejs/plugin-react-swc';
+import react from '@vitejs/plugin-react';
 import path from 'path';
 
 const manualChunks = (id: string) => {
@@ -34,12 +34,9 @@ export default defineConfig(({ mode }) => {
     build: {
       outDir: 'dist',
       sourcemap: isDev,
-      minify: isDev ? false : 'terser',
-      terserOptions: isDev ? {} : {
-        compress: {
-          drop_console: true,
-          drop_debugger: true,
-        },
+      minify: isDev ? false : 'esbuild',
+      esbuild: isDev ? undefined : {
+        drop: ['console', 'debugger'],
       },
       chunkSizeWarningLimit: 1000,
       rollupOptions: {

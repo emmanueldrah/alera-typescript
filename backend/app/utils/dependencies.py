@@ -1,4 +1,5 @@
 from fastapi import Depends, HTTPException, status, Request
+from fastapi.security import HTTPAuthorizationCredentials
 from sqlalchemy.orm import Session
 from database import get_db
 from app.models.user import User, UserRole
@@ -11,7 +12,11 @@ async def get_current_user(
     db: Session = Depends(get_db)
 ) -> User:
     """Get current authenticated user from JWT token in cookie"""
-    token = request.cookies.get("access_token")
+    token: str | None = None
+    if isinstance(request, HTTPAuthorizationCredentials):
+        token = request.credentials
+    else:
+        token = request.cookies.get("access_token")
     if not token:
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,

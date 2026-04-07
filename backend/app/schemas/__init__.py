@@ -39,11 +39,9 @@ class UserCreate(UserBase):
     @field_validator("password")
     @classmethod
     def validate_password(cls, v: str) -> str:
-        """Validate password complexity: at least one lowercase, one uppercase, one digit"""
-        if not any(c.islower() for c in v):
-            raise ValueError("Password must contain at least one lowercase letter")
-        if not any(c.isupper() for c in v):
-            raise ValueError("Password must contain at least one uppercase letter")
+        """Validate password complexity with at least one letter and one digit."""
+        if not any(c.isalpha() for c in v):
+            raise ValueError("Password must contain at least one letter")
         if not any(c.isdigit() for c in v):
             raise ValueError("Password must contain at least one digit")
         return v
