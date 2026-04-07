@@ -1,11 +1,13 @@
 import { useState } from 'react';
 import { motion } from 'framer-motion';
-import { Ambulance, MapPin, AlertTriangle, X, Inbox } from 'lucide-react';
+import { Ambulance, MapPin, AlertTriangle, X, Inbox, Navigation, Eye } from 'lucide-react';
 import { useSearchParams } from 'react-router-dom';
 import { useAuth } from '@/contexts/useAuth';
 import { useAppData } from '@/contexts/useAppData';
 import { useNotifications } from '@/contexts/useNotifications';
 import { type AmbulanceRequest } from '@/data/mockData';
+import { useLiveLocation } from '@/hooks/useLiveLocation';
+import { LiveLocationMap } from '@/components/maps/LiveLocationMap';
 
 const priorityColors: Record<string, string> = { critical: 'bg-destructive/10 text-destructive', high: 'bg-warning/10 text-warning', medium: 'bg-info/10 text-info', low: 'bg-muted text-muted-foreground' };
 
@@ -15,7 +17,14 @@ const AmbulancePage = () => {
   const { addNotification } = useNotifications();
   const [searchParams] = useSearchParams();
   const [showForm, setShowForm] = useState(false);
-  const [formData, setFormData] = useState({ location: '', priority: 'high' as const });
+  const [formData, setFormData] = useState<{ location: string; priority: AmbulanceRequest['priority'] }>({ location: '', priority: 'high' });
+  const [trackingRequest, setTrackingRequest] = useState<AmbulanceRequest | null>(null);
+  
+  const { myLocation, peerLocation, isConnected, error: wsError } = useLiveLocation(
+    trackingRequest?.id || '',
+    !!trackingRequest
+  );
+
   const focusId = searchParams.get('focus');
   const currentPage = user?.role === 'ambulance' ? 'requests' : 'ambulance';
   const users = getUsers();
@@ -122,6 +131,29 @@ const AmbulancePage = () => {
           <button onClick={handleRequest} className="mt-4 px-6 py-2.5 rounded-xl bg-destructive text-destructive-foreground text-sm font-semibold hover:opacity-90 transition">Send Emergency Request</button>
         </motion.div>
       )}
+      {trackingRequest && (
+        <motion.div initial={{ opacity: 0, height: 0 }} animate={{ opacity: 1, height: 'auto' }} className="mb-6 space-y-4">
+          <div className="flex items-center justify-between">
+            <h2 className="text-lg font-display font-semibold flex items-center gap-2">
+              <Navigation className="w-5 h-5 text-primary animate-pulse" /> 
+              Live Tracking: {trackingRequest.patientName}
+            </h2>
+            <button onClick={() => setTrackingRequest(null)} className="text-sm text-muted-foreground hover:text-foreground">Close Map</button>
+          </div>
+          <div className="relative">
+            <LiveLocationMap myLocation={myLocation} peerLocation={peerLocation} myRole={user?.role} />
+            {!isConnected && (
+              <div className="absolute inset-0 bg-background/60 backdrop-blur-[2px] flex items-center justify-center z-[1000] rounded-2xl">
+                <div className="flex items-center gap-2 text-sm font-medium">
+                   <div className="w-4 h-4 border-2 border-primary border-t-transparent rounded-full animate-spin" />
+                   Connecting to live feed...
+                </div>
+              </div>
+            )}
+            {wsError && <div className="absolute top-4 right-4 bg-destructive text-destructive-foreground px-3 py-1 rounded-lg text-xs font-medium z-[1000]">{wsError}</div>}
+          </div>
+        </motion.div>
+      )}
       {visibleRequests.length === 0 ? (
         <div className="flex flex-col items-center justify-center py-12 text-muted-foreground">
           <Inbox className="w-10 h-10 mb-3" />
@@ -143,10 +175,20 @@ const AmbulancePage = () => {
                 <div className="flex flex-col items-end gap-2">
                   <div className="flex gap-2">
                     <span className={`px-3 py-1 rounded-lg text-xs font-medium ${priorityColors[request.priority]}`}>{request.priority}</span>
-                    <span className={`px-3 py-1 rounded-lg text-xs font-medium ${request.status === 'requested' ? 'bg-warning/10 text-warning' : request.status === 'dispatched' ? 'bg-info/10 text-info' : 'bg-success/10 text-success'}`}>{request.status}</span>
+                    <span className={`px-3 py-1 rounded-lg text-xs font-medium ${request.status === 'requested' ? 'bg-warning/10 text-warning' : request.status === 'dispatched' ? 'bg-info/10 text-info' : request.status === 'en-route' ? 'bg-success/10 text-success' : 'bg-muted text-muted-foreground'}`}>{request.status}</span>
                   </div>
-                  {user?.role === 'ambulance' && request.status === 'requested' && <button onClick={() => handleDispatch(request.id)} className="px-3 py-1 rounded-lg bg-info/10 text-info text-xs font-medium hover:bg-info/20">Dispatch</button>}
-                  {user?.role === 'ambulance' && request.status === 'dispatched' && <button onClick={() => handleComplete(request.id)} className="px-3 py-1 rounded-lg bg-success/10 text-success text-xs font-medium hover:bg-success/20">Complete</button>}
+                  <div className="flex gap-2">
+                    {(request.status === 'dispatched' || request.status === 'en-route') && (
+                      <button 
+                        onClick={() => setTrackingRequest(request)} 
+                        className="px-3 py-1 rounded-lg bg-primary/10 text-primary text-xs font-medium hover:bg-primary/20 flex items-center gap-1"
+                      >
+                        <Eye className="w-3.5 h-3.5" /> Track Live
+                      </button>
+                    )}
+                    {user?.role === 'ambulance' && request.status === 'requested' && <button onClick={() => handleDispatch(request.id)} className="px-3 py-1 rounded-lg bg-info/10 text-info text-xs font-medium hover:bg-info/20">Dispatch</button>}
+                    {user?.role === 'ambulance' && request.status === 'dispatched' && <button onClick={() => handleComplete(request.id)} className="px-3 py-1 rounded-lg bg-success/10 text-success text-xs font-medium hover:bg-success/20">Complete</button>}
+                  </div>
                 </div>
               </div>
             </motion.div>
