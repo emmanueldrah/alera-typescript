@@ -388,7 +388,8 @@ def _patch_userrole_enum_values():
                 
                 # Add missing values
                 all_desired = set(renames.values())
-                missing_values = [value for value in ("admin", "super_admin") if value not in labels and value not in all_desired]
+                normalized_labels = {renames.get(value, value) for value in labels}
+                missing_values = [value for value in ("admin", "super_admin") if value not in normalized_labels]
                 if missing_values:
                     for value in missing_values:
                         try:

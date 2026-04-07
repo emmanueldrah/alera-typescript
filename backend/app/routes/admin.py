@@ -66,6 +66,10 @@ class CreateUserRequest(BaseModel):
         return self
 
 
+class ChangeUserRoleRequest(BaseModel):
+    new_role: str
+
+
 # ─────────────────────────────────────────────────────────────────────────────
 # Dashboard / Stats (accessible to all admins)
 # ─────────────────────────────────────────────────────────────────────────────
@@ -253,18 +257,26 @@ async def reactivate_user(
 @router.put("/users/{user_id}/change-role")
 async def change_user_role(
     user_id: int,
-    new_role: str,
+    payload: Optional[ChangeUserRoleRequest] = Body(default=None),
+    new_role: Optional[str] = None,
     current_user: User = Depends(get_current_admin),
     db: Session = Depends(get_db)
 ):
     """Change user's role — super_admin required to assign admin/super_admin roles"""
 
+    requested_role = payload.new_role if isinstance(payload, ChangeUserRoleRequest) else new_role
+    if not requested_role:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="new_role is required",
+        )
+
     try:
-        role = UserRole[new_role.upper()]
+        role = UserRole[requested_role.upper()]
     except KeyError:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail=f"Invalid role: {new_role}"
+            detail=f"Invalid role: {requested_role}"
         )
 
     user = db.query(User).filter(User.id == user_id).first()
@@ -297,8 +309,8 @@ async def change_user_role(
     )
 
     return {
-        "message": f"User role changed from {old_role.value} to {new_role}",
-        "user_id": user_id, "old_role": old_role.value, "new_role": new_role
+        "message": f"User role changed from {old_role.value} to {role.value}",
+        "user_id": user_id, "old_role": old_role.value, "new_role": role.value
     }
 
 

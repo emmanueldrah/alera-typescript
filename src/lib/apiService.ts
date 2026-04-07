@@ -704,7 +704,9 @@ export const adminApi = {
 
   /** `newRole` is backend role string, e.g. `patient`, `provider`, `pharmacist` (passed as query param). */
   changeUserRole: async (userId: string | number, newRole: string) => {
-    const response = await apiClient.put(`/admin/users/${userId}/change-role`, undefined, {
+    const response = await apiClient.put(`/admin/users/${userId}/change-role`, {
+      new_role: newRole,
+    }, {
       params: { new_role: newRole },
     });
     return response.data;
