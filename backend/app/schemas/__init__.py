@@ -1,4 +1,4 @@
-from pydantic import BaseModel, EmailStr, Field, model_validator, ConfigDict
+from pydantic import BaseModel, EmailStr, Field, model_validator, field_validator, ConfigDict
 from datetime import datetime
 from typing import Optional, List, Literal
 from enum import Enum
@@ -30,11 +30,23 @@ class UserBase(BaseModel):
 
 
 class UserCreate(UserBase):
-    password: str = Field(..., min_length=8, pattern=r"^(?=.*[a-z])(?=.*[A-Z])(?=.*\d).{8,}$")
+    password: str = Field(..., min_length=8)
     role: UserRole = UserRole.PATIENT
     license_number: Optional[str] = None
     license_state: Optional[str] = None
     specialty: Optional[str] = None
+
+    @field_validator("password")
+    @classmethod
+    def validate_password(cls, v: str) -> str:
+        """Validate password complexity: at least one lowercase, one uppercase, one digit"""
+        if not any(c.islower() for c in v):
+            raise ValueError("Password must contain at least one lowercase letter")
+        if not any(c.isupper() for c in v):
+            raise ValueError("Password must contain at least one uppercase letter")
+        if not any(c.isdigit() for c in v):
+            raise ValueError("Password must contain at least one digit")
+        return v
 
     @model_validator(mode="after")
     def validate_role_specific_fields(self):
