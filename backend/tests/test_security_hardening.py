@@ -506,7 +506,23 @@ def test_verified_provider_filtering_and_scoped_patient_data(db_session):
     assert consent.patient_id == patient_user.id
 
 
-def test_super_admin_can_change_user_roles(db_session):
+@pytest.mark.parametrize(
+    ("requested_role", "expected_role"),
+    [
+        ("patient", UserRole.PATIENT),
+        ("doctor", UserRole.PROVIDER),
+        ("provider", UserRole.PROVIDER),
+        ("pharmacy", UserRole.PHARMACIST),
+        ("pharmacist", UserRole.PHARMACIST),
+        ("hospital", UserRole.HOSPITAL),
+        ("laboratory", UserRole.LABORATORY),
+        ("imaging", UserRole.IMAGING),
+        ("ambulance", UserRole.AMBULANCE),
+        ("admin", UserRole.ADMIN),
+        ("super_admin", UserRole.SUPER_ADMIN),
+    ],
+)
+def test_super_admin_can_change_user_roles(db_session, requested_role, expected_role):
     user_result = run(register(
         UserCreate(
             email="rolechange@example.com",
@@ -527,14 +543,14 @@ def test_super_admin_can_change_user_roles(db_session):
 
     result = run(change_user_role(
         user_id=target_user.id,
-        new_role="admin",
+        new_role=requested_role,
         current_user=super_admin,
         db=db_session,
     ))
 
     db_session.refresh(target_user)
-    assert result["new_role"] == "admin"
-    assert target_user.role == UserRole.ADMIN
+    assert result["new_role"] == expected_role.value
+    assert target_user.role == expected_role
 
 
 def test_email_verification_flow_and_resend(db_session, monkeypatch):

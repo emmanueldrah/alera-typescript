@@ -70,6 +70,32 @@ class ChangeUserRoleRequest(BaseModel):
     new_role: str
 
 
+ROLE_ALIASES: dict[str, UserRole] = {
+    "patient": UserRole.PATIENT,
+    "doctor": UserRole.PROVIDER,
+    "provider": UserRole.PROVIDER,
+    "pharmacy": UserRole.PHARMACIST,
+    "pharmacist": UserRole.PHARMACIST,
+    "hospital": UserRole.HOSPITAL,
+    "laboratory": UserRole.LABORATORY,
+    "imaging": UserRole.IMAGING,
+    "ambulance": UserRole.AMBULANCE,
+    "admin": UserRole.ADMIN,
+    "super_admin": UserRole.SUPER_ADMIN,
+}
+
+
+def _parse_user_role(raw_role: str) -> UserRole:
+    normalized = raw_role.strip().lower().replace("-", "_")
+    role = ROLE_ALIASES.get(normalized)
+    if role is None:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=f"Invalid role: {raw_role}",
+        )
+    return role
+
+
 # ─────────────────────────────────────────────────────────────────────────────
 # Dashboard / Stats (accessible to all admins)
 # ─────────────────────────────────────────────────────────────────────────────
@@ -271,13 +297,7 @@ async def change_user_role(
             detail="new_role is required",
         )
 
-    try:
-        role = UserRole[requested_role.upper()]
-    except KeyError:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail=f"Invalid role: {requested_role}"
-        )
+    role = _parse_user_role(requested_role)
 
     user = db.query(User).filter(User.id == user_id).first()
 
