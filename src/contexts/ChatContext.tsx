@@ -5,6 +5,7 @@ import { ChatContext, type CallSession, type CallSignalEvent } from './chat-cont
 import { messagingApi } from '@/lib/apiService';
 import { normalizeUserRole } from '@/lib/roleUtils';
 import { getTelemedicineSocketUrl } from '@/lib/telemedicineSocket';
+import type { UserRole } from './AuthContext';
 
 export interface ChatMessage {
   id: string;
@@ -66,6 +67,33 @@ type SocketEnvelope =
 const sortByTimestamp = (items: ChatMessage[]) => [...items].sort((a, b) => a.timestamp.getTime() - b.timestamp.getTime());
 
 const isMessageRead = (value: string) => value === 'Y' || value === 'y' || value === 'true';
+
+const roleSubtitleMap: Record<UserRole, string> = {
+  patient: 'Patient',
+  doctor: 'Doctor',
+  hospital: 'Hospital team',
+  laboratory: 'Laboratory team',
+  imaging: 'Imaging center',
+  pharmacy: 'Pharmacy team',
+  ambulance: 'Ambulance team',
+  admin: 'Admin',
+  super_admin: 'Super admin',
+};
+
+const isOperationalRole = (role?: string): role is UserRole => {
+  const normalized = normalizeUserRole(role);
+  return Boolean(
+    normalized &&
+    !['admin', 'super_admin'].includes(normalized),
+  );
+};
+
+const getContactSubtitle = (role?: string, hasConversation: boolean = false) => {
+  const normalized = normalizeUserRole(role);
+  if (!normalized) return hasConversation ? 'Recent conversation' : 'Secure conversation';
+  if (hasConversation) return `Recent conversation with ${roleSubtitleMap[normalized]}`;
+  return roleSubtitleMap[normalized];
+};
 
 export const ChatProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const { user, getUsers } = useAuth();
@@ -430,7 +458,7 @@ export const ChatProvider: React.FC<{ children: React.ReactNode }> = ({ children
         participantName,
         participantRole,
         participantEmail,
-        subtitle: participantRole === 'doctor' ? 'Secure provider conversation' : 'Patient conversation',
+        subtitle: getContactSubtitle(participantRole, true),
         lastMessage: message.content,
         lastTimestamp: message.timestamp,
         unreadCount: relevant.filter((candidate) => (
@@ -462,39 +490,36 @@ export const ChatProvider: React.FC<{ children: React.ReactNode }> = ({ children
       });
     });
 
-    if (user.role === 'patient') {
-      allUsers
-        .filter((account) => account.id !== user.id && account.role === 'doctor')
-        .forEach((doctor) => {
-          const existing = contactMap.get(doctor.id);
-          contactMap.set(doctor.id, {
-            participantId: doctor.id,
-            participantName: doctor.name,
-            participantRole: doctor.role,
-            participantEmail: doctor.email,
-            subtitle: doctor.profile?.bio?.trim() || 'Doctor',
-            hasConversation: existing?.hasConversation ?? false,
-            lastTimestamp: existing?.lastTimestamp,
-          });
-        });
-    }
+    const userRole = normalizeUserRole(user.role);
+    const availableContacts = allUsers.filter((account) => {
+      if (account.id === user.id) return false;
 
-    if (user.role === 'doctor') {
-      allUsers
-        .filter((account) => account.id !== user.id && account.role === 'patient')
-        .forEach((patient) => {
-          const existing = contactMap.get(patient.id);
-          contactMap.set(patient.id, {
-            participantId: patient.id,
-            participantName: patient.name,
-            participantRole: patient.role,
-            participantEmail: patient.email,
-            subtitle: 'Patient',
-            hasConversation: existing?.hasConversation ?? false,
-            lastTimestamp: existing?.lastTimestamp,
-          });
-        });
-    }
+      const accountRole = normalizeUserRole(account.role);
+      if (!isOperationalRole(accountRole)) return false;
+
+      if (userRole === 'patient') {
+        return accountRole !== 'patient';
+      }
+
+      if (!userRole || !isOperationalRole(userRole)) {
+        return false;
+      }
+
+      return true;
+    });
+
+    availableContacts.forEach((account) => {
+      const existing = contactMap.get(account.id);
+      contactMap.set(account.id, {
+        participantId: account.id,
+        participantName: account.name,
+        participantRole: account.role,
+        participantEmail: account.email,
+        subtitle: existing?.subtitle ?? account.profile?.bio?.trim() ?? getContactSubtitle(account.role),
+        hasConversation: existing?.hasConversation ?? false,
+        lastTimestamp: existing?.lastTimestamp,
+      });
+    });
 
     return Array.from(contactMap.values()).sort((a, b) => {
       if (a.hasConversation !== b.hasConversation) {

@@ -49,27 +49,32 @@ const roleNavItems: Record<string, { label: string; icon: React.ReactNode; path:
     { label: 'Emergency Tracking', icon: <Ambulance className="w-5 h-5" />, path: '/dashboard/requests' },
     { label: 'Referrals', icon: <FileText className="w-5 h-5" />, path: '/dashboard/referrals' },
     { label: 'Doctors', icon: <Heart className="w-5 h-5" />, path: '/dashboard/doctors' },
+    { label: 'Messages', icon: <MessageSquare className="w-5 h-5" />, path: '/dashboard/messages' },
   ],
   laboratory: [
     { label: 'Dashboard', icon: <LayoutDashboard className="w-5 h-5" />, path: '/dashboard' },
     { label: 'Test Requests', icon: <FlaskConical className="w-5 h-5" />, path: '/dashboard/test-requests' },
     { label: 'Results', icon: <FileText className="w-5 h-5" />, path: '/dashboard/results' },
+    { label: 'Messages', icon: <MessageSquare className="w-5 h-5" />, path: '/dashboard/messages' },
   ],
   imaging: [
     { label: 'Dashboard', icon: <LayoutDashboard className="w-5 h-5" />, path: '/dashboard' },
     { label: 'Scan Requests', icon: <ScanLine className="w-5 h-5" />, path: '/dashboard/scan-requests' },
     { label: 'Results', icon: <FileText className="w-5 h-5" />, path: '/dashboard/results' },
+    { label: 'Messages', icon: <MessageSquare className="w-5 h-5" />, path: '/dashboard/messages' },
   ],
   pharmacy: [
     { label: 'Dashboard', icon: <LayoutDashboard className="w-5 h-5" />, path: '/dashboard' },
     { label: 'Prescriptions', icon: <Pill className="w-5 h-5" />, path: '/dashboard/prescriptions' },
     { label: 'Referral requests', icon: <FileText className="w-5 h-5" />, path: '/dashboard/pharmacy-referrals' },
     { label: 'Inventory', icon: <Activity className="w-5 h-5" />, path: '/dashboard/inventory' },
+    { label: 'Messages', icon: <MessageSquare className="w-5 h-5" />, path: '/dashboard/messages' },
   ],
   ambulance: [
     { label: 'Dashboard', icon: <LayoutDashboard className="w-5 h-5" />, path: '/dashboard' },
     { label: 'Requests', icon: <Ambulance className="w-5 h-5" />, path: '/dashboard/requests' },
     { label: 'Vehicles', icon: <Activity className="w-5 h-5" />, path: '/dashboard/vehicles' },
+    { label: 'Messages', icon: <MessageSquare className="w-5 h-5" />, path: '/dashboard/messages' },
   ],
   admin: [
     { label: 'Dashboard', icon: <LayoutDashboard className="w-5 h-5" />, path: '/dashboard' },
