@@ -113,7 +113,7 @@ async def create_appointment(
         user=current_user,
         appointment_title=apt.title,
         appointment_time=apt.scheduled_time.isoformat(),
-        provider_name=provider_name,
+        provider_name=_display_name(provider),
     )
 
     return serialize_appointment(apt)
