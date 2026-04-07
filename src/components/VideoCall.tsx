@@ -5,6 +5,7 @@ import {
   Maximize2, Minimize2, Monitor, MonitorOff, MessageSquare, Clock,
   Heart, Users, Send,
 } from 'lucide-react';
+import { useChat } from '@/contexts/useChat';
 
 export type CallState = 'idle' | 'ringing' | 'connecting' | 'active' | 'ended';
 
@@ -13,8 +14,6 @@ interface VideoCallProps {
   participantRole: string;
   isIncoming?: boolean;
   onEnd: () => void;
-  onAccept?: () => void;
-  onDecline?: () => void;
 }
 
 interface ChatMsg {
@@ -24,10 +23,28 @@ interface ChatMsg {
   time: string;
 }
 
+const rtcConfig: RTCConfiguration = {
+  iceServers: [
+    { urls: 'stun:stun.l.google.com:19302' },
+    { urls: 'stun:stun1.l.google.com:19302' },
+  ],
+};
+
 const VideoCall = ({
-  participantName, participantRole, isIncoming = false,
-  onEnd, onAccept, onDecline,
+  participantName,
+  participantRole,
+  isIncoming = false,
+  onEnd,
 }: VideoCallProps) => {
+  const {
+    currentCall,
+    callSignals,
+    acceptCurrentCall,
+    declineCurrentCall,
+    endCurrentCall,
+    sendCallSignal,
+    consumeCallSignal,
+  } = useChat();
   const [callState, setCallState] = useState<CallState>(isIncoming ? 'ringing' : 'connecting');
   const [isMuted, setIsMuted] = useState(false);
   const [isVideoOn, setIsVideoOn] = useState(true);
@@ -37,114 +54,249 @@ const VideoCall = ({
   const [showChat, setShowChat] = useState(false);
   const [chatMessages, setChatMessages] = useState<ChatMsg[]>([]);
   const [chatInput, setChatInput] = useState('');
+  const [remoteVideoActive, setRemoteVideoActive] = useState(false);
   const localVideoRef = useRef<HTMLVideoElement>(null);
+  const remoteVideoRef = useRef<HTMLVideoElement>(null);
   const screenVideoRef = useRef<HTMLVideoElement>(null);
-  const streamRef = useRef<MediaStream | null>(null);
+  const localStreamRef = useRef<MediaStream | null>(null);
+  const remoteStreamRef = useRef<MediaStream | null>(null);
   const screenStreamRef = useRef<MediaStream | null>(null);
+  const peerConnectionRef = useRef<RTCPeerConnection | null>(null);
   const timerRef = useRef<ReturnType<typeof setInterval>>();
   const containerRef = useRef<HTMLDivElement>(null);
 
-  const startCamera = useCallback(async () => {
-    try {
-      const stream = await navigator.mediaDevices.getUserMedia({ video: true, audio: true });
-      streamRef.current = stream;
-      if (localVideoRef.current) {
-        localVideoRef.current.srcObject = stream;
-      }
-    } catch {
-      if (import.meta.env.DEV) {
-        console.log('Camera not available, using placeholder');
-      }
-    }
+  const stopTracks = useCallback((stream: MediaStream | null) => {
+    stream?.getTracks().forEach((track) => track.stop());
   }, []);
 
-  const stopCamera = useCallback(() => {
-    streamRef.current?.getTracks().forEach(t => t.stop());
-    streamRef.current = null;
-  }, []);
-
-  const startScreenShare = useCallback(async () => {
-    try {
-      const stream = await navigator.mediaDevices.getDisplayMedia({ video: true, audio: false });
-      screenStreamRef.current = stream;
-      if (screenVideoRef.current) {
-        screenVideoRef.current.srcObject = stream;
-      }
-      setIsScreenSharing(true);
-      // Listen for user stopping share via browser UI
-      stream.getVideoTracks()[0].onended = () => {
-        setIsScreenSharing(false);
-        screenStreamRef.current = null;
-      };
-    } catch {
-      if (import.meta.env.DEV) {
-        console.log('Screen sharing cancelled or not available');
-      }
-    }
-  }, []);
-
-  const stopScreenShare = useCallback(() => {
-    screenStreamRef.current?.getTracks().forEach(t => t.stop());
+  const teardownPeer = useCallback(() => {
+    peerConnectionRef.current?.close();
+    peerConnectionRef.current = null;
+    stopTracks(localStreamRef.current);
+    stopTracks(screenStreamRef.current);
+    localStreamRef.current = null;
     screenStreamRef.current = null;
-    setIsScreenSharing(false);
-  }, []);
+    remoteStreamRef.current = null;
+    setRemoteVideoActive(false);
+  }, [stopTracks]);
+
+  const ensurePeerConnection = useCallback(async () => {
+    if (!currentCall) return null;
+    if (peerConnectionRef.current) return peerConnectionRef.current;
+
+    const peerConnection = new RTCPeerConnection(rtcConfig);
+    peerConnectionRef.current = peerConnection;
+
+    const localStream = await navigator.mediaDevices.getUserMedia({ video: true, audio: true });
+    localStreamRef.current = localStream;
+    if (localVideoRef.current) {
+      localVideoRef.current.srcObject = localStream;
+    }
+
+    localStream.getTracks().forEach((track) => peerConnection.addTrack(track, localStream));
+
+    const remoteStream = new MediaStream();
+    remoteStreamRef.current = remoteStream;
+    if (remoteVideoRef.current) {
+      remoteVideoRef.current.srcObject = remoteStream;
+    }
+
+    peerConnection.ontrack = (event) => {
+      event.streams[0]?.getTracks().forEach((track) => remoteStream.addTrack(track));
+      setRemoteVideoActive(true);
+      setCallState('active');
+    };
+
+    peerConnection.onicecandidate = (event) => {
+      if (event.candidate) {
+        sendCallSignal('ice-candidate', event.candidate.toJSON());
+      }
+    };
+
+    peerConnection.onconnectionstatechange = () => {
+      if (peerConnection.connectionState === 'connected') {
+        setCallState('active');
+      }
+      if (['failed', 'disconnected', 'closed'].includes(peerConnection.connectionState)) {
+        setCallState('ended');
+      }
+    };
+
+    return peerConnection;
+  }, [currentCall, sendCallSignal]);
+
+  const createOffer = useCallback(async () => {
+    const peerConnection = await ensurePeerConnection();
+    if (!peerConnection) return;
+    const offer = await peerConnection.createOffer();
+    await peerConnection.setLocalDescription(offer);
+    sendCallSignal('offer', offer);
+    setCallState('connecting');
+  }, [ensurePeerConnection, sendCallSignal]);
+
+  const handleIncomingSignal = useCallback(async (signal: typeof callSignals[number]) => {
+    try {
+      if (signal.signalType === 'call-accepted') {
+        if (currentCall?.direction === 'outgoing') {
+          await createOffer();
+        }
+        consumeCallSignal(signal.id);
+        return;
+      }
+
+      if (signal.signalType === 'call-declined' || signal.signalType === 'call-ended') {
+        setCallState('ended');
+        teardownPeer();
+        consumeCallSignal(signal.id);
+        window.setTimeout(onEnd, 800);
+        return;
+      }
+
+      const peerConnection = await ensurePeerConnection();
+      if (!peerConnection) return;
+
+      if (signal.signalType === 'offer') {
+        await peerConnection.setRemoteDescription(new RTCSessionDescription(signal.payload as RTCSessionDescriptionInit));
+        const answer = await peerConnection.createAnswer();
+        await peerConnection.setLocalDescription(answer);
+        sendCallSignal('answer', answer);
+        setCallState('connecting');
+      }
+
+      if (signal.signalType === 'answer') {
+        await peerConnection.setRemoteDescription(new RTCSessionDescription(signal.payload as RTCSessionDescriptionInit));
+        setCallState('active');
+      }
+
+      if (signal.signalType === 'ice-candidate' && signal.payload) {
+        await peerConnection.addIceCandidate(new RTCIceCandidate(signal.payload as RTCIceCandidateInit));
+      }
+    } catch (error) {
+      console.error('Failed to process call signal:', error);
+    } finally {
+      consumeCallSignal(signal.id);
+    }
+  }, [callSignals, consumeCallSignal, createOffer, currentCall?.direction, ensurePeerConnection, onEnd, sendCallSignal, teardownPeer]);
 
   useEffect(() => {
-    if (!isIncoming) {
-      startCamera();
-      const t = setTimeout(() => setCallState('active'), 2500);
-      return () => { clearTimeout(t); stopCamera(); stopScreenShare(); };
+    setCallState(isIncoming ? 'ringing' : 'connecting');
+  }, [isIncoming]);
+
+  useEffect(() => {
+    if (!currentCall) {
+      teardownPeer();
+      setCallState('ended');
+      return;
     }
-    return () => { stopCamera(); stopScreenShare(); };
-  }, [isIncoming, startCamera, stopCamera, stopScreenShare]);
+  }, [currentCall, teardownPeer]);
+
+  useEffect(() => {
+    callSignals
+      .filter((signal) => currentCall && signal.callId === currentCall.id)
+      .forEach((signal) => {
+        void handleIncomingSignal(signal);
+      });
+  }, [callSignals, currentCall, handleIncomingSignal]);
+
+  useEffect(() => {
+    if (!isIncoming && currentCall?.direction === 'outgoing') {
+      setCallState(currentCall.status === 'ringing' ? 'ringing' : 'connecting');
+    }
+  }, [currentCall?.direction, currentCall?.status, isIncoming]);
 
   useEffect(() => {
     if (callState === 'active') {
-      timerRef.current = setInterval(() => setElapsed(e => e + 1), 1000);
+      timerRef.current = setInterval(() => setElapsed((value) => value + 1), 1000);
     }
     return () => clearInterval(timerRef.current);
   }, [callState]);
 
-  const handleAccept = () => {
-    startCamera();
-    setCallState('active');
-    onAccept?.();
+  useEffect(() => () => {
+    clearInterval(timerRef.current);
+    teardownPeer();
+  }, [teardownPeer]);
+
+  const handleAccept = async () => {
+    await ensurePeerConnection();
+    acceptCurrentCall();
+    setCallState('connecting');
   };
 
   const handleEnd = () => {
     setCallState('ended');
-    stopCamera();
-    stopScreenShare();
+    endCurrentCall();
+    teardownPeer();
     clearInterval(timerRef.current);
-    setTimeout(onEnd, 1500);
+    window.setTimeout(onEnd, 800);
   };
 
   const handleDecline = () => {
-    stopCamera();
-    onDecline?.();
+    declineCurrentCall();
+    teardownPeer();
     onEnd();
   };
 
   const toggleMute = () => {
-    if (streamRef.current) {
-      streamRef.current.getAudioTracks().forEach(t => { t.enabled = !t.enabled; });
+    if (localStreamRef.current) {
+      localStreamRef.current.getAudioTracks().forEach((track) => {
+        track.enabled = !track.enabled;
+      });
     }
-    setIsMuted(!isMuted);
+    setIsMuted((value) => !value);
   };
 
   const toggleVideo = () => {
-    if (streamRef.current) {
-      streamRef.current.getVideoTracks().forEach(t => { t.enabled = !t.enabled; });
+    if (localStreamRef.current) {
+      localStreamRef.current.getVideoTracks().forEach((track) => {
+        track.enabled = !track.enabled;
+      });
     }
-    setIsVideoOn(!isVideoOn);
+    setIsVideoOn((value) => !value);
   };
+
+  const startScreenShare = useCallback(async () => {
+    const peerConnection = peerConnectionRef.current;
+    if (!peerConnection) return;
+
+    try {
+      const screenStream = await navigator.mediaDevices.getDisplayMedia({ video: true, audio: false });
+      screenStreamRef.current = screenStream;
+      if (screenVideoRef.current) {
+        screenVideoRef.current.srcObject = screenStream;
+      }
+      setIsScreenSharing(true);
+
+      const screenTrack = screenStream.getVideoTracks()[0];
+      const sender = peerConnection.getSenders().find((candidate) => candidate.track?.kind === 'video');
+      await sender?.replaceTrack(screenTrack);
+
+      screenTrack.onended = async () => {
+        const cameraTrack = localStreamRef.current?.getVideoTracks()[0];
+        await sender?.replaceTrack(cameraTrack ?? null);
+        setIsScreenSharing(false);
+        stopTracks(screenStreamRef.current);
+        screenStreamRef.current = null;
+      };
+    } catch (error) {
+      console.error('Screen sharing unavailable:', error);
+    }
+  }, [stopTracks]);
+
+  const stopScreenShare = useCallback(async () => {
+    const sender = peerConnectionRef.current?.getSenders().find((candidate) => candidate.track?.kind === 'video');
+    const cameraTrack = localStreamRef.current?.getVideoTracks()[0];
+    await sender?.replaceTrack(cameraTrack ?? null);
+    stopTracks(screenStreamRef.current);
+    screenStreamRef.current = null;
+    setIsScreenSharing(false);
+  }, [stopTracks]);
 
   const toggleScreenShare = () => {
     if (isScreenSharing) {
-      stopScreenShare();
-    } else {
-      startScreenShare();
+      void stopScreenShare();
+      return;
     }
+    void startScreenShare();
   };
 
   const toggleFullscreen = () => {
@@ -153,25 +305,24 @@ const VideoCall = ({
     } else {
       document.exitFullscreen?.();
     }
-    setIsFullscreen(!isFullscreen);
+    setIsFullscreen((value) => !value);
   };
 
   const sendChatMessage = () => {
     if (!chatInput.trim()) return;
-    const msg: ChatMsg = {
+    setChatMessages((current) => [...current, {
       id: crypto.randomUUID(),
       text: chatInput,
       isMe: true,
       time: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
-    };
-    setChatMessages(prev => [...prev, msg]);
+    }]);
     setChatInput('');
   };
 
-  const formatElapsed = (s: number) => {
-    const m = Math.floor(s / 60);
-    const sec = s % 60;
-    return `${m.toString().padStart(2, '0')}:${sec.toString().padStart(2, '0')}`;
+  const formatElapsed = (seconds: number) => {
+    const minutes = Math.floor(seconds / 60);
+    const remainder = seconds % 60;
+    return `${minutes.toString().padStart(2, '0')}:${remainder.toString().padStart(2, '0')}`;
   };
 
   return (
@@ -183,17 +334,10 @@ const VideoCall = ({
       className="fixed inset-0 z-[100] bg-background/95 backdrop-blur-sm flex items-center justify-center"
     >
       <div className={`relative w-full h-full max-w-6xl max-h-[90vh] mx-auto flex flex-col ${isFullscreen ? 'max-w-none max-h-none' : 'p-4'}`}>
-        {/* Main video area */}
         <div className="flex-1 relative rounded-2xl overflow-hidden bg-gradient-to-br from-muted to-secondary">
-          {/* Screen share display (takes over main area when active) */}
           {isScreenSharing && callState === 'active' && (
             <div className="absolute inset-0 bg-background">
-              <video
-                ref={screenVideoRef}
-                autoPlay
-                playsInline
-                className="w-full h-full object-contain"
-              />
+              <video ref={screenVideoRef} autoPlay playsInline className="w-full h-full object-contain" />
               <div className="absolute top-4 left-1/2 -translate-x-1/2 flex items-center gap-2 px-4 py-2 rounded-xl bg-primary/90 text-primary-foreground text-sm font-medium shadow-lg">
                 <Monitor className="w-4 h-4" />
                 Sharing your screen
@@ -201,8 +345,9 @@ const VideoCall = ({
             </div>
           )}
 
-          {/* Remote participant (simulated) */}
-          {(!isScreenSharing || callState !== 'active') && (
+          {callState === 'active' && remoteVideoActive && !isScreenSharing ? (
+            <video ref={remoteVideoRef} autoPlay playsInline className="absolute inset-0 w-full h-full object-cover bg-black" />
+          ) : (
             <div className="absolute inset-0 flex items-center justify-center">
               {callState === 'active' ? (
                 <div className="text-center">
@@ -253,8 +398,7 @@ const VideoCall = ({
             </div>
           )}
 
-          {/* Local video (PiP) */}
-          {callState === 'active' && (
+          {['connecting', 'active'].includes(callState) && (
             <motion.div
               initial={{ opacity: 0, scale: 0.8 }}
               animate={{ opacity: 1, scale: 1 }}
@@ -282,74 +426,62 @@ const VideoCall = ({
             </motion.div>
           )}
 
-          {/* Status bar */}
           {callState === 'active' && !isScreenSharing && (
             <div className="absolute top-4 left-4 flex items-center gap-2">
               <span className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-background/70 text-foreground text-xs font-medium">
                 <span className="w-2 h-2 rounded-full bg-success animate-pulse" />
-                Connected — End-to-end encrypted
+                Connected via WebRTC
               </span>
             </div>
           )}
         </div>
 
-        {/* Controls */}
         <div className="mt-4 flex items-center justify-center gap-3">
           {callState === 'ringing' && isIncoming ? (
             <>
-              <button onClick={handleDecline}
-                className="w-14 h-14 rounded-full bg-destructive text-destructive-foreground flex items-center justify-center hover:opacity-90 transition shadow-lg">
+              <button onClick={handleDecline} className="w-14 h-14 rounded-full bg-destructive text-destructive-foreground flex items-center justify-center hover:opacity-90 transition shadow-lg">
                 <PhoneOff className="w-6 h-6" />
               </button>
-              <button onClick={handleAccept}
-                className="w-14 h-14 rounded-full bg-success text-primary-foreground flex items-center justify-center hover:opacity-90 transition shadow-lg">
+              <button onClick={() => void handleAccept()} className="w-14 h-14 rounded-full bg-success text-primary-foreground flex items-center justify-center hover:opacity-90 transition shadow-lg">
                 <Phone className="w-6 h-6" />
               </button>
             </>
-          ) : callState === 'active' ? (
+          ) : callState === 'active' || callState === 'connecting' || callState === 'ringing' ? (
             <>
-              <button onClick={toggleMute}
-                className={`w-12 h-12 rounded-full flex items-center justify-center transition shadow-md ${
-                  isMuted ? 'bg-destructive/20 text-destructive' : 'bg-secondary text-secondary-foreground hover:bg-muted'
-                }`}>
-                {isMuted ? <MicOff className="w-5 h-5" /> : <Mic className="w-5 h-5" />}
-              </button>
-              <button onClick={toggleVideo}
-                className={`w-12 h-12 rounded-full flex items-center justify-center transition shadow-md ${
-                  !isVideoOn ? 'bg-destructive/20 text-destructive' : 'bg-secondary text-secondary-foreground hover:bg-muted'
-                }`}>
-                {isVideoOn ? <Video className="w-5 h-5" /> : <VideoOff className="w-5 h-5" />}
-              </button>
-              <button onClick={toggleScreenShare} title={isScreenSharing ? 'Stop sharing' : 'Share screen'}
-                className={`w-12 h-12 rounded-full flex items-center justify-center transition shadow-md ${
-                  isScreenSharing ? 'bg-primary/20 text-primary' : 'bg-secondary text-secondary-foreground hover:bg-muted'
-                }`}>
-                {isScreenSharing ? <MonitorOff className="w-5 h-5" /> : <Monitor className="w-5 h-5" />}
-              </button>
-              <button onClick={() => setShowChat(!showChat)}
-                className={`w-12 h-12 rounded-full flex items-center justify-center transition shadow-md ${
-                  showChat ? 'bg-primary/20 text-primary' : 'bg-secondary text-secondary-foreground hover:bg-muted'
-                }`}>
-                <MessageSquare className="w-5 h-5" />
-              </button>
-              <button onClick={toggleFullscreen}
-                className="w-12 h-12 rounded-full bg-secondary text-secondary-foreground flex items-center justify-center hover:bg-muted transition shadow-md">
-                {isFullscreen ? <Minimize2 className="w-5 h-5" /> : <Maximize2 className="w-5 h-5" />}
-              </button>
-              <button onClick={handleEnd}
-                className="w-14 h-14 rounded-full bg-destructive text-destructive-foreground flex items-center justify-center hover:opacity-90 transition shadow-lg">
+              {callState === 'active' && (
+                <>
+                  <button onClick={toggleMute} className={`w-12 h-12 rounded-full flex items-center justify-center transition shadow-md ${
+                    isMuted ? 'bg-destructive/20 text-destructive' : 'bg-secondary text-secondary-foreground hover:bg-muted'
+                  }`}>
+                    {isMuted ? <MicOff className="w-5 h-5" /> : <Mic className="w-5 h-5" />}
+                  </button>
+                  <button onClick={toggleVideo} className={`w-12 h-12 rounded-full flex items-center justify-center transition shadow-md ${
+                    !isVideoOn ? 'bg-destructive/20 text-destructive' : 'bg-secondary text-secondary-foreground hover:bg-muted'
+                  }`}>
+                    {isVideoOn ? <Video className="w-5 h-5" /> : <VideoOff className="w-5 h-5" />}
+                  </button>
+                  <button onClick={toggleScreenShare} className={`w-12 h-12 rounded-full flex items-center justify-center transition shadow-md ${
+                    isScreenSharing ? 'bg-primary/20 text-primary' : 'bg-secondary text-secondary-foreground hover:bg-muted'
+                  }`}>
+                    {isScreenSharing ? <MonitorOff className="w-5 h-5" /> : <Monitor className="w-5 h-5" />}
+                  </button>
+                  <button onClick={() => setShowChat((value) => !value)} className={`w-12 h-12 rounded-full flex items-center justify-center transition shadow-md ${
+                    showChat ? 'bg-primary/20 text-primary' : 'bg-secondary text-secondary-foreground hover:bg-muted'
+                  }`}>
+                    <MessageSquare className="w-5 h-5" />
+                  </button>
+                  <button onClick={toggleFullscreen} className="w-12 h-12 rounded-full bg-secondary text-secondary-foreground flex items-center justify-center hover:bg-muted transition shadow-md">
+                    {isFullscreen ? <Minimize2 className="w-5 h-5" /> : <Maximize2 className="w-5 h-5" />}
+                  </button>
+                </>
+              )}
+              <button onClick={handleEnd} className="w-14 h-14 rounded-full bg-destructive text-destructive-foreground flex items-center justify-center hover:opacity-90 transition shadow-lg">
                 <PhoneOff className="w-6 h-6" />
               </button>
             </>
-          ) : callState === 'connecting' ? (
-            <button onClick={handleEnd}
-              className="w-14 h-14 rounded-full bg-destructive text-destructive-foreground flex items-center justify-center hover:opacity-90 transition shadow-lg">
-              <PhoneOff className="w-6 h-6" />
-            </button>
           ) : null}
         </div>
 
-        {/* In-call chat sidebar */}
         <AnimatePresence>
           {showChat && callState === 'active' && (
             <motion.div
@@ -365,13 +497,13 @@ const VideoCall = ({
                 {chatMessages.length === 0 ? (
                   <p className="text-xs text-muted-foreground text-center mt-8">Send quick messages during the call</p>
                 ) : (
-                  chatMessages.map(msg => (
-                    <div key={msg.id} className={`flex ${msg.isMe ? 'justify-end' : 'justify-start'}`}>
+                  chatMessages.map((message) => (
+                    <div key={message.id} className={`flex ${message.isMe ? 'justify-end' : 'justify-start'}`}>
                       <div className={`max-w-[85%] px-3 py-2 rounded-xl text-xs ${
-                        msg.isMe ? 'bg-primary text-primary-foreground' : 'bg-secondary text-secondary-foreground'
+                        message.isMe ? 'bg-primary text-primary-foreground' : 'bg-secondary text-secondary-foreground'
                       }`}>
-                        <p>{msg.text}</p>
-                        <p className={`text-[9px] mt-1 ${msg.isMe ? 'text-primary-foreground/60' : 'text-muted-foreground'}`}>{msg.time}</p>
+                        <p>{message.text}</p>
+                        <p className={`text-[9px] mt-1 ${message.isMe ? 'text-primary-foreground/60' : 'text-muted-foreground'}`}>{message.time}</p>
                       </div>
                     </div>
                   ))
@@ -380,13 +512,12 @@ const VideoCall = ({
               <div className="p-3 border-t border-border flex gap-2">
                 <input
                   value={chatInput}
-                  onChange={e => setChatInput(e.target.value)}
-                  onKeyDown={e => e.key === 'Enter' && sendChatMessage()}
+                  onChange={(event) => setChatInput(event.target.value)}
+                  onKeyDown={(event) => event.key === 'Enter' && sendChatMessage()}
                   placeholder="Type a message..."
                   className="flex-1 h-9 px-3 rounded-lg border border-input bg-background text-foreground placeholder:text-muted-foreground text-sm focus:outline-none focus:ring-2 focus:ring-primary/30"
                 />
-                <button onClick={sendChatMessage} disabled={!chatInput.trim()}
-                  className="w-9 h-9 rounded-lg bg-primary text-primary-foreground flex items-center justify-center hover:opacity-90 transition disabled:opacity-40">
+                <button onClick={sendChatMessage} disabled={!chatInput.trim()} className="w-9 h-9 rounded-lg bg-primary text-primary-foreground flex items-center justify-center hover:opacity-90 transition disabled:opacity-40">
                   <Send className="w-4 h-4" />
                 </button>
               </div>
