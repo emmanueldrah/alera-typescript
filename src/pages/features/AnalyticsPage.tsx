@@ -66,7 +66,7 @@ const AnalyticsPage = () => {
     };
   }, [scopedAppointments, scopedPrescriptions, scopedLabTests, scopedImagingScans]);
 
-  const isAdmin = effectiveRole === 'admin';
+  const isAdmin = effectiveRole === 'admin' || user?.role === 'super_admin';
   const isDoctor = effectiveRole === 'doctor';
 
   const [platformStats, setPlatformStats] = useState<PlatformStats | null>(null);
