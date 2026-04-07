@@ -6,12 +6,26 @@ from app.utils.websocket_manager import manager
 from app.utils.auth import get_user_id_from_token
 from app.models.ambulance import AmbulanceRequest
 from app.models.user import User, UserRole
+from app.utils.access import require_verified_workforce_member
+from app.utils.time import utcnow
 import json
 import logging
 
 router = APIRouter(prefix="/api/ws/location", tags=["websocket"])
 
 logger = logging.getLogger(__name__)
+
+
+def _can_track_request(user: User, db_request: AmbulanceRequest) -> bool:
+    if user.role == UserRole.PATIENT:
+        return db_request.patient_id == user.id
+    if user.role == UserRole.AMBULANCE:
+        require_verified_workforce_member(user, "track emergency locations")
+        return db_request.assigned_ambulance_id in (None, user.id)
+    if user.role in [UserRole.HOSPITAL, UserRole.PROVIDER]:
+        require_verified_workforce_member(user, "track emergency locations")
+        return True
+    return user.role == UserRole.ADMIN
 
 @router.websocket("/{request_id}")
 async def location_websocket(
@@ -42,35 +56,48 @@ async def location_websocket(
             await websocket.close(code=4003) # Forbidden
             return
 
-        # 2. Authorize user for this request
-        # In a real app, request_id would be an integer, but the frontend might send 'amb-...' (mock) or digits.
-        # We'll try to parse it if it's numeric.
         try:
-            db_request_id = int(request_id) if request_id.isdigit() else None
+            db_request_id = int(request_id)
         except ValueError:
-            db_request_id = None
+            await websocket.close(code=4004)
+            return
 
-        if db_request_id:
-            db_request = db.query(AmbulanceRequest).filter(AmbulanceRequest.id == db_request_id).first()
-            if not db_request:
-                await websocket.close(code=4004) # Not Found
-                return
-            
-            # Check if user is either the patient or an authorized worker (ambulance/admin)
-            is_patient = db_request.patient_id == user.id
-            is_authorized_worker = user.role in [UserRole.AMBULANCE, UserRole.ADMIN, UserRole.HOSPITAL]
-            
-            if not (is_patient or is_authorized_worker):
-                await websocket.close(code=4003) # Forbidden
-                return
-        else:
-            # If it's a mock ID (like 'amb-123'), we'll allow it for demo purposes if the user is logged in
-            logger.info(f"Mock request ID detected: {request_id}. allowing for demo.")
-            pass
+        db_request = db.query(AmbulanceRequest).filter(AmbulanceRequest.id == db_request_id).first()
+        if not db_request:
+            await websocket.close(code=4004)
+            return
+
+        if not _can_track_request(user, db_request):
+            await websocket.close(code=4003)
+            return
 
         # 3. Connect to room
         await manager.connect(websocket, request_id)
         logger.info(f"User {user_id} connected to tracking room {request_id}")
+
+        if db_request.patient_id:
+            patient = db.query(User).filter(User.id == db_request.patient_id).first()
+            if patient and patient.live_location_sharing_enabled and patient.live_latitude and patient.live_longitude:
+                await websocket.send_json({
+                    "type": "location_snapshot",
+                    "user_id": patient.id,
+                    "role": patient.role.value if hasattr(patient.role, "value") else str(patient.role),
+                    "lat": float(patient.live_latitude),
+                    "lng": float(patient.live_longitude),
+                    "timestamp": patient.live_location_updated_at.isoformat() if patient.live_location_updated_at else None,
+                })
+
+        if db_request.assigned_ambulance_id:
+            ambulance = db.query(User).filter(User.id == db_request.assigned_ambulance_id).first()
+            if ambulance and ambulance.live_location_sharing_enabled and ambulance.live_latitude and ambulance.live_longitude:
+                await websocket.send_json({
+                    "type": "location_snapshot",
+                    "user_id": ambulance.id,
+                    "role": ambulance.role.value if hasattr(ambulance.role, "value") else str(ambulance.role),
+                    "lat": float(ambulance.live_latitude),
+                    "lng": float(ambulance.live_longitude),
+                    "timestamp": ambulance.live_location_updated_at.isoformat() if ambulance.live_location_updated_at else None,
+                })
 
         # 4. Handle messages
         try:
@@ -80,10 +107,22 @@ async def location_websocket(
                 
                 # Expected message format: {"type": "location_update", "lat": float, "lng": float, "heading": float, "speed": float}
                 if message.get("type") == "location_update":
+                    lat = message.get("lat")
+                    lng = message.get("lng")
+                    if lat is None or lng is None:
+                        continue
+
+                    user.live_location_sharing_enabled = True
+                    user.live_latitude = float(lat)
+                    user.live_longitude = float(lng)
+                    user.live_location_updated_at = utcnow()
+                    db.add(user)
+                    db.commit()
+
                     # Add sender info
                     message["user_id"] = user.id
                     message["role"] = user.role.value if hasattr(user.role, 'value') else str(user.role)
-                    message["timestamp"] = json.dumps(str(json.dumps("now"))) # Placeholder for simple mock consistency if needed
+                    message["timestamp"] = user.live_location_updated_at.isoformat()
                     
                     # Broadcast to everyone else in the room
                     await manager.broadcast_to_room(message, request_id, sender_websocket=websocket)

@@ -1,4 +1,4 @@
-from sqlalchemy import Column, Integer, String, Enum as SQLEnum, DateTime, Boolean, Text, Index
+from sqlalchemy import Column, Integer, String, Enum as SQLEnum, DateTime, Boolean, Text, Index, Float
 from sqlalchemy.orm import relationship
 from datetime import datetime
 import enum
@@ -52,6 +52,10 @@ class User(Base):
     notification_email = Column(Boolean, default=True, nullable=False)
     notification_sms = Column(Boolean, default=False, nullable=False)
     privacy_public_profile = Column(Boolean, default=False, nullable=False)
+    live_location_sharing_enabled = Column(Boolean, default=False, nullable=False)
+    live_latitude = Column(Float, nullable=True)
+    live_longitude = Column(Float, nullable=True)
+    live_location_updated_at = Column(DateTime, nullable=True)
 
     # Account recovery / verification
     email_verification_token_hash = Column(String(255), nullable=True)

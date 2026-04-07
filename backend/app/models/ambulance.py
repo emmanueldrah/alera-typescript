@@ -33,6 +33,7 @@ class AmbulanceRequest(Base):
 
     id = Column(Integer, primary_key=True, index=True, autoincrement=True)
     patient_id = Column(Integer, ForeignKey("users.id"), nullable=True, index=True)
+    assigned_ambulance_id = Column(Integer, ForeignKey("users.id"), nullable=True, index=True)
     
     # Location info
     location_name = Column(String, nullable=False)
@@ -47,16 +48,20 @@ class AmbulanceRequest(Base):
     
     # Tracking
     requested_at = Column(DateTime, default=utcnow)
+    accepted_at = Column(DateTime, nullable=True)
     dispatched_at = Column(DateTime, nullable=True)
+    arrived_at = Column(DateTime, nullable=True)
     completed_at = Column(DateTime, nullable=True)
     
     # Relationships
     patient = relationship("User", foreign_keys=[patient_id])
+    assigned_ambulance = relationship("User", foreign_keys=[assigned_ambulance_id])
 
     def to_dict(self):
         return {
             "id": self.id,
             "patient_id": self.patient_id,
+            "assigned_ambulance_id": self.assigned_ambulance_id,
             "location_name": self.location_name,
             "address": self.address,
             "latitude": self.latitude,
@@ -65,7 +70,9 @@ class AmbulanceRequest(Base):
             "status": self.status.value if self.status else None,
             "priority": self.priority.value if self.priority else None,
             "requested_at": self.requested_at.isoformat() if self.requested_at else None,
+            "accepted_at": self.accepted_at.isoformat() if self.accepted_at else None,
             "dispatched_at": self.dispatched_at.isoformat() if self.dispatched_at else None,
+            "arrived_at": self.arrived_at.isoformat() if self.arrived_at else None,
             "completed_at": self.completed_at.isoformat() if self.completed_at else None,
         }
 

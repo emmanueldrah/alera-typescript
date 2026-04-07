@@ -424,16 +424,52 @@ class AmbulanceRequestCreate(AmbulanceRequestBase):
 class AmbulanceRequestUpdate(BaseModel):
     status: Optional[str] = None
     priority: Optional[str] = None
+    assigned_ambulance_id: Optional[int] = None
     dispatched_at: Optional[datetime] = None
+    accepted_at: Optional[datetime] = None
+    arrived_at: Optional[datetime] = None
     completed_at: Optional[datetime] = None
+    location_name: Optional[str] = None
+    address: Optional[str] = None
+    latitude: Optional[float] = None
+    longitude: Optional[float] = None
+    description: Optional[str] = None
 
 
 class AmbulanceRequestResponse(AmbulanceRequestBase):
     id: int
     patient_id: Optional[int] = None
+    assigned_ambulance_id: Optional[int] = None
     status: str
     requested_at: datetime
+    accepted_at: Optional[datetime] = None
     dispatched_at: Optional[datetime] = None
+    arrived_at: Optional[datetime] = None
     completed_at: Optional[datetime] = None
 
     model_config = ConfigDict(from_attributes=True)
+
+
+class LiveLocationUpdate(BaseModel):
+    latitude: float
+    longitude: float
+    sharing_enabled: bool = True
+
+
+class LiveLocationResponse(BaseModel):
+    user_id: int
+    role: str
+    latitude: Optional[float] = None
+    longitude: Optional[float] = None
+    last_updated: Optional[datetime] = None
+    sharing_enabled: bool = False
+
+
+class EmergencyTrackingResponse(BaseModel):
+    request_id: int
+    status: str
+    priority: str
+    patient_id: Optional[int] = None
+    assigned_ambulance_id: Optional[int] = None
+    patient_location: Optional[LiveLocationResponse] = None
+    ambulance_location: Optional[LiveLocationResponse] = None

@@ -323,7 +323,10 @@ export const ambulanceApi = {
     updateData: {
       status?: string;
       priority?: string;
+      assigned_ambulance_id?: number;
+      accepted_at?: string;
       dispatched_at?: string;
+      arrived_at?: string;
       completed_at?: string;
       location_name?: string;
       address?: string;
@@ -334,6 +337,47 @@ export const ambulanceApi = {
   ) => {
     const response = await apiClient.put(`/ambulance/${requestId}`, updateData);
     return response.data;
+  },
+};
+
+export type LiveLocationSnapshot = {
+  user_id: number;
+  role: string;
+  latitude?: number | null;
+  longitude?: number | null;
+  last_updated?: string | null;
+  sharing_enabled: boolean;
+};
+
+export type EmergencyTrackingSnapshot = {
+  request_id: number;
+  status: string;
+  priority: string;
+  patient_id?: number | null;
+  assigned_ambulance_id?: number | null;
+  patient_location?: LiveLocationSnapshot | null;
+  ambulance_location?: LiveLocationSnapshot | null;
+};
+
+export const liveLocationApi = {
+  updateMine: async (payload: { latitude: number; longitude: number; sharing_enabled?: boolean }) => {
+    const response = await apiClient.post('/live-locations/me', payload);
+    return response.data as LiveLocationSnapshot;
+  },
+
+  getMine: async () => {
+    const response = await apiClient.get('/live-locations/me');
+    return response.data as LiveLocationSnapshot;
+  },
+
+  disableMine: async () => {
+    const response = await apiClient.post('/live-locations/me/disable');
+    return response.data as LiveLocationSnapshot;
+  },
+
+  getRequestTracking: async (requestId: string | number) => {
+    const response = await apiClient.get(`/live-locations/request/${requestId}`);
+    return response.data as EmergencyTrackingSnapshot;
   },
 };
 
@@ -920,5 +964,6 @@ export const api = {
   imaging: imagingApi,
   referrals: referralsApi,
   ambulance: ambulanceApi,
+  liveLocation: liveLocationApi,
   records: recordsApi,
 };

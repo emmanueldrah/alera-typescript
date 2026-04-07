@@ -301,11 +301,19 @@ export interface AmbulanceRequest {
   patientName: string;
   patientId: string;
   location: string;
+  address?: string;
+  latitude?: number;
+  longitude?: number;
   date: string;
   time: string;
-  status: 'requested' | 'dispatched' | 'en-route' | 'completed';
+  status: 'requested' | 'accepted' | 'dispatched' | 'en-route' | 'arrived' | 'completed' | 'cancelled';
   priority: 'low' | 'medium' | 'high' | 'critical';
   vehicleId?: string;
+  assignedAmbulanceId?: string;
+  acceptedAt?: string;
+  dispatchedAt?: string;
+  arrivedAt?: string;
+  completedAt?: string;
 }
 
 export interface TimelineEvent {

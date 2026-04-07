@@ -172,6 +172,53 @@ def _patch_users_notification_preferences_columns():
             print(f"WARNING: Could not patch users.{column_name} column: {e}")
 
 
+def _patch_users_live_location_columns():
+    """Add live-location tracking columns when upgrading an existing users table."""
+    try:
+        columns = {column["name"] for column in inspect(engine).get_columns("users")}
+    except Exception:
+        return
+
+    patches = {
+        "live_location_sharing_enabled": "BOOLEAN NOT NULL DEFAULT FALSE",
+        "live_latitude": "FLOAT",
+        "live_longitude": "FLOAT",
+        "live_location_updated_at": "TIMESTAMP",
+    }
+
+    for column_name, ddl in patches.items():
+        if column_name in columns:
+            continue
+        try:
+            with engine.begin() as conn:
+                conn.execute(text(f"ALTER TABLE users ADD COLUMN {column_name} {ddl}"))
+        except Exception as e:
+            print(f"WARNING: Could not patch users.{column_name} column: {e}")
+
+
+def _patch_ambulance_request_tracking_columns():
+    """Add assignment and richer tracking columns to ambulance requests."""
+    try:
+        columns = {column["name"] for column in inspect(engine).get_columns("ambulance_requests")}
+    except Exception:
+        return
+
+    patches = {
+        "assigned_ambulance_id": "INTEGER",
+        "accepted_at": "TIMESTAMP",
+        "arrived_at": "TIMESTAMP",
+    }
+
+    for column_name, ddl in patches.items():
+        if column_name in columns:
+            continue
+        try:
+            with engine.begin() as conn:
+                conn.execute(text(f"ALTER TABLE ambulance_requests ADD COLUMN {column_name} {ddl}"))
+        except Exception as e:
+            print(f"WARNING: Could not patch ambulance_requests.{column_name} column: {e}")
+
+
 def _patch_admin_accounts_email_verified():
     """Backfill seeded/admin accounts so they never get stuck behind email verification."""
     try:
@@ -412,6 +459,8 @@ def init_db():
         _patch_users_session_version_column()
         _patch_users_account_recovery_columns()
         _patch_users_notification_preferences_columns()
+        _patch_users_live_location_columns()
+        _patch_ambulance_request_tracking_columns()
         _patch_userrole_enum_values()
         _patch_postgres_enum_values()
         _patch_admin_accounts_email_verified()

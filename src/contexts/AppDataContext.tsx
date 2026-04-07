@@ -174,6 +174,7 @@ type BackendReferral = {
 type BackendAmbulanceRequest = {
   id: number;
   patient_id?: number | null;
+  assigned_ambulance_id?: number | null;
   location_name: string;
   address?: string | null;
   latitude?: number | null;
@@ -182,7 +183,9 @@ type BackendAmbulanceRequest = {
   status: string;
   priority: string;
   requested_at: string;
+  accepted_at?: string | null;
   dispatched_at?: string | null;
+  arrived_at?: string | null;
   completed_at?: string | null;
 };
 
@@ -372,11 +375,18 @@ const mapBackendAmbulanceRequest = (request: BackendAmbulanceRequest, fallbackPa
   patientName: fallbackPatientName || `Patient #${request.patient_id ?? 'unknown'}`,
   patientId: String(request.patient_id ?? ''),
   location: request.location_name || request.address || 'Unknown location',
+  address: request.address || undefined,
+  latitude: request.latitude ?? undefined,
+  longitude: request.longitude ?? undefined,
   date: (request.requested_at || '').slice(0, 10),
   time: (request.requested_at || '').slice(11, 16),
   status: (() => {
     const status = (request.status || 'requested').toLowerCase();
+    if (status === 'pending') return 'requested';
+    if (status === 'accepted') return 'accepted';
     if (status === 'dispatched') return 'dispatched';
+    if (status === 'arrived') return 'arrived';
+    if (status === 'cancelled') return 'cancelled';
     if (status === 'completed') return 'completed';
     if (status === 'en_route') return 'en-route';
     return 'requested';
@@ -389,6 +399,11 @@ const mapBackendAmbulanceRequest = (request: BackendAmbulanceRequest, fallbackPa
     return 'medium';
   })(),
   vehicleId: undefined,
+  assignedAmbulanceId: request.assigned_ambulance_id ? String(request.assigned_ambulance_id) : undefined,
+  acceptedAt: request.accepted_at || undefined,
+  dispatchedAt: request.dispatched_at || undefined,
+  arrivedAt: request.arrived_at || undefined,
+  completedAt: request.completed_at || undefined,
 });
 
 const labStatusToApi = (s: LabTest['status']): string => {
@@ -1085,6 +1100,9 @@ export const AppDataProvider: React.FC<{ children: React.ReactNode }> = ({ child
           await ambulanceApi.createRequest({
             patient_id: toOptionalNumber(request.patientId) ?? undefined,
             location_name: request.location,
+            address: request.address,
+            latitude: request.latitude,
+            longitude: request.longitude,
             description: request.location,
             priority: request.priority,
           });
@@ -1101,10 +1119,20 @@ export const AppDataProvider: React.FC<{ children: React.ReactNode }> = ({ child
         const next = update(prev);
         const payload: Record<string, unknown> = {};
         if (next.status !== prev.status) {
-          payload.status = next.status === 'en-route' ? 'en_route' : next.status;
+          payload.status = next.status === 'requested'
+            ? 'pending'
+            : next.status === 'en-route'
+              ? 'en_route'
+              : next.status;
         }
         if (next.priority !== prev.priority) payload.priority = next.priority;
         if (next.location !== prev.location) payload.location_name = next.location;
+        if (next.address !== prev.address) payload.address = next.address;
+        if (next.latitude !== prev.latitude) payload.latitude = next.latitude;
+        if (next.longitude !== prev.longitude) payload.longitude = next.longitude;
+        if (next.assignedAmbulanceId !== prev.assignedAmbulanceId) {
+          payload.assigned_ambulance_id = toOptionalNumber(next.assignedAmbulanceId);
+        }
         try {
           if (Object.keys(payload).length > 0) {
             await ambulanceApi.updateRequest(id, payload);
