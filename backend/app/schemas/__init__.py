@@ -30,7 +30,7 @@ class UserBase(BaseModel):
 
 
 class UserCreate(UserBase):
-    password: str = Field(..., min_length=8)
+    password: str = Field(..., min_length=8, pattern=r"^(?=.*[a-z])(?=.*[A-Z])(?=.*\d).{8,}$")
     role: UserRole = UserRole.PATIENT
     license_number: Optional[str] = None
     license_state: Optional[str] = None

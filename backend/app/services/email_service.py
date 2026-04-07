@@ -81,13 +81,8 @@ class EmailService:
             return "sendgrid"
         if settings.SMTP_HOST:
             return "smtp"
-        if settings.DEBUG or settings.ENVIRONMENT == "development":
-            return "console"
-
-        raise HTTPException(
-            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
-            detail="Email service is not configured",
-        )
+        # Fall back to console for development or when no providers configured
+        return "console"
 
     @staticmethod
     async def send_appointment_reminder(
