@@ -16,6 +16,7 @@ from app.models.appointment import Appointment, AppointmentStatus, AppointmentTy
 from app.models.lab_imaging import ImagingScan, ImagingScanStatus, LabTest, LabTestStatus
 from app.models.user import User, UserRole
 from app.routes.admin import approve_provider, deactivate_user, list_verifications
+from app.routes.admin import change_user_role
 from app.routes.appointments import create_appointment
 from app.routes.auth import (
     change_password,
@@ -503,6 +504,37 @@ def test_verified_provider_filtering_and_scoped_patient_data(db_session):
         current_user=provider_user,
     ))
     assert consent.patient_id == patient_user.id
+
+
+def test_super_admin_can_change_user_roles(db_session):
+    user_result = run(register(
+        UserCreate(
+            email="rolechange@example.com",
+            username="rolechange-user",
+            first_name="Role",
+            last_name="Change",
+            password="password123",
+            role="patient",
+        ),
+        db_session,
+    ))
+
+    target_user = load_user_by_id(db_session, user_result["user"].id)
+    super_admin = load_user(db_session, ADMIN_EMAIL)
+    super_admin.role = UserRole.SUPER_ADMIN
+    db_session.commit()
+    db_session.refresh(super_admin)
+
+    result = run(change_user_role(
+        user_id=target_user.id,
+        new_role="admin",
+        current_user=super_admin,
+        db=db_session,
+    ))
+
+    db_session.refresh(target_user)
+    assert result["new_role"] == "admin"
+    assert target_user.role == UserRole.ADMIN
 
 
 def test_email_verification_flow_and_resend(db_session, monkeypatch):
