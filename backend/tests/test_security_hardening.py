@@ -178,6 +178,15 @@ def test_enum_value_renames_detect_legacy_uppercase_labels():
     ]
 
 
+def test_missing_postgres_enum_labels_detects_new_roles():
+    missing = database._missing_postgres_enum_labels(
+        ["patient", "provider", "pharmacist", "admin", "super_admin"],
+        ["patient", "provider", "pharmacist", "admin", "super_admin", "hospital", "laboratory", "imaging", "ambulance"],
+    )
+
+    assert missing == ["hospital", "laboratory", "imaging", "ambulance"]
+
+
 def test_verification_email_hits_sendgrid_api_when_configured(monkeypatch):
     captured: dict[str, object] = {}
 

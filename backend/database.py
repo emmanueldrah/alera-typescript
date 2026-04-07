@@ -281,8 +281,15 @@ def _collect_sqlalchemy_enum_specs() -> dict[str, list[str]]:
     return specs
 
 
+def _missing_postgres_enum_labels(current_labels: list[str], desired_labels: list[str]) -> list[str]:
+    """Return desired enum labels that are still missing after rename normalization."""
+
+    current_set = set(current_labels)
+    return [label for label in desired_labels if label not in current_set]
+
+
 def _patch_postgres_enum_values():
-    """Normalize legacy PostgreSQL enum labels to the current lowercase values."""
+    """Normalize legacy PostgreSQL enum labels and append any newly introduced labels."""
 
     if not str(database_url).startswith("postgresql"):
         return
@@ -297,6 +304,7 @@ def _patch_postgres_enum_values():
     desired_enums = _collect_sqlalchemy_enum_specs()
 
     rename_count = 0
+    add_count = 0
     try:
         with engine.begin() as conn:
             for type_name, desired_labels in desired_enums.items():
@@ -309,12 +317,22 @@ def _patch_postgres_enum_values():
                         f'ALTER TYPE "{type_name}" RENAME VALUE {old_label!r} TO {new_label!r}'
                     )
                     rename_count += 1
+
+                rename_map = dict(enum_value_renames(current_labels, desired_labels))
+                normalized_labels = [rename_map.get(label, label) for label in current_labels]
+                for missing_label in _missing_postgres_enum_labels(normalized_labels, desired_labels):
+                    conn.exec_driver_sql(
+                        f'ALTER TYPE "{type_name}" ADD VALUE IF NOT EXISTS {missing_label!r}'
+                    )
+                    add_count += 1
     except Exception as e:
         print(f"WARNING: Could not normalize PostgreSQL enum values: {e}")
         return
 
     if rename_count:
         print(f"✓ Normalized {rename_count} PostgreSQL enum label(s)")
+    if add_count:
+        print(f"✓ Added {add_count} PostgreSQL enum label(s)")
 
 
 def _patch_userrole_enum_values():
