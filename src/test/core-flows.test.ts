@@ -5,7 +5,7 @@ import { canAccessFeature } from '@/lib/featureAccess';
 import { getAvailableAppointmentSlots, getAppointmentTimeUntilLabel, getVisibleAppointments, isWithinNext24Hours, isWithinNextHour } from '@/lib/appointmentUtils';
 import { getAccessiblePatients, getDoctorPatients } from '@/lib/patientDirectory';
 import { createStoredNotification, matchesNotificationRecipient } from '@/lib/notificationUtils';
-import { canAcceptReferral, canCancelReferral, canCompleteReferral, getReferralDepartmentId, getReferralDepartments, getVisibleReferrals, isReferralDestinationValid } from '@/lib/referralUtils';
+import { canAcceptReferral, canCancelReferral, canCompleteReferral, getReferralDepartmentId, getReferralDepartments, getReferralDestinationProviders, getVisibleReferrals, isReferralDestinationValid } from '@/lib/referralUtils';
 import { getVisibleImagingScans, getVisibleLabTests, getVisiblePrescriptions } from '@/lib/recordVisibility';
 import { clearAleraStorage, getNotificationStorageKey, storageKeys } from '@/lib/storageKeys';
 import type { Doctor, LabTest, Prescription, Referral } from '@/data/mockData';
@@ -253,8 +253,11 @@ describe('referral workflow helpers', () => {
       patientName: 'Jane Roe',
       fromDoctorId: 'doctor-1',
       fromDoctorName: 'Dr. Alice',
+      destinationProviderId: 'hospital-1',
+      destinationProviderName: 'City Hospital',
+      destinationProviderRole: 'hospital',
       toDepartmentId: 'cardiology',
-      toDepartment: 'Cardiology',
+      toDepartment: 'City Hospital',
       reason: 'Chest pain',
       date: '2026-04-01',
       status: 'pending',
@@ -266,6 +269,7 @@ describe('referral workflow helpers', () => {
     expect(getVisibleReferrals(referrals, { id: 'doctor-1', role: 'doctor' })).toHaveLength(1);
     expect(getVisibleReferrals(referrals, { id: 'doctor-2', role: 'doctor' })).toHaveLength(0);
     expect(getVisibleReferrals(referrals, { id: 'hospital-1', role: 'hospital' })).toHaveLength(1);
+    expect(getVisibleReferrals(referrals, { id: 'hospital-2', role: 'hospital' })).toHaveLength(0);
   });
 
   it('returns stable department lists and ids', () => {
@@ -279,6 +283,17 @@ describe('referral workflow helpers', () => {
     expect(isReferralDestinationValid('imaging', 'Radiology')).toBe(false);
     expect(isReferralDestinationValid('pharmacy', 'Clinical pharmacy')).toBe(true);
     expect(isReferralDestinationValid('hospital', 'Cardiology')).toBe(true);
+  });
+
+  it('returns verified provider destinations for each referral type', () => {
+    const users: User[] = [
+      { id: 'hospital-1', email: 'hospital1@alera.local', name: 'City Hospital', role: 'hospital', isVerified: true, isActive: true },
+      { id: 'hospital-2', email: 'hospital2@alera.local', name: 'County Hospital', role: 'hospital', isVerified: false, isActive: true },
+      { id: 'img-1', email: 'imaging@alera.local', name: 'Precision Imaging', role: 'imaging', isVerified: true, isActive: true },
+    ];
+
+    expect(getReferralDestinationProviders(users, 'hospital').map((user) => user.id)).toEqual(['hospital-1']);
+    expect(getReferralDestinationProviders(users, 'imaging').map((user) => user.id)).toEqual(['img-1']);
   });
 
   it('assigns referral actions to the correct roles and statuses', () => {

@@ -160,6 +160,9 @@ type BackendReferral = {
   patient_id: number;
   from_doctor_id: number;
   referral_type?: string | null;
+  destination_provider_id?: number | null;
+  destination_provider_name?: string | null;
+  destination_provider_role?: string | null;
   to_department: string;
   to_department_id?: string | null;
   reason: string;
@@ -360,6 +363,14 @@ const mapBackendReferral = (r: BackendReferral): Referral => {
     patientName: r.patient_name?.trim() || `Patient #${r.patient_id}`,
     fromDoctorId: String(r.from_doctor_id),
     fromDoctorName: r.from_doctor_name?.trim() || `Provider #${r.from_doctor_id}`,
+    destinationProviderId: r.destination_provider_id ? String(r.destination_provider_id) : undefined,
+    destinationProviderName: r.destination_provider_name?.trim() || undefined,
+    destinationProviderRole: (() => {
+      const role = (r.destination_provider_role || '').toLowerCase();
+      if (role === 'hospital' || role === 'laboratory' || role === 'imaging') return role;
+      if (role === 'pharmacist' || role === 'pharmacy') return 'pharmacy';
+      return undefined;
+    })(),
     toDepartmentId: r.to_department_id || getReferralDepartmentId(r.to_department),
     toDepartment: r.to_department,
     reason: r.reason,
@@ -1239,6 +1250,7 @@ export const AppDataProvider: React.FC<{ children: React.ReactNode }> = ({ child
           await referralsApi.createReferral({
             patient_id: Number(referral.patientId),
             referral_type: referral.referralType,
+            destination_provider_id: Number(referral.destinationProviderId),
             to_department: referral.toDepartment,
             to_department_id: referral.toDepartmentId || undefined,
             reason: referral.reason,

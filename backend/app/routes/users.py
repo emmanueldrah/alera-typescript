@@ -1,4 +1,5 @@
 from fastapi import APIRouter, Depends, HTTPException, status
+from sqlalchemy import and_, or_
 from sqlalchemy.orm import Session
 from database import get_db
 from app.models.user import User, UserRole
@@ -97,10 +98,25 @@ async def list_accessible_users(
     if current_user.role.value == "provider":
         patient_ids = provider_panel_patient_ids(db, current_user.id)
         query = db.query(User).filter(User.is_active.is_(True))
-        if patient_ids:
-            query = query.filter(User.id.in_(patient_ids))
-        else:
-            query = query.filter(User.id == current_user.id)
+        patient_filter = User.id.in_(patient_ids) if patient_ids else User.id == current_user.id
+        referral_destinations_filter = and_(
+            User.is_verified.is_(True),
+            role_text.in_(
+                [
+                    UserRole.HOSPITAL.value,
+                    UserRole.LABORATORY.value,
+                    UserRole.IMAGING.value,
+                    UserRole.PHARMACIST.value,
+                ]
+            ),
+        )
+        query = query.filter(
+            or_(
+                patient_filter,
+                User.id == current_user.id,
+                referral_destinations_filter,
+            )
+        )
         return query.all()
 
     if is_workforce_role(current_user.role):
@@ -108,8 +124,13 @@ async def list_accessible_users(
             db.query(User)
             .filter(
                 User.is_active.is_(True),
-                User.is_verified.is_(True),
-                role_text == UserRole.PATIENT.value,
+                or_(
+                    role_text == UserRole.PATIENT.value,
+                    and_(
+                        User.is_verified.is_(True),
+                        role_text == UserRole.PROVIDER.value,
+                    ),
+                ),
             )
             .all()
         )

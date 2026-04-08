@@ -93,11 +93,11 @@ export const getVisibleReferrals = (
   if (role === 'doctor') {
     rows = referrals.filter((referral) => referral.fromDoctorId === user.id);
   } else if (role === 'hospital') {
-    rows = referrals;
+    rows = referrals.filter((referral) => referral.referralType === 'hospital' && referral.destinationProviderId === user.id);
   } else if (role === 'patient') {
     rows = referrals.filter((referral) => referral.patientId === user.id);
   } else if (role === 'laboratory' || role === 'imaging' || role === 'pharmacy') {
-    rows = referrals;
+    rows = referrals.filter((referral) => referral.referralType === role && referral.destinationProviderId === user.id);
   } else {
     return [];
   }
@@ -117,6 +117,22 @@ export const isReferralDestinationValid = (kind: ReferralKind, destination: stri
   if (!normalizedDestination) return true;
   return !referralServiceAliases[kind].some((alias) => normalizeReferralValue(alias) === normalizedDestination);
 };
+
+const referralDestinationRole: Record<ReferralKind, User['role']> = {
+  hospital: 'hospital',
+  laboratory: 'laboratory',
+  imaging: 'imaging',
+  pharmacy: 'pharmacy',
+};
+
+export const getReferralDestinationProviders = (
+  users: User[],
+  kind: ReferralKind,
+) =>
+  users
+    .filter((candidate) => candidate.role === referralDestinationRole[kind])
+    .filter((candidate) => candidate.isActive !== false && candidate.isVerified !== false)
+    .sort((left, right) => left.name.localeCompare(right.name));
 
 export const referralKindLabel = (t: ReferralType): string => {
   switch (t) {

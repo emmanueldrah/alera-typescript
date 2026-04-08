@@ -472,6 +472,9 @@ export interface Referral {
   patientName: string;
   fromDoctorId: string;
   fromDoctorName: string;
+  destinationProviderId?: string;
+  destinationProviderName?: string;
+  destinationProviderRole?: 'hospital' | 'laboratory' | 'imaging' | 'pharmacy';
   toDepartmentId: string;
   toDepartment: string;
   reason: string;

@@ -388,6 +388,7 @@ REFERRAL_SERVICE_ALIASES: dict[ReferralTypeLiteral, set[str]] = {
 class ReferralCreate(BaseModel):
     patient_id: int
     referral_type: ReferralTypeLiteral = "hospital"
+    destination_provider_id: int
     to_department: str
     to_department_id: Optional[str] = None
     reason: str
@@ -412,6 +413,9 @@ class ReferralResponse(BaseModel):
     patient_id: int
     from_doctor_id: int
     referral_type: str
+    destination_provider_id: Optional[int] = None
+    destination_provider_name: Optional[str] = None
+    destination_provider_role: Optional[str] = None
     to_department: str
     to_department_id: Optional[str] = None
     reason: str

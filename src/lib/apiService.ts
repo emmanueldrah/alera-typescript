@@ -881,6 +881,7 @@ export const referralsApi = {
   createReferral: async (body: {
     patient_id: number;
     referral_type: 'hospital' | 'laboratory' | 'imaging' | 'pharmacy';
+    destination_provider_id: number;
     to_department: string;
     to_department_id?: string;
     reason: string;

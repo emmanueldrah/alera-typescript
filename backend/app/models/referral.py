@@ -21,6 +21,7 @@ class Referral(Base):
     patient_id = Column(Integer, ForeignKey("users.id"), nullable=False, index=True)
     from_doctor_id = Column(Integer, ForeignKey("users.id"), nullable=False, index=True)
     referral_type = Column(String(32), nullable=False, default=REFERRAL_TYPE_HOSPITAL, index=True)
+    destination_provider_id = Column(Integer, ForeignKey("users.id"), nullable=True, index=True)
     to_department = Column(String(255), nullable=False)
     to_department_id = Column(String(120), nullable=True)
     reason = Column(Text, nullable=False)
@@ -32,10 +33,12 @@ class Referral(Base):
 
     patient = relationship("User", foreign_keys=[patient_id])
     from_doctor = relationship("User", foreign_keys=[from_doctor_id])
+    destination_provider = relationship("User", foreign_keys=[destination_provider_id])
 
     __table_args__ = (
         Index("idx_referral_patient", "patient_id"),
         Index("idx_referral_doctor", "from_doctor_id"),
+        Index("idx_referral_destination_provider", "destination_provider_id"),
         Index("idx_referral_status", "status"),
         Index("idx_referral_type", "referral_type"),
     )
