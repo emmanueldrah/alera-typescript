@@ -38,6 +38,17 @@ export const DEFAULT_PHARMACY_REFERRAL_TARGETS = [
   'Hospital outpatient pharmacy',
 ] as const;
 
+export const REFERRAL_DESTINATION_ERROR = 'The destination must be different from service rendered';
+
+const normalizeReferralValue = (value: string) => value.toLowerCase().replace(/[^a-z0-9]+/g, '');
+
+const referralServiceAliases: Record<ReferralKind, readonly string[]> = {
+  hospital: ['hospital', 'specialist', 'specialist care'],
+  laboratory: ['laboratory', 'lab'],
+  imaging: ['imaging', 'radiology'],
+  pharmacy: ['pharmacy'],
+};
+
 /** @deprecated use DEFAULT_HOSPITAL_DEPARTMENTS */
 export const DEFAULT_REFERRAL_DEPARTMENTS = DEFAULT_HOSPITAL_DEPARTMENTS;
 
@@ -100,6 +111,12 @@ export const getVisibleReferrals = (
 
 export const getReferralDepartmentId = (department: string) =>
   department.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/(^-|-$)/g, '');
+
+export const isReferralDestinationValid = (kind: ReferralKind, destination: string) => {
+  const normalizedDestination = normalizeReferralValue(destination);
+  if (!normalizedDestination) return true;
+  return !referralServiceAliases[kind].some((alias) => normalizeReferralValue(alias) === normalizedDestination);
+};
 
 export const referralKindLabel = (t: ReferralType): string => {
   switch (t) {

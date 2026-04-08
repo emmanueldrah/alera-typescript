@@ -373,6 +373,18 @@ REFERRAL_TYPE_VALUES = ("hospital", "laboratory", "imaging", "pharmacy")
 ReferralTypeLiteral = Literal["hospital", "laboratory", "imaging", "pharmacy"]
 
 
+def _normalize_referral_value(value: str) -> str:
+    return "".join(ch for ch in value.lower() if ch.isalnum())
+
+
+REFERRAL_SERVICE_ALIASES: dict[ReferralTypeLiteral, set[str]] = {
+    "hospital": {"hospital", "specialist", "specialistcare"},
+    "laboratory": {"laboratory", "lab"},
+    "imaging": {"imaging", "radiology"},
+    "pharmacy": {"pharmacy"},
+}
+
+
 class ReferralCreate(BaseModel):
     patient_id: int
     referral_type: ReferralTypeLiteral = "hospital"
@@ -380,6 +392,14 @@ class ReferralCreate(BaseModel):
     to_department_id: Optional[str] = None
     reason: str
     notes: Optional[str] = None
+
+    @model_validator(mode="after")
+    def validate_destination_is_different_from_service_rendered(self):
+        normalized_destination = _normalize_referral_value(self.to_department)
+        service_aliases = REFERRAL_SERVICE_ALIASES[self.referral_type]
+        if normalized_destination in service_aliases:
+            raise ValueError("The destination must be different from service rendered")
+        return self
 
 
 class ReferralUpdate(BaseModel):

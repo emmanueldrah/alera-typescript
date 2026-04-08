@@ -9,12 +9,14 @@ import { Button } from '@/components/ui/button';
 import type { ReferralType } from '@/data/mockData';
 import { getDoctorPatients } from '@/lib/patientDirectory';
 import {
+  REFERRAL_DESTINATION_ERROR,
   canAcceptReferral,
   canCancelReferral,
   canCompleteReferral,
   getReferralDepartmentId,
   getReferralDepartmentsForKind,
   getVisibleReferrals,
+  isReferralDestinationValid,
   referralKindLabel,
   type ReferralKind,
 } from '@/lib/referralUtils';
@@ -45,6 +47,7 @@ const ReferralsPage = ({ referralKind = 'hospital' }: ReferralsPageProps) => {
   const { addNotification } = useNotifications();
   const [statusFilter, setStatusFilter] = useState('all');
   const [showForm, setShowForm] = useState(false);
+  const [formError, setFormError] = useState<string | null>(null);
   const [formData, setFormData] = useState({ patientId: '', toDepartment: '', reason: '', notes: '' });
 
   const effectiveRole = normalizeUserRole(user?.role) ?? user?.role;
@@ -162,6 +165,11 @@ const ReferralsPage = ({ referralKind = 'hospital' }: ReferralsPageProps) => {
   const handleCreateReferral = () => {
     if (effectiveRole !== 'doctor' || !formData.patientId || !formData.toDepartment || !formData.reason.trim()) return;
 
+    if (!isReferralDestinationValid(referralKind, formData.toDepartment)) {
+      setFormError(REFERRAL_DESTINATION_ERROR);
+      return;
+    }
+
     const patient = patientOptions.find((option) => option.id === formData.patientId);
     if (!patient) return;
 
@@ -193,6 +201,7 @@ const ReferralsPage = ({ referralKind = 'hospital' }: ReferralsPageProps) => {
       actionUrl: path,
       actionLabel: 'Review referrals',
     });
+    setFormError(null);
     setFormData({ patientId: '', toDepartment: '', reason: '', notes: '' });
     setShowForm(false);
   };
@@ -263,7 +272,10 @@ const ReferralsPage = ({ referralKind = 'hospital' }: ReferralsPageProps) => {
               </label>
               <select
                 value={formData.toDepartment}
-                onChange={(event) => setFormData((current) => ({ ...current, toDepartment: event.target.value }))}
+                onChange={(event) => {
+                  setFormError(null);
+                  setFormData((current) => ({ ...current, toDepartment: event.target.value }));
+                }}
                 className="w-full h-11 px-4 rounded-xl border border-input bg-background text-foreground focus:outline-none focus:ring-2 focus:ring-primary/30"
               >
                 <option value="">Select</option>
@@ -271,6 +283,7 @@ const ReferralsPage = ({ referralKind = 'hospital' }: ReferralsPageProps) => {
                   <option key={department} value={department}>{department}</option>
                 ))}
               </select>
+              {formError ? <p className="mt-2 text-sm text-destructive">{formError}</p> : null}
             </div>
             <div className="md:col-span-2">
               <label className="block text-sm font-medium text-foreground mb-1">Reason</label>

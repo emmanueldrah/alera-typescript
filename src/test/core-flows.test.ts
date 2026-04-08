@@ -5,7 +5,7 @@ import { canAccessFeature } from '@/lib/featureAccess';
 import { getAvailableAppointmentSlots, getAppointmentTimeUntilLabel, getVisibleAppointments, isWithinNext24Hours, isWithinNextHour } from '@/lib/appointmentUtils';
 import { getAccessiblePatients, getDoctorPatients } from '@/lib/patientDirectory';
 import { createStoredNotification, matchesNotificationRecipient } from '@/lib/notificationUtils';
-import { canAcceptReferral, canCancelReferral, canCompleteReferral, getReferralDepartmentId, getReferralDepartments, getVisibleReferrals } from '@/lib/referralUtils';
+import { canAcceptReferral, canCancelReferral, canCompleteReferral, getReferralDepartmentId, getReferralDepartments, getVisibleReferrals, isReferralDestinationValid } from '@/lib/referralUtils';
 import { getVisibleImagingScans, getVisibleLabTests, getVisiblePrescriptions } from '@/lib/recordVisibility';
 import { clearAleraStorage, getNotificationStorageKey, storageKeys } from '@/lib/storageKeys';
 import type { Doctor, LabTest, Prescription, Referral } from '@/data/mockData';
@@ -272,6 +272,13 @@ describe('referral workflow helpers', () => {
     expect(getReferralDepartments(referrals)).toContain('Cardiology');
     expect(getReferralDepartments(referrals)).toContain('Neurology');
     expect(getReferralDepartmentId('Ear Nose & Throat')).toBe('ear-nose-throat');
+  });
+
+  it('rejects destinations that only repeat the rendered service', () => {
+    expect(isReferralDestinationValid('laboratory', 'Lab')).toBe(false);
+    expect(isReferralDestinationValid('imaging', 'Radiology')).toBe(false);
+    expect(isReferralDestinationValid('pharmacy', 'Clinical pharmacy')).toBe(true);
+    expect(isReferralDestinationValid('hospital', 'Cardiology')).toBe(true);
   });
 
   it('assigns referral actions to the correct roles and statuses', () => {
