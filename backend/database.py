@@ -259,6 +259,39 @@ def _patch_admin_accounts_email_verified():
         print(f"WARNING: Could not patch admin verification state: {e}")
 
 
+def _patch_destination_routing_columns():
+    """Add destination/provider routing columns introduced after initial launch."""
+    patches = {
+        "referrals": {
+            "destination_provider_id": "INTEGER",
+        },
+        "lab_tests": {
+            "destination_provider_id": "INTEGER",
+        },
+        "imaging_scans": {
+            "destination_provider_id": "INTEGER",
+        },
+        "prescriptions": {
+            "pharmacy_id": "INTEGER",
+        },
+    }
+
+    for table_name, columns in patches.items():
+        try:
+            existing = {column["name"] for column in inspect(engine).get_columns(table_name)}
+        except Exception:
+            continue
+
+        for column_name, ddl in columns.items():
+            if column_name in existing:
+                continue
+            try:
+                with engine.begin() as conn:
+                    conn.execute(text(f"ALTER TABLE {table_name} ADD COLUMN {column_name} {ddl}"))
+            except Exception as e:
+                print(f"WARNING: Could not patch {table_name}.{column_name} column: {e}")
+
+
 def _collect_sqlalchemy_enum_specs() -> dict[str, list[str]]:
     """Collect the desired persisted labels for every SQLAlchemy enum in metadata."""
 
@@ -480,6 +513,7 @@ def init_db():
         _patch_users_notification_preferences_columns()
         _patch_users_live_location_columns()
         _patch_ambulance_request_tracking_columns()
+        _patch_destination_routing_columns()
         _patch_userrole_enum_values()
         _patch_postgres_enum_values()
         _patch_admin_accounts_email_verified()

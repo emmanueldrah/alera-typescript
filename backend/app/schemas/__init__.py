@@ -200,6 +200,7 @@ class PrescriptionCreate(PrescriptionBase):
     """Patient receiving the prescription; prescriber is always the authenticated provider."""
 
     patient_id: int
+    pharmacy_id: int
 
 
 class PrescriptionUpdate(BaseModel):
@@ -217,12 +218,14 @@ class PrescriptionResponse(PrescriptionBase):
     id: int
     patient_id: int
     provider_id: int
+    pharmacy_id: Optional[int] = None
     status: str
     prescribed_date: datetime
     created_at: datetime
     refills_remaining: int = 0
     patient_name: Optional[str] = None
     provider_name: Optional[str] = None
+    pharmacy_name: Optional[str] = None
 
     model_config = ConfigDict(from_attributes=True)
 
@@ -293,6 +296,7 @@ class LabTestBase(BaseModel):
 
 class LabTestCreate(LabTestBase):
     patient_id: int
+    destination_provider_id: int
 
 
 class LabTestUpdate(BaseModel):
@@ -310,6 +314,8 @@ class LabTestResponse(LabTestBase):
     id: int
     patient_id: int
     ordered_by: int
+    destination_provider_id: Optional[int] = None
+    destination_provider_name: Optional[str] = None
     processed_by: Optional[int] = None
     status: str
     result_value: Optional[str] = None
@@ -336,6 +342,7 @@ class ImagingScanBase(BaseModel):
 
 class ImagingScanCreate(ImagingScanBase):
     patient_id: int
+    destination_provider_id: int
 
 
 class ImagingScanUpdate(BaseModel):
@@ -352,6 +359,8 @@ class ImagingScanResponse(ImagingScanBase):
     id: int
     patient_id: int
     ordered_by: int
+    destination_provider_id: Optional[int] = None
+    destination_provider_name: Optional[str] = None
     processed_by: Optional[int] = None
     status: str
     findings: Optional[str] = None

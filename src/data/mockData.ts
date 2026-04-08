@@ -31,6 +31,7 @@ export interface Prescription {
   patientId: string;
   doctorName: string;
   doctorId: string;
+  pharmacyName?: string;
   date: string;
   medications: { name: string; dosage: string; frequency: string; duration: string }[];
   status: 'active' | 'dispensed' | 'expired';
@@ -271,6 +272,7 @@ export interface LabTest {
   patientId: string;
   doctorName: string;
   doctorId: string;
+  destinationProviderName?: string;
   testName: string;
   date: string;
   status: 'requested' | 'in-progress' | 'completed' | 'cancelled';
@@ -288,6 +290,7 @@ export interface ImagingScan {
   patientId: string;
   doctorName: string;
   doctorId: string;
+  destinationProviderName?: string;
   scanType: 'X-Ray' | 'MRI' | 'CT Scan' | 'Ultrasound' | 'PET Scan' | 'DEXA Scan';
   date: string;
   status: 'requested' | 'in-progress' | 'completed' | 'cancelled';

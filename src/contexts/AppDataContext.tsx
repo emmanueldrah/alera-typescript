@@ -31,6 +31,7 @@ type BackendPrescription = {
   instructions?: string | null;
   quantity?: number | null;
   provider_id: string | number;
+  pharmacy_id?: string | number | null;
   patient_id: string | number;
   status?: string;
   refills?: number;
@@ -39,6 +40,7 @@ type BackendPrescription = {
   created_at?: string;
   patient_name?: string | null;
   provider_name?: string | null;
+  pharmacy_name?: string | null;
 };
 
 type BackendAllergy = {
@@ -132,6 +134,8 @@ type BackendLabTest = {
   completed_at?: string;
   patient_id: number;
   ordered_by: number;
+  destination_provider_id?: number | null;
+  destination_provider_name?: string | null;
   patient_name?: string | null;
   ordered_by_name?: string | null;
 };
@@ -151,6 +155,8 @@ type BackendImagingScan = {
   completed_at?: string;
   patient_id: number;
   ordered_by: number;
+  destination_provider_id?: number | null;
+  destination_provider_name?: string | null;
   patient_name?: string | null;
   ordered_by_name?: string | null;
 };
@@ -271,6 +277,8 @@ const mapBackendPrescription = (presc: BackendPrescription): Prescription => {
     patientId: String(presc.patient_id),
     doctorName: presc.provider_name?.trim() || `Provider #${presc.provider_id}`,
     doctorId: String(presc.provider_id),
+    pharmacyId: presc.pharmacy_id ? String(presc.pharmacy_id) : undefined,
+    pharmacyName: presc.pharmacy_name?.trim() || undefined,
     date: presc.prescribed_date ? presc.prescribed_date.slice(0, 10) : new Date().toISOString().slice(0, 10),
     medications: [{
       name: presc.medication_name,
@@ -327,6 +335,8 @@ const mapBackendLabTest = (test: BackendLabTest): LabTest => ({
   patientName: test.patient_name?.trim() || `Patient #${test.patient_id}`,
   doctorId: String(test.ordered_by),
   doctorName: test.ordered_by_name?.trim() || `Provider #${test.ordered_by}`,
+  labId: test.destination_provider_id ? String(test.destination_provider_id) : undefined,
+  destinationProviderName: test.destination_provider_name?.trim() || undefined,
   testName: test.test_name,
   date: test.ordered_at.slice(0, 10),
   status: mapBackendLabStatus(test.status),
@@ -345,6 +355,8 @@ const mapBackendImagingScan = (scan: BackendImagingScan): ImagingScan => ({
   patientName: scan.patient_name?.trim() || `Patient #${scan.patient_id}`,
   doctorId: String(scan.ordered_by),
   doctorName: scan.ordered_by_name?.trim() || `Provider #${scan.ordered_by}`,
+  centerId: scan.destination_provider_id ? String(scan.destination_provider_id) : undefined,
+  destinationProviderName: scan.destination_provider_name?.trim() || undefined,
   scanType: scan.scan_type as ImagingScan['scanType'],
   bodyPart: scan.body_part || 'Unspecified',
   date: scan.ordered_at.slice(0, 10),
@@ -944,6 +956,7 @@ export const AppDataProvider: React.FC<{ children: React.ReactNode }> = ({ child
         try {
           await prescriptionsApi.createPrescription({
             patient_id: Number(prescription.patientId),
+            pharmacy_id: Number(prescription.pharmacyId),
             medication_name: prescription.medications[0]?.name || 'Medication',
             dosage: prescription.medications[0]?.dosage || 'As directed',
             dosage_unit: prescription.medications[0]?.dosage.split(' ').slice(1).join(' ') || 'unit',
@@ -1049,6 +1062,7 @@ export const AppDataProvider: React.FC<{ children: React.ReactNode }> = ({ child
         try {
           await api.labTests.createLabTest({
             patient_id: Number(test.patientId),
+            destination_provider_id: Number(test.labId),
             test_name: test.testName,
             test_code: test.testName,
           });
@@ -1079,6 +1093,7 @@ export const AppDataProvider: React.FC<{ children: React.ReactNode }> = ({ child
         try {
           await api.imaging.orderImagingScan({
             patient_id: Number(scan.patientId),
+            destination_provider_id: Number(scan.centerId),
             scan_type: scan.scanType,
             body_part: scan.bodyPart || undefined,
             clinical_indication: undefined,
@@ -1179,6 +1194,19 @@ export const AppDataProvider: React.FC<{ children: React.ReactNode }> = ({ child
         }
       })();
     },
+    addInventoryItem: (item) => {
+      void (async () => {
+        try {
+          await upsertStructuredRecord('inventory_item', item, 'inventoryItems', {
+            provider_id: toOptionalNumber(user?.id),
+            status: item.status,
+            created_by: toOptionalNumber(user?.id),
+          });
+        } catch (error) {
+          console.error('addInventoryItem failed:', error);
+        }
+      })();
+    },
     updateInventoryItem: (id, update) => {
       void (async () => {
         const prev = dataRef.current.inventoryItems.find((item) => item.id === id);
@@ -1186,10 +1214,35 @@ export const AppDataProvider: React.FC<{ children: React.ReactNode }> = ({ child
         const next = update(prev);
         try {
           await updateStructuredRecord('inventory_item', next, 'inventoryItems', {
+            provider_id: toOptionalNumber(user?.id),
             status: next.status,
+            created_by: toOptionalNumber(user?.id),
           });
         } catch (error) {
           console.error('updateInventoryItem failed:', error);
+        }
+      })();
+    },
+    deleteInventoryItem: (id) => {
+      void (async () => {
+        try {
+          await recordsApi.deleteRecord(id);
+          await loadAPIData(true);
+        } catch (error) {
+          console.error('deleteInventoryItem failed:', error);
+        }
+      })();
+    },
+    addAmbulance: (ambulance) => {
+      void (async () => {
+        try {
+          await upsertStructuredRecord('ambulance_vehicle', ambulance, 'ambulances', {
+            provider_id: toOptionalNumber(user?.id),
+            status: ambulance.status,
+            created_by: toOptionalNumber(user?.id),
+          });
+        } catch (error) {
+          console.error('addAmbulance failed:', error);
         }
       })();
     },
@@ -1200,10 +1253,22 @@ export const AppDataProvider: React.FC<{ children: React.ReactNode }> = ({ child
         const next = update(prev);
         try {
           await updateStructuredRecord('ambulance_vehicle', next, 'ambulances', {
+            provider_id: toOptionalNumber(user?.id),
             status: next.status,
+            created_by: toOptionalNumber(user?.id),
           });
         } catch (error) {
           console.error('updateAmbulance failed:', error);
+        }
+      })();
+    },
+    deleteAmbulance: (id) => {
+      void (async () => {
+        try {
+          await recordsApi.deleteRecord(id);
+          await loadAPIData(true);
+        } catch (error) {
+          console.error('deleteAmbulance failed:', error);
         }
       })();
     },

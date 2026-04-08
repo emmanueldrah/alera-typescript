@@ -13,6 +13,7 @@ class Prescription(Base):
     # Relationships
     patient_id = Column(Integer, ForeignKey("users.id"), nullable=False, index=True)
     provider_id = Column(Integer, ForeignKey("users.id"), nullable=False, index=True)
+    pharmacy_id = Column(Integer, ForeignKey("users.id"), nullable=True, index=True)
     
     # Prescription Details
     medication_name = Column(String(255), nullable=False)
@@ -52,11 +53,13 @@ class Prescription(Base):
     # Relationships
     patient = relationship("User", foreign_keys=[patient_id], back_populates="prescriptions_as_patient")
     provider = relationship("User", foreign_keys=[provider_id], back_populates="prescriptions_as_provider")
+    pharmacy = relationship("User", foreign_keys=[pharmacy_id])
     
     # Indexes
     __table_args__ = (
         Index('idx_prescription_patient_id', 'patient_id'),
         Index('idx_prescription_provider_id', 'provider_id'),
+        Index('idx_prescription_pharmacy_id', 'pharmacy_id'),
         Index('idx_prescription_status', 'status'),
         Index('idx_prescription_start_date', 'start_date'),
     )

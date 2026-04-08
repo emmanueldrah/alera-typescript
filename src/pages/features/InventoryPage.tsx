@@ -1,16 +1,27 @@
 import { useState, useMemo } from 'react';
 import { motion } from 'framer-motion';
-import { Package, Search, AlertTriangle, Check, TrendingDown, DollarSign, Calendar, Inbox, Pill, Zap } from 'lucide-react';
+import { Package, Search, AlertTriangle, Check, TrendingDown, DollarSign, Calendar, Inbox, Pill, Zap, Plus, Trash2, X } from 'lucide-react';
 import { useAuth } from '@/contexts/useAuth';
 import { useAppData } from '@/contexts/useAppData';
 import type { InventoryItem } from '@/data/mockData';
 
 const InventoryPage = () => {
   const { user } = useAuth();
-  const { inventoryItems, updateInventoryItem } = useAppData();
+  const { inventoryItems, addInventoryItem, updateInventoryItem, deleteInventoryItem } = useAppData();
   const [search, setSearch] = useState('');
   const [categoryFilter, setCategoryFilter] = useState('all');
   const [statusFilter, setStatusFilter] = useState('all');
+  const [showCreate, setShowCreate] = useState(false);
+  const [newItem, setNewItem] = useState({
+    name: '',
+    category: 'medication' as InventoryItem['category'],
+    stock: 0,
+    reorderLevel: 10,
+    price: 0,
+    unit: 'packs',
+    expiryDate: '',
+    supplier: '',
+  });
 
   const isPharmacy = user?.role === 'pharmacy';
 
@@ -65,6 +76,37 @@ const InventoryPage = () => {
     }));
   };
 
+  const handleCreateItem = () => {
+    if (!newItem.name.trim() || newItem.price <= 0 || newItem.stock < 0 || newItem.reorderLevel < 0) return;
+    const status: InventoryItem['status'] =
+      newItem.stock === 0 ? 'out-of-stock' : newItem.stock < newItem.reorderLevel ? 'low-stock' : 'in-stock';
+
+    addInventoryItem({
+      id: `inv-${crypto.randomUUID()}`,
+      name: newItem.name.trim(),
+      category: newItem.category,
+      stock: newItem.stock,
+      reorderLevel: newItem.reorderLevel,
+      price: newItem.price,
+      unit: newItem.unit.trim() || 'packs',
+      expiryDate: newItem.expiryDate || undefined,
+      supplier: newItem.supplier.trim() || undefined,
+      lastRestocked: new Date().toISOString(),
+      status,
+    });
+    setNewItem({
+      name: '',
+      category: 'medication',
+      stock: 0,
+      reorderLevel: 10,
+      price: 0,
+      unit: 'packs',
+      expiryDate: '',
+      supplier: '',
+    });
+    setShowCreate(false);
+  };
+
   const categoryIcons = { medication: <Pill className="w-4 h-4" />, supply: <Package className="w-4 h-4" />, equipment: <Zap className="w-4 h-4" /> };
 
   const card = (i: number) => ({ initial: { opacity: 0, y: 15 }, animate: { opacity: 1, y: 0 }, transition: { delay: i * 0.05 } });
@@ -88,7 +130,63 @@ const InventoryPage = () => {
           <h1 className="text-2xl font-display font-bold text-foreground">Inventory Management</h1>
           <p className="text-muted-foreground mt-1">Manage pharmacy stock and inventory levels</p>
         </div>
+        <button onClick={() => setShowCreate((value) => !value)} className="flex items-center gap-2 px-4 py-2.5 rounded-xl bg-gradient-primary text-primary-foreground text-sm font-semibold hover:opacity-90 transition">
+          {showCreate ? <X className="w-4 h-4" /> : <Plus className="w-4 h-4" />}
+          {showCreate ? 'Close' : 'Add Drug'}
+        </button>
       </div>
+
+      {showCreate && (
+        <motion.div initial={{ opacity: 0, y: -10 }} animate={{ opacity: 1, y: 0 }} className="bg-card rounded-2xl border border-border p-6 space-y-4">
+          <h2 className="text-lg font-display font-semibold text-card-foreground">Add Inventory Item</h2>
+          <div className="grid md:grid-cols-2 lg:grid-cols-4 gap-4">
+            <div className="lg:col-span-2">
+              <label className="block text-sm font-medium text-foreground mb-1">Drug / Item Name</label>
+              <input value={newItem.name} onChange={(e) => setNewItem((prev) => ({ ...prev, name: e.target.value }))} className="w-full h-11 px-4 rounded-xl border border-input bg-background text-foreground focus:outline-none focus:ring-2 focus:ring-primary/30" />
+            </div>
+            <div>
+              <label className="block text-sm font-medium text-foreground mb-1">Category</label>
+              <select value={newItem.category} onChange={(e) => setNewItem((prev) => ({ ...prev, category: e.target.value as InventoryItem['category'] }))} className="w-full h-11 px-4 rounded-xl border border-input bg-background text-foreground focus:outline-none focus:ring-2 focus:ring-primary/30">
+                <option value="medication">Medication</option>
+                <option value="supply">Supply</option>
+                <option value="equipment">Equipment</option>
+              </select>
+            </div>
+            <div>
+              <label className="block text-sm font-medium text-foreground mb-1">Unit</label>
+              <input value={newItem.unit} onChange={(e) => setNewItem((prev) => ({ ...prev, unit: e.target.value }))} className="w-full h-11 px-4 rounded-xl border border-input bg-background text-foreground focus:outline-none focus:ring-2 focus:ring-primary/30" />
+            </div>
+            <div>
+              <label className="block text-sm font-medium text-foreground mb-1">Stock</label>
+              <input type="number" min="0" value={newItem.stock} onChange={(e) => setNewItem((prev) => ({ ...prev, stock: Number(e.target.value) }))} className="w-full h-11 px-4 rounded-xl border border-input bg-background text-foreground focus:outline-none focus:ring-2 focus:ring-primary/30" />
+            </div>
+            <div>
+              <label className="block text-sm font-medium text-foreground mb-1">Reorder Level</label>
+              <input type="number" min="0" value={newItem.reorderLevel} onChange={(e) => setNewItem((prev) => ({ ...prev, reorderLevel: Number(e.target.value) }))} className="w-full h-11 px-4 rounded-xl border border-input bg-background text-foreground focus:outline-none focus:ring-2 focus:ring-primary/30" />
+            </div>
+            <div>
+              <label className="block text-sm font-medium text-foreground mb-1">Price</label>
+              <input type="number" min="0" step="0.01" value={newItem.price} onChange={(e) => setNewItem((prev) => ({ ...prev, price: Number(e.target.value) }))} className="w-full h-11 px-4 rounded-xl border border-input bg-background text-foreground focus:outline-none focus:ring-2 focus:ring-primary/30" />
+            </div>
+            <div>
+              <label className="block text-sm font-medium text-foreground mb-1">Expiry Date</label>
+              <input type="date" value={newItem.expiryDate} onChange={(e) => setNewItem((prev) => ({ ...prev, expiryDate: e.target.value }))} className="w-full h-11 px-4 rounded-xl border border-input bg-background text-foreground focus:outline-none focus:ring-2 focus:ring-primary/30" />
+            </div>
+            <div className="md:col-span-2">
+              <label className="block text-sm font-medium text-foreground mb-1">Supplier</label>
+              <input value={newItem.supplier} onChange={(e) => setNewItem((prev) => ({ ...prev, supplier: e.target.value }))} className="w-full h-11 px-4 rounded-xl border border-input bg-background text-foreground focus:outline-none focus:ring-2 focus:ring-primary/30" />
+            </div>
+          </div>
+          <div className="flex gap-3">
+            <button onClick={handleCreateItem} className="px-5 py-2.5 rounded-xl bg-gradient-primary text-primary-foreground text-sm font-semibold hover:opacity-90 transition">
+              Save Item
+            </button>
+            <button onClick={() => setShowCreate(false)} className="px-5 py-2.5 rounded-xl bg-secondary text-secondary-foreground text-sm font-semibold">
+              Cancel
+            </button>
+          </div>
+        </motion.div>
+      )}
 
       {/* Stats Cards */}
       <div className="grid grid-cols-2 md:grid-cols-5 gap-3">
@@ -279,6 +377,12 @@ const InventoryPage = () => {
                           -1
                         </button>
                       )}
+                      <button
+                        onClick={() => deleteInventoryItem(item.id)}
+                        className="px-2 py-1 rounded-lg text-xs font-medium bg-destructive/10 text-destructive hover:bg-destructive/20 transition"
+                      >
+                        <span className="inline-flex items-center gap-1"><Trash2 className="w-3 h-3" /> Delete</span>
+                      </button>
                     </div>
                   </td>
                 </motion.tr>

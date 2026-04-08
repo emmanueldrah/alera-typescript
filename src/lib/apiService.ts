@@ -388,6 +388,7 @@ export const liveLocationApi = {
 export const prescriptionsApi = {
   createPrescription: async (prescriptionData: {
     patient_id: number;
+    pharmacy_id: number;
     medication_name: string;
     dosage: string;
     dosage_unit: string;
@@ -427,6 +428,11 @@ export const prescriptionsApi = {
     },
   ) => {
     const response = await apiClient.put(`/prescriptions/${prescriptionId}`, updateData);
+    return response.data;
+  },
+
+  deletePrescription: async (prescriptionId: string | number) => {
+    const response = await apiClient.delete(`/prescriptions/${prescriptionId}`);
     return response.data;
   },
 };
@@ -817,6 +823,7 @@ export const adminApi = {
 export const labTestsApi = {
   createLabTest: async (testData: {
     patient_id: number;
+    destination_provider_id: number;
     test_name: string;
     test_code?: string;
     description?: string;
@@ -839,6 +846,11 @@ export const labTestsApi = {
     const response = await apiClient.put(`/lab-tests/${id}`, updateData);
     return response.data;
   },
+
+  deleteLabTest: async (id: string | number) => {
+    const response = await apiClient.delete(`/lab-tests/${id}`);
+    return response.data;
+  },
 };
 
 // ============================================================================
@@ -848,6 +860,7 @@ export const labTestsApi = {
 export const imagingApi = {
   orderImagingScan: async (scanData: {
     patient_id: number;
+    destination_provider_id: number;
     scan_type: string;
     body_part?: string;
     clinical_indication?: string;
@@ -868,6 +881,11 @@ export const imagingApi = {
 
   updateImagingScan: async (id: string | number, updateData: Record<string, unknown>) => {
     const response = await apiClient.put(`/imaging/${id}`, updateData);
+    return response.data;
+  },
+
+  deleteImagingScan: async (id: string | number) => {
+    const response = await apiClient.delete(`/imaging/${id}`);
     return response.data;
   },
 };

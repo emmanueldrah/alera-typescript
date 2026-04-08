@@ -21,6 +21,8 @@ def imaging_to_response(scan: ImagingScan) -> ImagingScanResponse:
         id=scan.id,
         patient_id=scan.patient_id,
         ordered_by=scan.ordered_by,
+        destination_provider_id=scan.destination_provider_id,
+        destination_provider_name=_display_name(scan.destination_provider),
         processed_by=scan.processed_by,
         scan_type=scan.scan_type,
         body_part=scan.body_part,
@@ -42,7 +44,7 @@ def imaging_to_response(scan: ImagingScan) -> ImagingScanResponse:
 def _load_scan_with_users(db: Session, scan_id: int) -> ImagingScan | None:
     return (
         db.query(ImagingScan)
-        .options(joinedload(ImagingScan.patient), joinedload(ImagingScan.doctor))
+        .options(joinedload(ImagingScan.patient), joinedload(ImagingScan.doctor), joinedload(ImagingScan.destination_provider))
         .filter(ImagingScan.id == scan_id)
         .first()
     )
@@ -71,9 +73,16 @@ async def order_imaging_scan(
             detail="Patient not found",
         )
 
+    destination_provider = db.query(User).filter(User.id == imaging_scan.destination_provider_id).first()
+    if not destination_provider or destination_provider.role != UserRole.IMAGING:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Destination provider must be an imaging center")
+    if not destination_provider.is_active or not destination_provider.is_verified:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Destination imaging center must be active and verified")
+
     db_imaging_scan = ImagingScan(
         patient_id=imaging_scan.patient_id,
         ordered_by=current_user.id,
+        destination_provider_id=imaging_scan.destination_provider_id,
         scan_type=imaging_scan.scan_type,
         body_part=imaging_scan.body_part,
         clinical_indication=imaging_scan.clinical_indication,
@@ -114,7 +123,7 @@ async def list_imaging_scans(
         query = db.query(ImagingScan).filter(ImagingScan.patient_id == current_user.id)
     elif current_user.role == UserRole.IMAGING:
         require_verified_workforce_member(current_user, "view imaging scans")
-        query = db.query(ImagingScan)
+        query = db.query(ImagingScan).filter(ImagingScan.destination_provider_id == current_user.id)
     elif current_user.role == UserRole.PROVIDER:
         require_verified_workforce_member(current_user, "view imaging scans")
         query = db.query(ImagingScan).filter(ImagingScan.ordered_by == current_user.id)
@@ -127,7 +136,7 @@ async def list_imaging_scans(
         )
 
     rows = (
-        query.options(joinedload(ImagingScan.patient), joinedload(ImagingScan.doctor))
+        query.options(joinedload(ImagingScan.patient), joinedload(ImagingScan.doctor), joinedload(ImagingScan.destination_provider))
         .order_by(ImagingScan.ordered_at.desc())
         .offset(skip)
         .limit(limit)
@@ -231,3 +240,46 @@ async def update_imaging_scan(
         status="updated",
     )
     return imaging_to_response(loaded)
+
+
+@router.delete("/{scan_id}", status_code=status.HTTP_204_NO_CONTENT)
+async def delete_imaging_scan(
+    scan_id: int,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    """Delete an imaging scan order (ordering provider or admin)."""
+
+    db_imaging_scan = db.query(ImagingScan).filter(ImagingScan.id == scan_id).first()
+    if not db_imaging_scan:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Imaging scan not found",
+        )
+
+    if current_user.role == UserRole.PROVIDER:
+        require_verified_workforce_member(current_user, "delete imaging scans")
+        if db_imaging_scan.ordered_by != current_user.id:
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="Not authorized to delete this imaging scan",
+            )
+    elif current_user.role != UserRole.ADMIN:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Not authorized to delete imaging scans",
+        )
+
+    db.delete(db_imaging_scan)
+    db.commit()
+    return None
+    if current_user.role == UserRole.IMAGING and db_imaging_scan.destination_provider_id != current_user.id:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Not authorized",
+        )
+    if current_user.role == UserRole.IMAGING and db_imaging_scan.destination_provider_id != current_user.id:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Not authorized to update this imaging scan",
+        )

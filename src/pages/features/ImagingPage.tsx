@@ -1,6 +1,6 @@
 import { useMemo, useState } from 'react';
 import { motion } from 'framer-motion';
-import { ScanLine, Upload, Plus, X, Inbox, Calendar } from 'lucide-react';
+import { ScanLine, Upload, Plus, X, Inbox, Calendar, Trash2 } from 'lucide-react';
 import { useSearchParams } from 'react-router-dom';
 import { useAuth } from '@/contexts/useAuth';
 import { useAppData } from '@/contexts/useAppData';
@@ -8,24 +8,28 @@ import { useNotifications } from '@/contexts/useNotifications';
 import { type ImagingScan } from '@/data/mockData';
 import { getDoctorPatients } from '@/lib/patientDirectory';
 import { getVisibleImagingScans } from '@/lib/recordVisibility';
+import { getReferralDestinationProviders } from '@/lib/referralUtils';
 import { normalizeUserRole } from '@/lib/roleUtils';
+import { api } from '@/lib/apiService';
 
 const SCAN_TYPES: ImagingScan['scanType'][] = ['X-Ray', 'MRI', 'CT Scan', 'Ultrasound', 'PET Scan', 'DEXA Scan'];
 
 const ImagingPage = () => {
   const { user, getUsers } = useAuth();
-  const { appointments, imagingScans, addImagingScan, updateImagingScan } = useAppData();
+  const { appointments, imagingScans, addImagingScan, updateImagingScan, refreshAppData } = useAppData();
   const { addNotification } = useNotifications();
   const [searchParams] = useSearchParams();
   const [showUpload, setShowUpload] = useState<string | null>(null);
   const [showOrder, setShowOrder] = useState(false);
   const [uploadResult, setUploadResult] = useState('');
-  const [orderForm, setOrderForm] = useState({ patientId: '', scanType: '' as ImagingScan['scanType'] | '', bodyPart: '' });
+  const [orderForm, setOrderForm] = useState({ patientId: '', centerId: '', scanType: '' as ImagingScan['scanType'] | '', bodyPart: '' });
+  const [deleteId, setDeleteId] = useState<string | null>(null);
   const focusId = searchParams.get('focus');
   const effectiveRole = normalizeUserRole(user?.role) ?? user?.role;
   const currentPage = user?.role === 'imaging' ? 'scan-requests' : effectiveRole === 'doctor' ? 'imaging-referrals' : 'imaging';
   const users = getUsers();
   const patientOptions = useMemo(() => getDoctorPatients(users, appointments, user?.id), [appointments, user?.id, users]);
+  const imagingCenterOptions = useMemo(() => getReferralDestinationProviders(users, 'imaging'), [users]);
 
   const visibleScans = useMemo(
     () => getVisibleImagingScans(imagingScans, user),
@@ -61,15 +65,18 @@ const ImagingPage = () => {
   };
 
   const handleOrder = () => {
-    if (!orderForm.patientId || !orderForm.scanType) return;
+    if (!orderForm.patientId || !orderForm.centerId || !orderForm.scanType) return;
     const patient = patientOptions.find((option) => option.id === orderForm.patientId);
-    if (!patient) return;
+    const center = imagingCenterOptions.find((option) => option.id === orderForm.centerId);
+    if (!patient || !center) return;
     const scan: ImagingScan = {
       id: `img-${Date.now()}`,
       patientName: patient.name,
       patientId: patient.id,
       doctorName: user?.name || 'Doctor',
       doctorId: user?.id || '',
+      centerId: center.id,
+      destinationProviderName: center.name,
       scanType: orderForm.scanType as ImagingScan['scanType'],
       bodyPart: orderForm.bodyPart,
       date: new Date().toISOString().split('T')[0],
@@ -79,14 +86,13 @@ const ImagingPage = () => {
     addImagingScan(scan);
     addNotification({
       title: 'Imaging Ordered',
-      message: `${orderForm.scanType}${orderForm.bodyPart ? ' (' + orderForm.bodyPart + ')' : ''} was requested for ${patient.name}.`,
+      message: `${orderForm.scanType}${orderForm.bodyPart ? ' (' + orderForm.bodyPart + ')' : ''} was requested for ${patient.name} and sent to ${center.name}.`,
       type: 'result',
       priority: 'medium',
       audience: 'personal',
       actionUrl: `/dashboard/imaging-referrals?focus=${scan.id}`,
       actionLabel: 'Open order',
-      targetEmails: [user?.email, patient.email].filter((value): value is string => Boolean(value)),
-      targetRoles: ['imaging'],
+      targetEmails: [user?.email, patient.email, center.email].filter((value): value is string => Boolean(value)),
       excludeEmails: user?.email ? [user.email] : [],
       actionUrlByRole: {
         doctor: `/dashboard/imaging-referrals?focus=${scan.id}`,
@@ -94,7 +100,27 @@ const ImagingPage = () => {
       },
     });
     setShowOrder(false);
-    setOrderForm({ patientId: '', scanType: '', bodyPart: '' });
+    setOrderForm({ patientId: '', centerId: '', scanType: '', bodyPart: '' });
+  };
+
+  const handleStatusChange = (id: string, status: ImagingScan['status']) => {
+    updateImagingScan(id, (scan) => ({ ...scan, status }));
+    if (showUpload === id && status !== 'completed') {
+      setShowUpload(null);
+      setUploadResult('');
+    }
+  };
+
+  const handleDelete = async (id: string) => {
+    setDeleteId(id);
+    try {
+      await api.imaging.deleteImagingScan(id);
+      await refreshAppData();
+    } catch (error) {
+      console.error('Failed to delete imaging scan:', error);
+    } finally {
+      setDeleteId(null);
+    }
   };
 
   const card = (i: number) => ({ initial: { opacity: 0, y: 15 }, animate: { opacity: 1, y: 0 }, transition: { delay: i * 0.05 } });
@@ -153,6 +179,19 @@ const ImagingPage = () => {
                 ))}
               </select>
             </div>
+            <div>
+              <label className="text-sm font-medium text-card-foreground mb-1.5 block">Imaging Center</label>
+              <select
+                value={orderForm.centerId}
+                onChange={(e) => setOrderForm({ ...orderForm, centerId: e.target.value })}
+                className="w-full h-11 px-4 rounded-xl border border-input bg-background text-foreground focus:outline-none focus:ring-2 focus:ring-primary/30"
+              >
+                <option value="">Select imaging center</option>
+                {imagingCenterOptions.map((center) => (
+                  <option key={center.id} value={center.id}>{center.name}</option>
+                ))}
+              </select>
+            </div>
             <div className="md:col-span-2">
               <label className="text-sm font-medium text-card-foreground mb-1.5 block">Body Part / Area (Optional)</label>
               <input
@@ -165,7 +204,7 @@ const ImagingPage = () => {
           </div>
           <button
             onClick={handleOrder}
-            disabled={!orderForm.patientId || !orderForm.scanType}
+            disabled={!orderForm.patientId || !orderForm.centerId || !orderForm.scanType}
             className="mt-4 px-6 py-2.5 rounded-xl bg-gradient-primary text-primary-foreground text-sm font-semibold hover:opacity-90 transition disabled:opacity-50 disabled:cursor-not-allowed"
           >
             Order Scan
@@ -203,6 +242,7 @@ const ImagingPage = () => {
                     </div>
                     <div className="text-sm text-muted-foreground mt-1">Patient: {scan.patientName}</div>
                     <div className="text-sm text-muted-foreground">Doctor: {scan.doctorName}</div>
+                    {scan.destinationProviderName ? <div className="text-xs text-muted-foreground">Imaging center: {scan.destinationProviderName}</div> : null}
                     <div className="flex items-center gap-2 text-xs text-muted-foreground mt-1">
                       <Calendar className="w-3 h-3" /> {scan.date}
                     </div>
@@ -236,14 +276,41 @@ const ImagingPage = () => {
                           ? 'Cancelled'
                           : 'Completed'}
                   </span>
-                  {user?.role === 'imaging' && scan.status !== 'completed' && scan.status !== 'cancelled' && (
-                    <button
-                      onClick={() => setShowUpload(scan.id)}
-                      className="flex items-center gap-1 px-3 py-1.5 rounded-lg bg-primary/10 text-primary text-xs font-medium hover:bg-primary/20 transition"
-                    >
-                      <Upload className="w-3 h-3" /> Upload Results
-                    </button>
-                  )}
+                  <div className="flex gap-2">
+                    {user?.role === 'imaging' && scan.status === 'requested' && (
+                      <button
+                        onClick={() => handleStatusChange(scan.id, 'in-progress')}
+                        className="flex items-center gap-1 px-3 py-1.5 rounded-lg bg-info/10 text-info text-xs font-medium hover:bg-info/20 transition"
+                      >
+                        Start
+                      </button>
+                    )}
+                    {user?.role === 'imaging' && scan.status !== 'completed' && scan.status !== 'cancelled' && (
+                      <button
+                        onClick={() => setShowUpload(scan.id)}
+                        className="flex items-center gap-1 px-3 py-1.5 rounded-lg bg-primary/10 text-primary text-xs font-medium hover:bg-primary/20 transition"
+                      >
+                        <Upload className="w-3 h-3" /> Upload Results
+                      </button>
+                    )}
+                    {(user?.role === 'imaging' || effectiveRole === 'doctor') && scan.status !== 'completed' && scan.status !== 'cancelled' && (
+                      <button
+                        onClick={() => handleStatusChange(scan.id, 'cancelled')}
+                        className="flex items-center gap-1 px-3 py-1.5 rounded-lg bg-destructive/10 text-destructive text-xs font-medium hover:bg-destructive/20 transition"
+                      >
+                        Cancel
+                      </button>
+                    )}
+                    {effectiveRole === 'doctor' && (
+                      <button
+                        onClick={() => void handleDelete(scan.id)}
+                        disabled={deleteId === scan.id}
+                        className="flex items-center gap-1 px-3 py-1.5 rounded-lg bg-destructive/10 text-destructive text-xs font-medium hover:bg-destructive/20 transition disabled:opacity-50"
+                      >
+                        <Trash2 className="w-3 h-3" /> {deleteId === scan.id ? 'Deleting...' : 'Delete'}
+                      </button>
+                    )}
+                  </div>
                 </div>
               </div>
 

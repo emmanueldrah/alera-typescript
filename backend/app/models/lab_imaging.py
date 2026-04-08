@@ -34,6 +34,7 @@ class LabTest(Base):
     id = Column(Integer, primary_key=True, index=True, autoincrement=True)
     patient_id = Column(Integer, ForeignKey("users.id"), nullable=False, index=True)
     ordered_by = Column(Integer, ForeignKey("users.id"), nullable=False)  # doctor
+    destination_provider_id = Column(Integer, ForeignKey("users.id"), nullable=True, index=True)  # lab facility
     processed_by = Column(Integer, ForeignKey("users.id"), nullable=True)  # lab user
 
     test_name = Column(String, nullable=False)
@@ -56,6 +57,7 @@ class LabTest(Base):
 
     patient = relationship("User", foreign_keys=[patient_id])
     doctor = relationship("User", foreign_keys=[ordered_by])
+    destination_provider = relationship("User", foreign_keys=[destination_provider_id])
     lab_user = relationship("User", foreign_keys=[processed_by])
 
     def to_dict(self):
@@ -63,6 +65,7 @@ class LabTest(Base):
             "id": self.id,
             "patient_id": self.patient_id,
             "ordered_by": self.ordered_by,
+            "destination_provider_id": self.destination_provider_id,
             "processed_by": self.processed_by,
             "test_name": self.test_name,
             "test_code": self.test_code,
@@ -86,6 +89,7 @@ class ImagingScan(Base):
     id = Column(Integer, primary_key=True, index=True, autoincrement=True)
     patient_id = Column(Integer, ForeignKey("users.id"), nullable=False, index=True)
     ordered_by = Column(Integer, ForeignKey("users.id"), nullable=False)
+    destination_provider_id = Column(Integer, ForeignKey("users.id"), nullable=True, index=True)
     processed_by = Column(Integer, ForeignKey("users.id"), nullable=True)
 
     scan_type = Column(String, nullable=False)  # X-Ray, MRI, CT, Ultrasound
@@ -107,6 +111,7 @@ class ImagingScan(Base):
 
     patient = relationship("User", foreign_keys=[patient_id])
     doctor = relationship("User", foreign_keys=[ordered_by])
+    destination_provider = relationship("User", foreign_keys=[destination_provider_id])
     imaging_user = relationship("User", foreign_keys=[processed_by])
 
     def to_dict(self):
@@ -114,6 +119,7 @@ class ImagingScan(Base):
             "id": self.id,
             "patient_id": self.patient_id,
             "ordered_by": self.ordered_by,
+            "destination_provider_id": self.destination_provider_id,
             "processed_by": self.processed_by,
             "scan_type": self.scan_type,
             "body_part": self.body_part,

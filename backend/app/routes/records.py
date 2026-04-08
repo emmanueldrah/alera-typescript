@@ -93,12 +93,12 @@ def _apply_role_scope(query, db: Session, current_user: User, record_type: str):
 
     if current_user.role == UserRole.PHARMACIST:
         if record_type in PHARMACY_TYPES:
-            return query
+            return query.filter(StructuredRecord.provider_id == current_user.id)
         return query.filter(False)
 
     if current_user.role in (UserRole.HOSPITAL, UserRole.AMBULANCE):
         if record_type in AMBULANCE_TYPES | {"invoice", "billing_record"}:
-            return query
+            return query.filter(StructuredRecord.provider_id == current_user.id)
         return query.filter(False)
 
     return query.filter(False)
@@ -172,9 +172,13 @@ async def create_record(
     elif body.record_type in PHARMACY_TYPES:
         if current_user.role not in (UserRole.PHARMACIST, UserRole.ADMIN):
             raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Not authorized")
+        if current_user.role == UserRole.PHARMACIST:
+            body.provider_id = current_user.id
     elif body.record_type in AMBULANCE_TYPES:
         if current_user.role not in (UserRole.AMBULANCE, UserRole.HOSPITAL, UserRole.ADMIN):
             raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Not authorized")
+        if current_user.role in (UserRole.AMBULANCE, UserRole.HOSPITAL):
+            body.provider_id = current_user.id
     else:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Unsupported record type")
 
@@ -240,11 +244,11 @@ async def update_record(
             raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Not authorized")
     elif current_user.role == UserRole.PHARMACIST:
         require_verified_workforce_member(current_user, f"update {record.record_type.replace('_', ' ')} records")
-        if record.record_type not in PHARMACY_TYPES:
+        if record.record_type not in PHARMACY_TYPES or record.provider_id != current_user.id:
             raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Not authorized")
     elif current_user.role in (UserRole.HOSPITAL, UserRole.AMBULANCE):
         require_verified_workforce_member(current_user, f"update {record.record_type.replace('_', ' ')} records")
-        if record.record_type not in AMBULANCE_TYPES:
+        if record.record_type not in AMBULANCE_TYPES or record.provider_id != current_user.id:
             raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Not authorized")
     else:
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Not authorized")
@@ -285,11 +289,11 @@ async def delete_record(
             raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Not authorized")
     elif current_user.role == UserRole.PHARMACIST:
         require_verified_workforce_member(current_user, f"delete {record.record_type.replace('_', ' ')} records")
-        if record.record_type not in PHARMACY_TYPES:
+        if record.record_type not in PHARMACY_TYPES or record.provider_id != current_user.id:
             raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Not authorized")
     elif current_user.role in (UserRole.HOSPITAL, UserRole.AMBULANCE):
         require_verified_workforce_member(current_user, f"delete {record.record_type.replace('_', ' ')} records")
-        if record.record_type not in AMBULANCE_TYPES:
+        if record.record_type not in AMBULANCE_TYPES or record.provider_id != current_user.id:
             raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Not authorized")
     else:
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Not authorized")

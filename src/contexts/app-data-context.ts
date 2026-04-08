@@ -48,8 +48,12 @@ export interface AppDataContextType {
   updateAmbulanceRequest: (id: string, update: (request: AmbulanceRequest) => AmbulanceRequest) => void;
   addVitalSigns: (vital: VitalSigns) => void;
   addHealthMetric: (metric: HealthMetric) => void;
+  addInventoryItem: (item: InventoryItem) => void;
   updateInventoryItem: (id: string, update: (item: InventoryItem) => InventoryItem) => void;
+  deleteInventoryItem: (id: string) => void;
+  addAmbulance: (ambulance: AmbulanceVehicle) => void;
   updateAmbulance: (id: string, update: (ambulance: AmbulanceVehicle) => AmbulanceVehicle) => void;
+  deleteAmbulance: (id: string) => void;
   addReferral: (referral: Referral) => void;
   updateReferral: (id: string, update: (referral: Referral) => Referral) => void;
   addProviderVerification: (verification: ProviderVerification) => void;

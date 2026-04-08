@@ -24,6 +24,39 @@ describe('feature access', () => {
   });
 });
 
+describe('referral helpers', () => {
+  const hospitalReferral: Referral = {
+    id: 'ref-hospital',
+    patientName: 'Jane Roe',
+    patientId: 'patient-1',
+    fromDoctorId: 'doctor-1',
+    fromDoctorName: 'Dr. Alice',
+    toDepartment: 'City General Hospital',
+    date: '2026-04-08',
+    reason: 'Escalated care',
+    status: 'pending',
+    lastUpdated: '2026-04-08',
+    referralType: 'hospital',
+    destinationProviderId: 'hospital-1',
+  };
+
+  const pharmacyReferral: Referral = {
+    ...hospitalReferral,
+    id: 'ref-pharmacy',
+    toDepartment: 'CarePlus Pharmacy',
+    referralType: 'pharmacy',
+    destinationProviderId: 'pharmacy-1',
+  };
+
+  it('lets hospital users act only on hospital referrals assigned to them', () => {
+    expect(getVisibleReferrals([hospitalReferral, pharmacyReferral], { id: 'hospital-1', role: 'hospital' })).toEqual([hospitalReferral]);
+    expect(canAcceptReferral(hospitalReferral, 'hospital')).toBe(true);
+    expect(canAcceptReferral(pharmacyReferral, 'hospital')).toBe(false);
+    expect(canCompleteReferral({ ...hospitalReferral, status: 'accepted' }, 'hospital')).toBe(true);
+    expect(canCompleteReferral({ ...pharmacyReferral, status: 'accepted' }, 'hospital')).toBe(false);
+  });
+});
+
 describe('doctor patient directory', () => {
   const users: User[] = [
     { id: 'doctor-1', email: 'doctor@alera.local', name: 'Dr. Alice', role: 'doctor' },
@@ -296,6 +329,52 @@ describe('referral workflow helpers', () => {
     expect(getReferralDestinationProviders(users, 'imaging').map((user) => user.id)).toEqual(['img-1']);
   });
 
+  it('scopes lab, imaging, and pharmacy queues to the assigned provider', () => {
+    const labReferral: LabTest = {
+      id: 'lab-queue-1',
+      patientName: 'Jane Roe',
+      patientId: 'patient-1',
+      doctorName: 'Dr. Alice',
+      doctorId: 'doctor-1',
+      labId: 'lab-1',
+      destinationProviderName: 'Precision Lab',
+      testName: 'CBC',
+      date: '2026-04-02',
+      status: 'requested',
+    };
+    const imagingReferral = {
+      id: 'img-queue-1',
+      patientName: 'Jane Roe',
+      patientId: 'patient-1',
+      doctorName: 'Dr. Alice',
+      doctorId: 'doctor-1',
+      centerId: 'img-1',
+      destinationProviderName: 'Precision Imaging',
+      scanType: 'MRI' as const,
+      date: '2026-04-02',
+      status: 'requested' as const,
+    };
+    const pharmacyPrescription: Prescription = {
+      id: 'rx-queue-1',
+      patientName: 'Jane Roe',
+      patientId: 'patient-1',
+      doctorName: 'Dr. Alice',
+      doctorId: 'doctor-1',
+      pharmacyId: 'pharm-1',
+      pharmacyName: 'Care Pharmacy',
+      date: '2026-04-02',
+      medications: [{ name: 'Amoxicillin', dosage: '500mg', frequency: 'daily', duration: '7d' }],
+      status: 'active',
+    };
+
+    expect(getVisibleLabTests([labReferral], { id: 'lab-1', role: 'laboratory' })).toHaveLength(1);
+    expect(getVisibleLabTests([labReferral], { id: 'lab-2', role: 'laboratory' })).toHaveLength(0);
+    expect(getVisibleImagingScans([imagingReferral], { id: 'img-1', role: 'imaging' })).toHaveLength(1);
+    expect(getVisibleImagingScans([imagingReferral], { id: 'img-2', role: 'imaging' })).toHaveLength(0);
+    expect(getVisiblePrescriptions([pharmacyPrescription], { id: 'pharm-1', role: 'pharmacy' })).toHaveLength(1);
+    expect(getVisiblePrescriptions([pharmacyPrescription], { id: 'pharm-2', role: 'pharmacy' })).toHaveLength(0);
+  });
+
   it('assigns referral actions to the correct roles and statuses', () => {
     expect(canAcceptReferral(referrals[0], 'hospital')).toBe(true);
     expect(canAcceptReferral(referrals[0], 'doctor')).toBe(false);
@@ -313,6 +392,8 @@ describe('clinical record visibility helpers', () => {
       patientId: 'patient-1',
       doctorName: 'Dr. Alice',
       doctorId: 'doctor-1',
+      pharmacyId: 'pharm-1',
+      pharmacyName: 'Care Pharmacy',
       date: '2026-04-02',
       medications: [{ name: 'Amoxicillin', dosage: '500mg', frequency: 'daily', duration: '7d' }],
       status: 'active',
@@ -325,6 +406,8 @@ describe('clinical record visibility helpers', () => {
       patientId: 'patient-1',
       doctorName: 'Dr. Alice',
       doctorId: 'doctor-1',
+      labId: 'lab-1',
+      destinationProviderName: 'Precision Lab',
       testName: 'CBC',
       date: '2026-04-03',
       status: 'requested',
@@ -337,6 +420,8 @@ describe('clinical record visibility helpers', () => {
       patientId: 'patient-1',
       doctorName: 'Dr. Alice',
       doctorId: 'doctor-1',
+      centerId: 'img-center',
+      destinationProviderName: 'Precision Imaging',
       scanType: 'MRI',
       date: '2026-04-03',
       status: 'requested',
@@ -346,6 +431,7 @@ describe('clinical record visibility helpers', () => {
   it('shows only role-appropriate prescriptions, lab tests, and imaging scans', () => {
     expect(getVisiblePrescriptions(prescriptions, { id: 'doctor-1', role: 'doctor' })).toHaveLength(1);
     expect(getVisiblePrescriptions(prescriptions, { id: 'patient-1', role: 'patient' })).toHaveLength(1);
+    expect(getVisiblePrescriptions(prescriptions, { id: 'pharm-1', role: 'pharmacy' })).toHaveLength(1);
     expect(getVisiblePrescriptions(prescriptions, { id: 'hospital-1', role: 'hospital' })).toHaveLength(0);
 
     expect(getVisibleLabTests(labTests, { id: 'doctor-1', role: 'doctor' })).toHaveLength(1);

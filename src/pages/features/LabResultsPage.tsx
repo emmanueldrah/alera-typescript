@@ -1,6 +1,6 @@
 import { useMemo, useState } from 'react';
 import { motion } from 'framer-motion';
-import { FlaskConical, Upload, Plus, X, Inbox } from 'lucide-react';
+import { FlaskConical, Upload, Plus, X, Inbox, Trash2 } from 'lucide-react';
 import { useSearchParams } from 'react-router-dom';
 import { useAuth } from '@/contexts/useAuth';
 import { useAppData } from '@/contexts/useAppData';
@@ -8,22 +8,26 @@ import { useNotifications } from '@/contexts/useNotifications';
 import { type LabTest } from '@/data/mockData';
 import { getDoctorPatients } from '@/lib/patientDirectory';
 import { getVisibleLabTests } from '@/lib/recordVisibility';
+import { getReferralDestinationProviders } from '@/lib/referralUtils';
 import { normalizeUserRole } from '@/lib/roleUtils';
+import { api } from '@/lib/apiService';
 
 const LabResultsPage = () => {
   const { user, getUsers } = useAuth();
-  const { appointments, labTests, addLabTest, updateLabTest } = useAppData();
+  const { appointments, labTests, addLabTest, updateLabTest, refreshAppData } = useAppData();
   const { addNotification } = useNotifications();
   const [searchParams] = useSearchParams();
   const [showUpload, setShowUpload] = useState<string | null>(null);
   const [showOrder, setShowOrder] = useState(false);
   const [uploadResult, setUploadResult] = useState('');
-  const [orderForm, setOrderForm] = useState({ patientId: '', testName: '' });
+  const [orderForm, setOrderForm] = useState({ patientId: '', labId: '', testName: '' });
+  const [deleteId, setDeleteId] = useState<string | null>(null);
   const focusId = searchParams.get('focus');
   const effectiveRole = normalizeUserRole(user?.role) ?? user?.role;
   const currentPage = user?.role === 'laboratory' ? 'test-requests' : effectiveRole === 'doctor' ? 'lab-referrals' : 'lab-results';
   const users = getUsers();
   const patientOptions = useMemo(() => getDoctorPatients(users, appointments, user?.id), [appointments, user?.id, users]);
+  const labOptions = useMemo(() => getReferralDestinationProviders(users, 'laboratory'), [users]);
   const visibleLabTests = useMemo(
     () => getVisibleLabTests(labTests, user),
     [labTests, user],
@@ -58,15 +62,18 @@ const LabResultsPage = () => {
   };
 
   const handleOrder = () => {
-    if (!orderForm.patientId || !orderForm.testName) return;
+    if (!orderForm.patientId || !orderForm.labId || !orderForm.testName) return;
     const patient = patientOptions.find((option) => option.id === orderForm.patientId);
-    if (!patient) return;
+    const lab = labOptions.find((option) => option.id === orderForm.labId);
+    if (!patient || !lab) return;
     const test: LabTest = {
       id: `lt-${Date.now()}`,
       patientName: patient.name,
       patientId: patient.id,
       doctorName: user?.name || 'Doctor',
       doctorId: user?.id || '',
+      labId: lab.id,
+      destinationProviderName: lab.name,
       testName: orderForm.testName,
       date: new Date().toISOString().split('T')[0],
       status: 'requested',
@@ -74,14 +81,13 @@ const LabResultsPage = () => {
     addLabTest(test);
     addNotification({
       title: 'Lab Test Ordered',
-      message: `${orderForm.testName} was ordered for ${patient.name}.`,
+      message: `${orderForm.testName} was ordered for ${patient.name} and sent to ${lab.name}.`,
       type: 'result',
       priority: 'medium',
       audience: 'personal',
       actionUrl: `/dashboard/lab-referrals?focus=${test.id}`,
       actionLabel: 'Open order',
-      targetEmails: [user?.email, patient.email].filter((value): value is string => Boolean(value)),
-      targetRoles: ['laboratory'],
+      targetEmails: [user?.email, patient.email, lab.email].filter((value): value is string => Boolean(value)),
       excludeEmails: user?.email ? [user.email] : [],
       actionUrlByRole: {
         doctor: `/dashboard/lab-referrals?focus=${test.id}`,
@@ -89,7 +95,27 @@ const LabResultsPage = () => {
       },
     });
     setShowOrder(false);
-    setOrderForm({ patientId: '', testName: '' });
+    setOrderForm({ patientId: '', labId: '', testName: '' });
+  };
+
+  const handleStatusChange = (id: string, status: LabTest['status']) => {
+    updateLabTest(id, (test) => ({ ...test, status }));
+    if (showUpload === id && status !== 'completed') {
+      setShowUpload(null);
+      setUploadResult('');
+    }
+  };
+
+  const handleDelete = async (id: string) => {
+    setDeleteId(id);
+    try {
+      await api.labTests.deleteLabTest(id);
+      await refreshAppData();
+    } catch (error) {
+      console.error('Failed to delete lab test:', error);
+    } finally {
+      setDeleteId(null);
+    }
   };
 
   return (
@@ -103,9 +129,10 @@ const LabResultsPage = () => {
           <div className="flex items-center justify-between mb-4"><h2 className="text-lg font-display font-semibold text-card-foreground">Order Lab Test</h2><button onClick={() => setShowOrder(false)} className="text-muted-foreground"><X className="w-5 h-5" /></button></div>
           <div className="grid md:grid-cols-2 gap-4">
             <div><label className="text-sm font-medium text-card-foreground mb-1.5 block">Patient</label><select value={orderForm.patientId} onChange={(e) => setOrderForm({ ...orderForm, patientId: e.target.value })} className="w-full h-11 px-4 rounded-xl border border-input bg-background text-foreground focus:outline-none focus:ring-2 focus:ring-primary/30"><option value="">Select patient</option>{patientOptions.map((patient) => <option key={patient.id} value={patient.id}>{patient.name}</option>)}</select></div>
-            <div><label className="text-sm font-medium text-card-foreground mb-1.5 block">Test</label><select value={orderForm.testName} onChange={(e) => setOrderForm({ ...orderForm, testName: e.target.value })} className="w-full h-11 px-4 rounded-xl border border-input bg-background text-foreground focus:outline-none focus:ring-2 focus:ring-primary/30"><option value="">Select</option><option>CBC</option><option>Lipid Panel</option><option>HbA1c</option><option>Thyroid Panel</option></select></div>
+            <div><label className="text-sm font-medium text-card-foreground mb-1.5 block">Laboratory</label><select value={orderForm.labId} onChange={(e) => setOrderForm({ ...orderForm, labId: e.target.value })} className="w-full h-11 px-4 rounded-xl border border-input bg-background text-foreground focus:outline-none focus:ring-2 focus:ring-primary/30"><option value="">Select laboratory</option>{labOptions.map((lab) => <option key={lab.id} value={lab.id}>{lab.name}</option>)}</select></div>
+            <div className="md:col-span-2"><label className="text-sm font-medium text-card-foreground mb-1.5 block">Test</label><select value={orderForm.testName} onChange={(e) => setOrderForm({ ...orderForm, testName: e.target.value })} className="w-full h-11 px-4 rounded-xl border border-input bg-background text-foreground focus:outline-none focus:ring-2 focus:ring-primary/30"><option value="">Select</option><option>CBC</option><option>Lipid Panel</option><option>HbA1c</option><option>Thyroid Panel</option></select></div>
           </div>
-          <button onClick={handleOrder} disabled={!orderForm.patientId || !orderForm.testName} className="mt-4 px-6 py-2.5 rounded-xl bg-gradient-primary text-primary-foreground text-sm font-semibold hover:opacity-90 transition disabled:cursor-not-allowed disabled:opacity-50">Order Test</button>
+          <button onClick={handleOrder} disabled={!orderForm.patientId || !orderForm.labId || !orderForm.testName} className="mt-4 px-6 py-2.5 rounded-xl bg-gradient-primary text-primary-foreground text-sm font-semibold hover:opacity-90 transition disabled:cursor-not-allowed disabled:opacity-50">Order Test</button>
         </motion.div>
       )}
       {visibleLabTests.length === 0 ? (
@@ -123,13 +150,31 @@ const LabResultsPage = () => {
                   <div>
                     <div className="text-base font-medium text-card-foreground">{test.testName}</div>
                     <div className="text-sm text-muted-foreground">{test.patientName} • {test.doctorName}</div>
+                    {test.destinationProviderName ? <div className="text-xs text-muted-foreground mt-1">Laboratory: {test.destinationProviderName}</div> : null}
                     <div className="text-xs text-muted-foreground mt-1">{test.date}</div>
                     {test.results && <div className="mt-2 p-3 rounded-lg bg-success/5 border border-success/10 text-sm text-card-foreground"><span className="font-medium text-success">Results: </span>{test.results}</div>}
                   </div>
                 </div>
                 <div className="flex flex-col items-end gap-2">
                   <span className={`px-3 py-1 rounded-lg text-xs font-medium ${test.status === 'requested' ? 'bg-warning/10 text-warning' : test.status === 'in-progress' ? 'bg-info/10 text-info' : test.status === 'cancelled' ? 'bg-muted text-muted-foreground' : 'bg-success/10 text-success'}`}>{test.status === 'cancelled' ? 'cancelled' : test.status}</span>
-                  {user?.role === 'laboratory' && test.status !== 'completed' && test.status !== 'cancelled' && <button onClick={() => setShowUpload(test.id)} className="flex items-center gap-1 px-3 py-1 rounded-lg bg-primary/10 text-primary text-xs font-medium hover:bg-primary/20"><Upload className="w-3 h-3" /> Upload</button>}
+                  <div className="flex gap-2">
+                    {user?.role === 'laboratory' && test.status === 'requested' && (
+                      <button onClick={() => handleStatusChange(test.id, 'in-progress')} className="flex items-center gap-1 px-3 py-1 rounded-lg bg-info/10 text-info text-xs font-medium hover:bg-info/20">
+                        Start
+                      </button>
+                    )}
+                    {user?.role === 'laboratory' && test.status !== 'completed' && test.status !== 'cancelled' && <button onClick={() => setShowUpload(test.id)} className="flex items-center gap-1 px-3 py-1 rounded-lg bg-primary/10 text-primary text-xs font-medium hover:bg-primary/20"><Upload className="w-3 h-3" /> Upload</button>}
+                    {(user?.role === 'laboratory' || effectiveRole === 'doctor') && test.status !== 'completed' && test.status !== 'cancelled' && (
+                      <button onClick={() => handleStatusChange(test.id, 'cancelled')} className="flex items-center gap-1 px-3 py-1 rounded-lg bg-destructive/10 text-destructive text-xs font-medium hover:bg-destructive/20">
+                        Cancel
+                      </button>
+                    )}
+                    {effectiveRole === 'doctor' && (
+                      <button onClick={() => void handleDelete(test.id)} disabled={deleteId === test.id} className="flex items-center gap-1 px-3 py-1 rounded-lg bg-destructive/10 text-destructive text-xs font-medium hover:bg-destructive/20 disabled:opacity-50">
+                        <Trash2 className="w-3 h-3" /> {deleteId === test.id ? 'Deleting...' : 'Delete'}
+                      </button>
+                    )}
+                  </div>
                 </div>
               </div>
               {showUpload === test.id && (

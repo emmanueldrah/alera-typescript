@@ -102,7 +102,6 @@ export const getVisibleReferrals = (
     return [];
   }
 
-  // Doctors use separate dashboard URLs per queue; hospital staff see hospital + pharmacy together from the API.
   if (options?.kind && role === 'doctor') {
     rows = rows.filter((r) => r.referralType === options.kind);
   }
@@ -151,7 +150,7 @@ export const canAcceptReferral = (referral: Referral, role?: User['role'] | stri
   if (referral.status !== 'pending') return false;
   const normalized = normalizeUserRole(role) ?? role;
   if (normalized === 'hospital') {
-    return referral.referralType === 'hospital' || referral.referralType === 'pharmacy';
+    return referral.referralType === 'hospital';
   }
   if (normalized === 'laboratory') return referral.referralType === 'laboratory';
   if (normalized === 'imaging') return referral.referralType === 'imaging';
@@ -163,7 +162,7 @@ export const canCompleteReferral = (referral: Referral, role?: User['role'] | st
   if (referral.status !== 'accepted') return false;
   const normalized = normalizeUserRole(role) ?? role;
   if (normalized === 'hospital') {
-    return referral.referralType === 'hospital' || referral.referralType === 'pharmacy';
+    return referral.referralType === 'hospital';
   }
   if (normalized === 'laboratory') return referral.referralType === 'laboratory';
   if (normalized === 'imaging') return referral.referralType === 'imaging';
