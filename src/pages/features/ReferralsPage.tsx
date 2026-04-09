@@ -43,7 +43,7 @@ const dashboardPathForReferralType = (t: ReferralType): string => {
 
 const ReferralsPage = ({ referralKind = 'hospital' }: ReferralsPageProps) => {
   const { user, getUsers } = useAuth();
-  const { referrals, appointments, addReferral, updateReferral } = useAppData();
+  const { referrals, appointments, addReferral, updateReferral, refreshAppData } = useAppData();
   const { addNotification } = useNotifications();
   const [statusFilter, setStatusFilter] = useState('all');
   const [showForm, setShowForm] = useState(false);
@@ -90,6 +90,16 @@ const ReferralsPage = ({ referralKind = 'hospital' }: ReferralsPageProps) => {
     if (statusFilter === 'all') return userReferrals;
     return userReferrals.filter((r) => r.status === statusFilter);
   }, [userReferrals, statusFilter]);
+
+  useEffect(() => {
+    const interval = window.setInterval(() => {
+      void refreshAppData();
+    }, 15000);
+
+    return () => {
+      window.clearInterval(interval);
+    };
+  }, [refreshAppData]);
 
   const stats = useMemo(
     () => ({

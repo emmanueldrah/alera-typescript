@@ -784,9 +784,26 @@ export const AppDataProvider: React.FC<{ children: React.ReactNode }> = ({ child
       }
     }, 30000);
 
+    const handleVisibilityChange = () => {
+      if (active && document.visibilityState === 'visible') {
+        void loadAPIData(true);
+      }
+    };
+
+    const handleOnline = () => {
+      if (active) {
+        void loadAPIData(true);
+      }
+    };
+
+    document.addEventListener('visibilitychange', handleVisibilityChange);
+    window.addEventListener('online', handleOnline);
+
     return () => {
       active = false;
       window.clearInterval(interval);
+      document.removeEventListener('visibilitychange', handleVisibilityChange);
+      window.removeEventListener('online', handleOnline);
     };
   }, [loadAPIData]);
 
@@ -1349,7 +1366,7 @@ export const AppDataProvider: React.FC<{ children: React.ReactNode }> = ({ child
 
         setData((current) => ({
           ...current,
-          referrals: [...current.referrals, mapBackendReferral(response.data)],
+          referrals: [...current.referrals, mapBackendReferral(response)],
         }));
 
         await loadAPIData(true);
