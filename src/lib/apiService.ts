@@ -937,9 +937,7 @@ export const imagingApi = {
       formData.append('image_files', file);
     }
 
-    const response = await apiClient.post(`/imaging/${id}/results`, formData, {
-      headers: { 'Content-Type': 'multipart/form-data' },
-    });
+    const response = await apiClient.post(`/imaging/${id}/results`, formData);
     return response.data;
   },
 
