@@ -8,7 +8,7 @@ const card = (i: number) => ({ initial: { opacity: 0, y: 15 }, animate: { opacit
 
 const DoctorDashboard = () => {
   const { user } = useAuth();
-  const { appointments, labTests, imagingScans } = useAppData();
+  const { appointments, labTests, imagingScans, referrals } = useAppData();
 
   // Get today's appointments for this doctor
   const today = new Date().toISOString().split('T')[0];
@@ -31,6 +31,9 @@ const DoctorDashboard = () => {
   const pendingImagingScans = imagingScans.filter(
     (scan) => scan.doctorId === user?.id && (scan.status === 'requested' || scan.status === 'in-progress'),
   );
+  const pendingImagingReferrals = referrals.filter(
+    (referral) => referral.fromDoctorId === user?.id && referral.referralType === 'imaging' && referral.status !== 'completed' && referral.status !== 'cancelled',
+  );
 
   return (
     <div className="space-y-6">
@@ -45,6 +48,7 @@ const DoctorDashboard = () => {
           { icon: <Users className="w-5 h-5" />, label: 'Active Patients', value: uniquePatients, color: 'text-info', bg: 'bg-info/10' },
           { icon: <FlaskConical className="w-5 h-5" />, label: 'Pending Labs', value: pendingLabTests.length, color: 'text-warning', bg: 'bg-warning/10' },
           { icon: <ScanLine className="w-5 h-5" />, label: 'Pending Scans', value: pendingImagingScans.length, color: 'text-accent', bg: 'bg-accent/10' },
+          { icon: <ScanLine className="w-5 h-5" />, label: 'Imaging Referrals', value: pendingImagingReferrals.length, color: 'text-cyan-700', bg: 'bg-cyan-100' },
         ].map((s, i) => (
           <motion.div key={i} {...card(i)} className="p-5 rounded-2xl bg-card border border-border">
             <div className={`w-10 h-10 rounded-xl ${s.bg} ${s.color} flex items-center justify-center mb-3`}>{s.icon}</div>

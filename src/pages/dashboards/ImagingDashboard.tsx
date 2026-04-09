@@ -1,19 +1,22 @@
 import { motion } from 'framer-motion';
-import { Clock, CheckCircle, AlertCircle, ArrowRight, Inbox } from 'lucide-react';
+import { Clock, CheckCircle, AlertCircle, ArrowRight, Inbox, FileText } from 'lucide-react';
 import { Link } from 'react-router-dom';
 import { useAuth } from '@/contexts/useAuth';
-import { useAppData } from '@/contexts/useAppData';
+import { useAppData } from '@/contexts/AppData';
 import { getVisibleImagingScans } from '@/lib/recordVisibility';
+import { getVisibleReferrals } from '@/lib/referralUtils';
 
 const card = (i: number) => ({ initial: { opacity: 0, y: 15 }, animate: { opacity: 1, y: 0 }, transition: { delay: i * 0.08 } });
 
 const ImagingDashboard = () => {
   const { user } = useAuth();
-  const { imagingScans } = useAppData();
+  const { imagingScans, referrals } = useAppData();
   const visibleScans = getVisibleImagingScans(imagingScans, user);
+  const visibleReferrals = getVisibleReferrals(referrals, user);
   const newRequests = visibleScans.filter((scan) => scan.status === 'requested');
   const inProgress = visibleScans.filter((scan) => scan.status === 'in-progress');
   const completed = visibleScans.filter((scan) => scan.status === 'completed');
+  const pendingReferrals = visibleReferrals.filter((referral) => referral.status === 'pending');
 
   return (
     <div className="space-y-6">
@@ -26,6 +29,7 @@ const ImagingDashboard = () => {
         {[
           { icon: <AlertCircle className="w-5 h-5" />, label: 'New Requests', value: newRequests.length, color: 'text-warning', bg: 'bg-warning/10' },
           { icon: <Clock className="w-5 h-5" />, label: 'In Progress', value: inProgress.length, color: 'text-info', bg: 'bg-info/10' },
+          { icon: <FileText className="w-5 h-5" />, label: 'Pending Referrals', value: pendingReferrals.length, color: 'text-accent', bg: 'bg-accent/10' },
           { icon: <CheckCircle className="w-5 h-5" />, label: 'Completed', value: completed.length, color: 'text-success', bg: 'bg-success/10' },
         ].map((s, i) => (
           <motion.div key={i} {...card(i)} className="p-5 rounded-2xl bg-card border border-border">

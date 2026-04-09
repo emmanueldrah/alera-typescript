@@ -60,6 +60,7 @@ const roleNavItems: Record<string, { label: string; icon: React.ReactNode; path:
   imaging: [
     { label: 'Dashboard', icon: <LayoutDashboard className="w-5 h-5" />, path: '/dashboard' },
     { label: 'Scan Requests', icon: <ScanLine className="w-5 h-5" />, path: '/dashboard/scan-requests' },
+    { label: 'Imaging Referrals', icon: <ScanLine className="w-5 h-5" />, path: '/dashboard/imaging-referrals' },
     { label: 'Results', icon: <FileText className="w-5 h-5" />, path: '/dashboard/results' },
     { label: 'Messages', icon: <MessageSquare className="w-5 h-5" />, path: '/dashboard/messages' },
   ],

@@ -8,7 +8,7 @@ export const featureAccessMap: Record<string, UserRole[]> = {
   'lab-referrals': ['doctor'],
   'test-requests': ['laboratory'],
   imaging: ['patient'],
-  'imaging-referrals': ['doctor'],
+  'imaging-referrals': ['doctor', 'imaging'],
   'scan-requests': ['imaging'],
   ambulance: ['patient', 'ambulance', 'hospital', 'doctor'],
   requests: ['ambulance', 'hospital', 'doctor'],

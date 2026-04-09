@@ -30,6 +30,7 @@ describe('provider access matrix', () => {
 
   it('keeps imaging portal routes accessible', () => {
     expect(canAccessFeature('scan-requests', 'imaging')).toBe(true);
+    expect(canAccessFeature('imaging-referrals', 'imaging')).toBe(true);
     expect(canAccessFeature('results', 'imaging')).toBe(true);
     expect(canAccessFeature('messages', 'imaging')).toBe(true);
   });
