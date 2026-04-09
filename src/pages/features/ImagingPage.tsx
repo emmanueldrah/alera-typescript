@@ -1,6 +1,6 @@
-import { useMemo, useState } from 'react';
+import { startTransition, useDeferredValue, useMemo, useState } from 'react';
 import { motion } from 'framer-motion';
-import { Calendar, Download, FileImage, FileText, Inbox, Plus, ScanLine, Trash2, Upload, X } from 'lucide-react';
+import { Calendar, CheckCircle2, Clock3, Download, FileImage, FileText, Inbox, Plus, ScanLine, Search, Trash2, Upload, X } from 'lucide-react';
 import { useSearchParams } from 'react-router-dom';
 import { useAuth } from '@/contexts/useAuth';
 import { useAppData } from '@/contexts/useAppData';
@@ -34,6 +34,14 @@ const formatFileSize = (bytes?: number) => {
   return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
 };
 
+const toDateInputValue = (value?: string) => {
+  if (!value) return '';
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return '';
+  const local = new Date(date.getTime() - (date.getTimezoneOffset() * 60_000));
+  return local.toISOString().slice(0, 16);
+};
+
 const ImagingPage = () => {
   const { user, getUsers } = useAuth();
   const { appointments, imagingScans, addImagingScan, updateImagingScan, refreshAppData } = useAppData();
@@ -44,7 +52,10 @@ const ImagingPage = () => {
   const [deleteId, setDeleteId] = useState<string | null>(null);
   const [uploadingId, setUploadingId] = useState<string | null>(null);
   const [schedulingId, setSchedulingId] = useState<string | null>(null);
-  const [scheduleValue, setScheduleValue] = useState('');
+  const [scheduleDrafts, setScheduleDrafts] = useState<Record<string, string>>({});
+  const [searchTerm, setSearchTerm] = useState('');
+  const [statusFilter, setStatusFilter] = useState<'all' | ImagingScan['status']>('all');
+  const [sortBy, setSortBy] = useState<'newest' | 'scheduled' | 'patient' | 'status'>('newest');
   const [orderForm, setOrderForm] = useState({
     patientId: '',
     centerId: '',
@@ -62,6 +73,7 @@ const ImagingPage = () => {
   const effectiveRole = normalizeUserRole(user?.role) ?? user?.role;
   const currentPage = user?.role === 'imaging' ? 'scan-requests' : effectiveRole === 'doctor' ? 'imaging-referrals' : 'imaging';
   const users = getUsers();
+  const deferredSearchTerm = useDeferredValue(searchTerm);
   const patientOptions = useMemo(() => getDoctorPatients(users, appointments, user?.id), [appointments, user?.id, users]);
   const imagingCenterOptions = useMemo(() => getReferralDestinationProviders(users, 'imaging'), [users]);
 
@@ -69,6 +81,52 @@ const ImagingPage = () => {
     () => getVisibleImagingScans(imagingScans, user),
     [imagingScans, user],
   );
+  const filteredScans = useMemo(() => {
+    const needle = deferredSearchTerm.trim().toLowerCase();
+    const matchesSearch = (scan: ImagingScan) => {
+      if (!needle) return true;
+      return [
+        scan.patientName,
+        scan.doctorName,
+        scan.scanType,
+        scan.bodyPart,
+        scan.clinicalIndication,
+        scan.destinationProviderName,
+        scan.results,
+        scan.impression,
+      ].some((value) => value?.toLowerCase().includes(needle));
+    };
+
+    const matchesStatus = (scan: ImagingScan) => statusFilter === 'all' || scan.status === statusFilter;
+    const rows = visibleScans.filter((scan) => matchesSearch(scan) && matchesStatus(scan));
+
+    const statusRank: Record<ImagingScan['status'], number> = {
+      requested: 0,
+      'in-progress': 1,
+      completed: 2,
+      cancelled: 3,
+    };
+
+    return [...rows].sort((left, right) => {
+      if (sortBy === 'patient') return left.patientName.localeCompare(right.patientName);
+      if (sortBy === 'status') return statusRank[left.status] - statusRank[right.status] || left.patientName.localeCompare(right.patientName);
+      if (sortBy === 'scheduled') {
+        const leftTime = left.scheduledAt ? new Date(left.scheduledAt).getTime() : Number.MAX_SAFE_INTEGER;
+        const rightTime = right.scheduledAt ? new Date(right.scheduledAt).getTime() : Number.MAX_SAFE_INTEGER;
+        return leftTime - rightTime;
+      }
+      const leftTime = left.completedAt || left.scheduledAt || left.date;
+      const rightTime = right.completedAt || right.scheduledAt || right.date;
+      return String(rightTime).localeCompare(String(leftTime));
+    });
+  }, [deferredSearchTerm, sortBy, statusFilter, visibleScans]);
+  const stats = useMemo(() => ({
+    total: visibleScans.length,
+    requested: visibleScans.filter((scan) => scan.status === 'requested').length,
+    inProgress: visibleScans.filter((scan) => scan.status === 'in-progress').length,
+    completed: visibleScans.filter((scan) => scan.status === 'completed').length,
+    scheduled: visibleScans.filter((scan) => Boolean(scan.scheduledAt) && scan.status !== 'completed' && scan.status !== 'cancelled').length,
+  }), [visibleScans]);
 
   const resetUploadForm = () => {
     setShowUpload(null);
@@ -126,6 +184,27 @@ const ImagingPage = () => {
     }
   };
 
+  const notifyQueueUpdate = (scan: ImagingScan, title: string, message: string) => {
+    const doctorEmail = users.find((account) => account.id === scan.doctorId)?.email;
+    const patientEmail = users.find((account) => account.id === scan.patientId)?.email;
+    addNotification({
+      title,
+      message,
+      type: 'result',
+      priority: 'medium',
+      audience: 'personal',
+      targetEmails: [doctorEmail, patientEmail].filter((value): value is string => Boolean(value)),
+      excludeEmails: user?.email ? [user.email] : [],
+      actionUrl: `/dashboard/${currentPage}?focus=${scan.id}`,
+      actionLabel: 'Open study',
+      actionUrlByRole: {
+        imaging: `/dashboard/scan-requests?focus=${scan.id}`,
+        doctor: `/dashboard/imaging-referrals?focus=${scan.id}`,
+        patient: `/dashboard/imaging?focus=${scan.id}`,
+      },
+    });
+  };
+
   const handleOrder = async () => {
     if (!orderForm.patientId || !orderForm.centerId || !orderForm.scanType) return;
     const patient = patientOptions.find((option) => option.id === orderForm.patientId);
@@ -169,25 +248,38 @@ const ImagingPage = () => {
   };
 
   const handleStatusChange = (id: string, status: ImagingScan['status']) => {
+    const target = imagingScans.find((scan) => scan.id === id);
     updateImagingScan(id, (scan) => ({ ...scan, status }));
     if (showUpload === id && status !== 'completed') {
       resetUploadForm();
     }
+    if (target && user?.role === 'imaging') {
+      if (status === 'in-progress') {
+        notifyQueueUpdate(target, 'Imaging Study Started', `${target.scanType}${target.bodyPart ? ` (${target.bodyPart})` : ''} for ${target.patientName} is now in progress.`);
+      }
+      if (status === 'cancelled') {
+        notifyQueueUpdate(target, 'Imaging Study Cancelled', `${target.scanType}${target.bodyPart ? ` (${target.bodyPart})` : ''} for ${target.patientName} was cancelled.`);
+      }
+    }
   };
 
-  const handleSchedule = async (scanId: string) => {
+  const handleSchedule = async (scan: ImagingScan) => {
+    const scheduleValue = scheduleDrafts[scan.id];
     if (!scheduleValue) return;
-    setSchedulingId(scanId);
+    setSchedulingId(scan.id);
     try {
-      await api.imaging.updateImagingScan(scanId, {
+      await api.imaging.updateImagingScan(scan.id, {
         scheduled_at: new Date(scheduleValue).toISOString(),
         status: 'scheduled',
       });
       await refreshAppData();
-      setSchedulingId(null);
-      setScheduleValue('');
+      startTransition(() => {
+        setScheduleDrafts((current) => ({ ...current, [scan.id]: '' }));
+      });
+      notifyQueueUpdate(scan, 'Imaging Study Scheduled', `${scan.scanType}${scan.bodyPart ? ` (${scan.bodyPart})` : ''} for ${scan.patientName} was scheduled for ${formatDateTime(new Date(scheduleValue).toISOString())}.`);
     } catch (error) {
       console.error('Failed to schedule imaging scan:', error);
+    } finally {
       setSchedulingId(null);
     }
   };
@@ -307,18 +399,80 @@ const ImagingPage = () => {
         </motion.div>
       )}
 
-      {visibleScans.length === 0 ? (
+      {user?.role === 'imaging' && (
+        <>
+          <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-5">
+            {[
+              { label: 'Total Queue', value: stats.total, icon: <ScanLine className="w-4 h-4" />, tone: 'text-primary bg-primary/10' },
+              { label: 'New Requests', value: stats.requested, icon: <Clock3 className="w-4 h-4" />, tone: 'text-warning bg-warning/10' },
+              { label: 'Scheduled', value: stats.scheduled, icon: <Calendar className="w-4 h-4" />, tone: 'text-info bg-info/10' },
+              { label: 'In Progress', value: stats.inProgress, icon: <Upload className="w-4 h-4" />, tone: 'text-info bg-info/10' },
+              { label: 'Completed', value: stats.completed, icon: <CheckCircle2 className="w-4 h-4" />, tone: 'text-success bg-success/10' },
+            ].map((item) => (
+              <div key={item.label} className="rounded-2xl border border-border bg-card p-4">
+                <div className={`mb-3 inline-flex h-10 w-10 items-center justify-center rounded-xl ${item.tone}`}>{item.icon}</div>
+                <div className="text-2xl font-display font-bold text-card-foreground">{item.value}</div>
+                <div className="text-sm text-muted-foreground">{item.label}</div>
+              </div>
+            ))}
+          </div>
+
+          <div className="rounded-2xl border border-border bg-card p-4">
+            <div className="grid gap-3 lg:grid-cols-[minmax(0,1.2fr)_220px_180px]">
+              <label className="relative block">
+                <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+                <input
+                  aria-label="Search studies"
+                  value={searchTerm}
+                  onChange={(event) => setSearchTerm(event.target.value)}
+                  placeholder="Search by patient, doctor, modality, body part, or findings"
+                  className="h-11 w-full rounded-xl border border-input bg-background pl-10 pr-4 text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-primary/30"
+                />
+              </label>
+
+              <select
+                aria-label="Filter by status"
+                value={statusFilter}
+                onChange={(event) => setStatusFilter(event.target.value as 'all' | ImagingScan['status'])}
+                className="h-11 rounded-xl border border-input bg-background px-4 text-foreground focus:outline-none focus:ring-2 focus:ring-primary/30"
+              >
+                <option value="all">All statuses</option>
+                <option value="requested">Pending</option>
+                <option value="in-progress">In progress</option>
+                <option value="completed">Completed</option>
+                <option value="cancelled">Cancelled</option>
+              </select>
+
+              <select
+                aria-label="Sort studies"
+                value={sortBy}
+                onChange={(event) => setSortBy(event.target.value as 'newest' | 'scheduled' | 'patient' | 'status')}
+                className="h-11 rounded-xl border border-input bg-background px-4 text-foreground focus:outline-none focus:ring-2 focus:ring-primary/30"
+              >
+                <option value="newest">Sort: newest activity</option>
+                <option value="scheduled">Sort: scheduled first</option>
+                <option value="patient">Sort: patient name</option>
+                <option value="status">Sort: queue status</option>
+              </select>
+            </div>
+          </div>
+        </>
+      )}
+
+      {filteredScans.length === 0 ? (
         <div className="flex flex-col items-center justify-center py-12 text-muted-foreground">
           <Inbox className="w-10 h-10 mb-3" />
-          <p className="text-sm">No imaging scans yet</p>
+          <p className="text-sm">{visibleScans.length === 0 ? 'No imaging scans yet' : 'No studies match the current worklist filters'}</p>
         </div>
       ) : (
         <div className="space-y-3">
-          {visibleScans.map((scan, index) => {
+          {filteredScans.map((scan, index) => {
             const reportDownloadUrl = scan.reportFile?.downloadUrl || scan.reportUrl;
             const canUpload = user?.role === 'imaging' && scan.status !== 'completed' && scan.status !== 'cancelled';
             const canCancel = (user?.role === 'imaging' || effectiveRole === 'doctor') && scan.status !== 'completed' && scan.status !== 'cancelled';
             const canDelete = effectiveRole === 'doctor';
+            const scheduleDraft = scheduleDrafts[scan.id] ?? toDateInputValue(scan.scheduledAt);
+            const hasAssets = Boolean(reportDownloadUrl || scan.imageUrl || scan.imageFiles?.length);
 
             return (
               <motion.div
@@ -358,6 +512,17 @@ const ImagingPage = () => {
                         <div className="rounded-lg border border-border/60 bg-secondary/40 px-3 py-2">
                           <div className="text-xs font-medium text-muted-foreground uppercase tracking-wide">Clinical indication</div>
                           <p className="mt-1 text-sm text-card-foreground">{scan.clinicalIndication}</p>
+                        </div>
+                      ) : null}
+
+                      {user?.role === 'imaging' ? (
+                        <div className="flex flex-wrap gap-2 text-xs">
+                          <span className="rounded-full bg-secondary px-2.5 py-1 text-secondary-foreground">
+                            Assets: {hasAssets ? `${scan.imageFiles?.length || 0} image file(s)` : 'none yet'}
+                          </span>
+                          <span className="rounded-full bg-secondary px-2.5 py-1 text-secondary-foreground">
+                            Report: {scan.reportFile ? 'attached' : 'not attached'}
+                          </span>
                         </div>
                       ) : null}
 
@@ -495,14 +660,19 @@ const ImagingPage = () => {
                         <input
                           type="datetime-local"
                           aria-label="Schedule study"
-                          value={scheduleValue}
-                          onChange={(e) => setScheduleValue(e.target.value)}
+                          value={scheduleDraft}
+                          onChange={(e) => {
+                            const nextValue = e.target.value;
+                            startTransition(() => {
+                              setScheduleDrafts((current) => ({ ...current, [scan.id]: nextValue }));
+                            });
+                          }}
                           className="mt-1 w-full h-11 px-4 rounded-xl border border-input bg-background text-foreground focus:outline-none focus:ring-2 focus:ring-primary/30"
                         />
                       </div>
                       <button
-                        onClick={() => void handleSchedule(scan.id)}
-                        disabled={!scheduleValue || schedulingId === scan.id}
+                        onClick={() => void handleSchedule(scan)}
+                        disabled={!scheduleDraft || schedulingId === scan.id}
                         className="px-4 py-2.5 rounded-xl bg-secondary text-secondary-foreground text-sm font-medium hover:bg-muted transition disabled:opacity-50"
                       >
                         {schedulingId === scan.id ? 'Saving...' : 'Save schedule'}

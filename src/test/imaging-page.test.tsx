@@ -195,4 +195,60 @@ describe('ImagingPage', () => {
     });
     expect(refreshAppDataMock).toHaveBeenCalled();
   });
+
+  it('filters the imaging worklist by search term and status', async () => {
+    currentUser = { id: 'img-center', email: 'imaging@alera.local', name: 'Precision Imaging', role: 'imaging' };
+    imagingScans = [
+      {
+        id: 'scan-1',
+        patientId: 'patient-1',
+        patientName: 'Pat One',
+        doctorId: 'doctor-1',
+        doctorName: 'Dr. Alice',
+        centerId: 'img-center',
+        destinationProviderName: 'Precision Imaging',
+        scanType: 'MRI',
+        bodyPart: 'Head',
+        clinicalIndication: 'Headaches',
+        date: '2026-04-09',
+        status: 'requested',
+      },
+      {
+        id: 'scan-2',
+        patientId: 'patient-1',
+        patientName: 'Jordan Case',
+        doctorId: 'doctor-1',
+        doctorName: 'Dr. Alice',
+        centerId: 'img-center',
+        destinationProviderName: 'Precision Imaging',
+        scanType: 'MRI',
+        bodyPart: 'Spine',
+        clinicalIndication: 'Back pain',
+        date: '2026-04-08',
+        status: 'completed',
+      },
+    ];
+
+    render(
+      <MemoryRouter future={{ v7_startTransition: true, v7_relativeSplatPath: true }}>
+        <ImagingPage />
+      </MemoryRouter>,
+    );
+
+    expect(screen.getByText(/Patient: Pat One/i)).toBeInTheDocument();
+    expect(screen.getByText(/Patient: Jordan Case/i)).toBeInTheDocument();
+
+    fireEvent.change(screen.getByLabelText('Search studies'), { target: { value: 'Jordan' } });
+
+    await waitFor(() => {
+      expect(screen.queryByText(/Patient: Pat One/i)).not.toBeInTheDocument();
+      expect(screen.getByText(/Patient: Jordan Case/i)).toBeInTheDocument();
+    });
+
+    fireEvent.change(screen.getByLabelText('Filter by status'), { target: { value: 'requested' } });
+
+    await waitFor(() => {
+      expect(screen.getByText(/No studies match the current worklist filters/i)).toBeInTheDocument();
+    });
+  });
 });
