@@ -1335,23 +1335,28 @@ export const AppDataProvider: React.FC<{ children: React.ReactNode }> = ({ child
         }
       })();
     },
-    addReferral: (referral) => {
-      void (async () => {
-        try {
-          await referralsApi.createReferral({
-            patient_id: Number(referral.patientId),
-            referral_type: referral.referralType,
-            destination_provider_id: Number(referral.destinationProviderId),
-            to_department: referral.toDepartment,
-            to_department_id: referral.toDepartmentId || undefined,
-            reason: referral.reason,
-            notes: referral.notes,
-          });
-          await loadAPIData(true);
-        } catch (e) {
-          console.error('addReferral failed:', e);
-        }
-      })();
+    addReferral: async (referral) => {
+      try {
+        const response = await referralsApi.createReferral({
+          patient_id: Number(referral.patientId),
+          referral_type: referral.referralType,
+          destination_provider_id: Number(referral.destinationProviderId),
+          to_department: referral.toDepartment,
+          to_department_id: referral.toDepartmentId || undefined,
+          reason: referral.reason,
+          notes: referral.notes,
+        });
+
+        setData((current) => ({
+          ...current,
+          referrals: [...current.referrals, mapBackendReferral(response.data)],
+        }));
+
+        await loadAPIData(true);
+      } catch (e) {
+        console.error('addReferral failed:', e);
+        throw e;
+      }
     },
     updateReferral: (id, update) => {
       void (async () => {

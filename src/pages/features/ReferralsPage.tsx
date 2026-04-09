@@ -170,7 +170,7 @@ const ReferralsPage = ({ referralKind = 'hospital' }: ReferralsPageProps) => {
     }
   };
 
-  const handleCreateReferral = () => {
+  const handleCreateReferral = async () => {
     if (effectiveRole !== 'doctor' || !formData.patientId || !formData.destinationProviderId || !formData.toDepartment || !formData.reason.trim()) return;
 
     if (!isReferralDestinationValid(referralKind, formData.toDepartment)) {
@@ -183,40 +183,45 @@ const ReferralsPage = ({ referralKind = 'hospital' }: ReferralsPageProps) => {
     if (!patient || !destinationProvider) return;
 
     const today = new Date().toLocaleDateString('en-CA');
-    addReferral({
-      id: `ref-${crypto.randomUUID()}`,
-      referralType: referralKind,
-      patientId: patient.id,
-      patientName: patient.name,
-      fromDoctorId: user.id,
-      fromDoctorName: user.name,
-      destinationProviderId: destinationProvider.id,
-      destinationProviderName: destinationProvider.name,
-      destinationProviderRole: destinationProvider.role === 'pharmacy' ? 'pharmacy' : referralKind,
-      toDepartmentId: destinationProvider.id || getReferralDepartmentId(destinationProvider.name),
-      toDepartment: destinationProvider.name,
-      reason: formData.reason.trim(),
-      date: today,
-      status: 'pending',
-      lastUpdated: today,
-      notes: formData.notes.trim() || undefined,
-    });
+    try {
+      await addReferral({
+        id: `ref-${crypto.randomUUID()}`,
+        referralType: referralKind,
+        patientId: patient.id,
+        patientName: patient.name,
+        fromDoctorId: user.id,
+        fromDoctorName: user.name,
+        destinationProviderId: destinationProvider.id,
+        destinationProviderName: destinationProvider.name,
+        destinationProviderRole: destinationProvider.role === 'pharmacy' ? 'pharmacy' : referralKind,
+        toDepartmentId: destinationProvider.id || getReferralDepartmentId(destinationProvider.name),
+        toDepartment: destinationProvider.name,
+        reason: formData.reason.trim(),
+        date: today,
+        status: 'pending',
+        lastUpdated: today,
+        notes: formData.notes.trim() || undefined,
+      });
 
-    const path = dashboardPathForReferralType(referralKind);
-    addNotification({
-      title: 'New referral submitted',
-      message: `${patient.name} — ${referralKindLabel(referralKind)} to ${destinationProvider.name}.`,
-      type: 'system',
-      priority: 'medium',
-      audience: 'personal',
-      targetEmails: destinationProvider.email ? [destinationProvider.email] : undefined,
-      targetRoles: destinationProvider.email ? undefined : coordinatorRolesForType(referralKind),
-      actionUrl: path,
-      actionLabel: 'Review referrals',
-    });
-    setFormError(null);
-    setFormData({ patientId: '', destinationProviderId: '', toDepartment: '', reason: '', notes: '' });
-    setShowForm(false);
+      const path = dashboardPathForReferralType(referralKind);
+      addNotification({
+        title: 'New referral submitted',
+        message: `${patient.name} — ${referralKindLabel(referralKind)} to ${destinationProvider.name}.`,
+        type: 'system',
+        priority: 'medium',
+        audience: 'personal',
+        targetEmails: destinationProvider.email ? [destinationProvider.email] : undefined,
+        targetRoles: destinationProvider.email ? undefined : coordinatorRolesForType(referralKind),
+        actionUrl: path,
+        actionLabel: 'Review referrals',
+      });
+      setFormError(null);
+      setFormData({ patientId: '', destinationProviderId: '', toDepartment: '', reason: '', notes: '' });
+      setShowForm(false);
+    } catch (error) {
+      setFormError('Unable to submit referral. Please try again.');
+      console.error('handleCreateReferral failed:', error);
+    }
   };
 
   const getStatusColor = (status: string) => {

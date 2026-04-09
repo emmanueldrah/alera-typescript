@@ -54,7 +54,7 @@ export interface AppDataContextType {
   addAmbulance: (ambulance: AmbulanceVehicle) => void;
   updateAmbulance: (id: string, update: (ambulance: AmbulanceVehicle) => AmbulanceVehicle) => void;
   deleteAmbulance: (id: string) => void;
-  addReferral: (referral: Referral) => void;
+  addReferral: (referral: Referral) => Promise<void>;
   updateReferral: (id: string, update: (referral: Referral) => Referral) => void;
   addProviderVerification: (verification: ProviderVerification) => void;
   updateProviderVerification: (id: string, update: (verification: ProviderVerification) => ProviderVerification) => void;
