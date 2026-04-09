@@ -55,6 +55,40 @@ export interface StructuredRecordResponse<T = Record<string, unknown>> {
   updated_at: string;
 }
 
+export interface ImagingFileAsset {
+  file_id: string;
+  filename: string;
+  mime_type: string;
+  file_size: number;
+  upload_time?: string | null;
+  download_url?: string | null;
+}
+
+export interface ImagingScanApiResponse {
+  id: number;
+  patient_id: number;
+  ordered_by: number;
+  destination_provider_id?: number | null;
+  destination_provider_name?: string | null;
+  processed_by?: number | null;
+  scan_type: string;
+  body_part?: string | null;
+  clinical_indication?: string | null;
+  status: string;
+  findings?: string | null;
+  impression?: string | null;
+  report_url?: string | null;
+  image_url?: string | null;
+  report_file?: ImagingFileAsset | null;
+  image_files?: ImagingFileAsset[];
+  scheduled_at?: string | null;
+  ordered_at: string;
+  completed_at?: string | null;
+  created_at: string;
+  patient_name?: string | null;
+  ordered_by_name?: string | null;
+}
+
 /** Row from `GET /api/admin/users/` (matches backend UserResponse). */
 export interface AdminUserRow {
   id: number;
@@ -881,6 +915,31 @@ export const imagingApi = {
 
   updateImagingScan: async (id: string | number, updateData: Record<string, unknown>) => {
     const response = await apiClient.put(`/imaging/${id}`, updateData);
+    return response.data;
+  },
+
+  uploadImagingResults: async (
+    id: string | number,
+    payload: {
+      findings?: string;
+      impression?: string;
+      status?: string;
+      reportFile?: File | null;
+      imageFiles?: File[];
+    },
+  ) => {
+    const formData = new FormData();
+    if (payload.findings?.trim()) formData.append('findings', payload.findings.trim());
+    if (payload.impression?.trim()) formData.append('impression', payload.impression.trim());
+    if (payload.status?.trim()) formData.append('status', payload.status.trim());
+    if (payload.reportFile) formData.append('report_file', payload.reportFile);
+    for (const file of payload.imageFiles ?? []) {
+      formData.append('image_files', file);
+    }
+
+    const response = await apiClient.post(`/imaging/${id}/results`, formData, {
+      headers: { 'Content-Type': 'multipart/form-data' },
+    });
     return response.data;
   },
 

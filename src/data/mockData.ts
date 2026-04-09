@@ -297,6 +297,28 @@ export interface ImagingScan {
   results?: string;
   centerId?: string;
   bodyPart?: string;
+  clinicalIndication?: string;
+  impression?: string;
+  reportUrl?: string;
+  imageUrl?: string;
+  reportFile?: {
+    fileId: string;
+    filename: string;
+    mimeType: string;
+    fileSize: number;
+    uploadTime?: string;
+    downloadUrl?: string;
+  };
+  imageFiles?: Array<{
+    fileId: string;
+    filename: string;
+    mimeType: string;
+    fileSize: number;
+    uploadTime?: string;
+    downloadUrl?: string;
+  }>;
+  scheduledAt?: string;
+  completedAt?: string;
 }
 
 export interface AmbulanceRequest {

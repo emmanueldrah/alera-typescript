@@ -2,7 +2,7 @@ import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import type { AmbulanceRequest, Appointment, ImagingScan, LabTest, Prescription, VitalSigns, HealthMetric, InventoryItem, AmbulanceVehicle, Referral, ProviderVerification, PatientAllergy, PatientMedicalHistory, PatientConsent, DrugInteraction, ClinicalNote, PatientProblem, MedicationAdherence, ProviderPricing, ServiceCharge, Invoice, BillingRecord, AppointmentReminder } from '@/data/mockData';
 import { drugInteractionDatabase } from '@/data/drugInteractionReference';
 import { AppDataContext, type AppDataContextType } from './app-data-context';
-import { appointmentsApi, prescriptionsApi, allergiesApi, api, referralsApi, recordsApi, ambulanceApi } from '@/lib/apiService';
+import { appointmentsApi, prescriptionsApi, allergiesApi, api, referralsApi, recordsApi, ambulanceApi, type ImagingFileAsset } from '@/lib/apiService';
 import { useAuth } from './useAuth';
 import { buildScheduledIso } from '@/lib/appointmentUtils';
 import { getReferralDepartmentId } from '@/lib/referralUtils';
@@ -159,6 +159,8 @@ type BackendImagingScan = {
   destination_provider_name?: string | null;
   patient_name?: string | null;
   ordered_by_name?: string | null;
+  report_file?: ImagingFileAsset | null;
+  image_files?: ImagingFileAsset[];
 };
 
 type BackendReferral = {
@@ -358,10 +360,34 @@ const mapBackendImagingScan = (scan: BackendImagingScan): ImagingScan => ({
   centerId: scan.destination_provider_id ? String(scan.destination_provider_id) : undefined,
   destinationProviderName: scan.destination_provider_name?.trim() || undefined,
   scanType: scan.scan_type as ImagingScan['scanType'],
-  bodyPart: scan.body_part || 'Unspecified',
+  bodyPart: scan.body_part || undefined,
+  clinicalIndication: scan.clinical_indication || undefined,
   date: scan.ordered_at.slice(0, 10),
   status: mapBackendImagingStatus(scan.status),
-  results: scan.findings,
+  results: scan.findings || undefined,
+  impression: scan.impression || undefined,
+  reportUrl: scan.report_url || undefined,
+  imageUrl: scan.image_url || undefined,
+  reportFile: scan.report_file
+    ? {
+        fileId: scan.report_file.file_id,
+        filename: scan.report_file.filename,
+        mimeType: scan.report_file.mime_type,
+        fileSize: scan.report_file.file_size,
+        uploadTime: scan.report_file.upload_time || undefined,
+        downloadUrl: scan.report_file.download_url || undefined,
+      }
+    : undefined,
+  imageFiles: (scan.image_files || []).map((file) => ({
+    fileId: file.file_id,
+    filename: file.filename,
+    mimeType: file.mime_type,
+    fileSize: file.file_size,
+    uploadTime: file.upload_time || undefined,
+    downloadUrl: file.download_url || undefined,
+  })),
+  scheduledAt: scan.scheduled_at || undefined,
+  completedAt: scan.completed_at || undefined,
 });
 
 const mapBackendReferral = (r: BackendReferral): Referral => {
@@ -1096,7 +1122,7 @@ export const AppDataProvider: React.FC<{ children: React.ReactNode }> = ({ child
             destination_provider_id: Number(scan.centerId),
             scan_type: scan.scanType,
             body_part: scan.bodyPart || undefined,
-            clinical_indication: undefined,
+            clinical_indication: scan.clinicalIndication || undefined,
           });
           await loadAPIData(true);
         } catch (e) {

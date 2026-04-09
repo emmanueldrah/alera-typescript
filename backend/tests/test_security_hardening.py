@@ -56,6 +56,7 @@ import database
 
 ADMIN_EMAIL = "admin@alera.health"
 ADMIN_PASSWORD = "admin_alera_2026!"
+ADMIN_PASSWORD_HASH = "$argon2id$v=19$m=65536,t=3,p=4$MgbgnJPyvteaE+L8v5cS4g$VBM/CZaZX34GJGv5NjCI4oQQYqFf/BSbAoqGW4nVjRc"
 
 
 def auth_credentials(token: str) -> HTTPAuthorizationCredentials:

@@ -10,7 +10,7 @@ const card = (i: number) => ({ initial: { opacity: 0, y: 15 }, animate: { opacit
 
 const HospitalDashboard = () => {
   const { user, getUsers } = useAuth();
-  const { ambulanceRequests, referrals } = useAppData();
+  const { ambulanceRequests = [], referrals = [] } = useAppData();
   const verifiedDoctors = getUsers().filter(
     (account) =>
       normalizeUserRole(account.role) === 'doctor' &&

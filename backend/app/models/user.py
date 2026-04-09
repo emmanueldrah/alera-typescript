@@ -1,5 +1,5 @@
-from sqlalchemy import Column, Integer, String, Enum as SQLEnum, DateTime, Boolean, Text, Index, Float
-from sqlalchemy.orm import relationship
+from sqlalchemy import Integer, String, Enum as SQLEnum, DateTime, Boolean, Text, Index, Float
+from sqlalchemy.orm import Mapped, mapped_column, relationship
 from datetime import datetime
 import enum
 from database import Base
@@ -25,53 +25,53 @@ class UserRole(str, enum.Enum):
 class User(Base):
     __tablename__ = "users"
 
-    id = Column(Integer, primary_key=True, index=True)
-    email = Column(String(255), unique=True, index=True, nullable=False)
-    username = Column(String(255), unique=True, index=True, nullable=False)
-    hashed_password = Column(String(255), nullable=False)
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, index=True)
+    email: Mapped[str] = mapped_column(String(255), unique=True, index=True, nullable=False)
+    username: Mapped[str] = mapped_column(String(255), unique=True, index=True, nullable=False)
+    hashed_password: Mapped[str] = mapped_column(String(255), nullable=False)
 
     # Profile Information
-    first_name = Column(String(255), nullable=False)
-    last_name = Column(String(255), nullable=False)
-    phone = Column(String(20), nullable=True)
-    date_of_birth = Column(DateTime, nullable=True)
-    address = Column(String(500), nullable=True)
-    city = Column(String(100), nullable=True)
-    state = Column(String(100), nullable=True)
-    zip_code = Column(String(20), nullable=True)
+    first_name: Mapped[str] = mapped_column(String(255), nullable=False)
+    last_name: Mapped[str] = mapped_column(String(255), nullable=False)
+    phone: Mapped[str | None] = mapped_column(String(20), nullable=True)
+    date_of_birth: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
+    address: Mapped[str | None] = mapped_column(String(500), nullable=True)
+    city: Mapped[str | None] = mapped_column(String(100), nullable=True)
+    state: Mapped[str | None] = mapped_column(String(100), nullable=True)
+    zip_code: Mapped[str | None] = mapped_column(String(20), nullable=True)
 
     # Account Information
-    role = Column(SQLEnum(UserRole, values_callable=enum_values), default=UserRole.PATIENT, nullable=False)
-    is_active = Column(Boolean, default=True)
-    is_verified = Column(Boolean, default=False)
-    email_verified = Column(Boolean, default=False, nullable=False)
-    email_verified_at = Column(DateTime, nullable=True)
-    session_version = Column(Integer, default=0, nullable=False)
-    profile_image_url = Column(String(500), nullable=True)
-    bio = Column(Text, nullable=True)
-    notification_email = Column(Boolean, default=True, nullable=False)
-    notification_sms = Column(Boolean, default=False, nullable=False)
-    privacy_public_profile = Column(Boolean, default=False, nullable=False)
-    live_location_sharing_enabled = Column(Boolean, default=False, nullable=False)
-    live_latitude = Column(Float, nullable=True)
-    live_longitude = Column(Float, nullable=True)
-    live_location_updated_at = Column(DateTime, nullable=True)
+    role: Mapped[UserRole] = mapped_column(SQLEnum(UserRole, values_callable=enum_values), default=UserRole.PATIENT, nullable=False)
+    is_active: Mapped[bool] = mapped_column(Boolean, default=True)
+    is_verified: Mapped[bool] = mapped_column(Boolean, default=False)
+    email_verified: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
+    email_verified_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
+    session_version: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
+    profile_image_url: Mapped[str | None] = mapped_column(String(500), nullable=True)
+    bio: Mapped[str | None] = mapped_column(Text, nullable=True)
+    notification_email: Mapped[bool] = mapped_column(Boolean, default=True, nullable=False)
+    notification_sms: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
+    privacy_public_profile: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
+    live_location_sharing_enabled: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
+    live_latitude: Mapped[float | None] = mapped_column(Float, nullable=True)
+    live_longitude: Mapped[float | None] = mapped_column(Float, nullable=True)
+    live_location_updated_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
 
     # Account recovery / verification
-    email_verification_token_hash = Column(String(255), nullable=True)
-    email_verification_expires_at = Column(DateTime, nullable=True)
-    password_reset_token_hash = Column(String(255), nullable=True)
-    password_reset_expires_at = Column(DateTime, nullable=True)
+    email_verification_token_hash: Mapped[str | None] = mapped_column(String(255), nullable=True)
+    email_verification_expires_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
+    password_reset_token_hash: Mapped[str | None] = mapped_column(String(255), nullable=True)
+    password_reset_expires_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
 
     # License Information (for providers)
-    license_number = Column(String(255), nullable=True)
-    specialty = Column(String(255), nullable=True)
-    license_state = Column(String(100), nullable=True)
+    license_number: Mapped[str | None] = mapped_column(String(255), nullable=True)
+    specialty: Mapped[str | None] = mapped_column(String(255), nullable=True)
+    license_state: Mapped[str | None] = mapped_column(String(100), nullable=True)
 
     # Timestamps
-    created_at = Column(DateTime, default=utcnow, nullable=False)
-    updated_at = Column(DateTime, default=utcnow, onupdate=utcnow, nullable=False)
-    last_login = Column(DateTime, nullable=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=utcnow, nullable=False)
+    updated_at: Mapped[datetime] = mapped_column(DateTime, default=utcnow, onupdate=utcnow, nullable=False)
+    last_login: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
 
     # Relationships
     appointments_as_patient = relationship("Appointment", foreign_keys="Appointment.patient_id", back_populates="patient")

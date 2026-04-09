@@ -2,7 +2,6 @@ from fastapi import APIRouter, Depends, HTTPException, Query, status
 from sqlalchemy.orm import Session
 from database import get_db
 from app.models import Referral, User, UserRole
-from app.models.appointment import Appointment
 from app.models.referral import (
     REFERRAL_TYPE_HOSPITAL,
     REFERRAL_TYPE_IMAGING,
@@ -12,11 +11,12 @@ from app.models.referral import (
 from app.schemas import ReferralCreate, ReferralUpdate, ReferralResponse
 from app.schemas import REFERRAL_TYPE_VALUES
 from app.utils.dependencies import get_current_user
-from app.utils.access import require_verified_workforce_member
+from app.utils.access import require_provider_panel_access, require_verified_workforce_member
 
 router = APIRouter(prefix="/api/referrals", tags=["referrals"])
 
 ALLOWED_TYPES = set(REFERRAL_TYPE_VALUES)
+ALLOWED_STATUSES = {"pending", "accepted", "completed", "cancelled"}
 
 
 def _display_name(user: User | None) -> str | None:
@@ -34,16 +34,6 @@ def _expected_destination_role(referral_type: str) -> UserRole:
     if referral_type == REFERRAL_TYPE_PHARMACY:
         return UserRole.PHARMACIST
     return UserRole.HOSPITAL
-
-
-def _provider_panel_patient_ids(db: Session, provider_id: int) -> set[int]:
-    rows = (
-        db.query(Appointment.patient_id)
-        .filter(Appointment.provider_id == provider_id)
-        .distinct()
-        .all()
-    )
-    return {r[0] for r in rows}
 
 
 def referral_to_response(ref: Referral, db: Session) -> ReferralResponse:
@@ -83,6 +73,31 @@ def _normalize_type(raw: str) -> str:
             detail=f"referral_type must be one of: {', '.join(sorted(ALLOWED_TYPES))}",
         )
     return t
+
+
+def _normalize_status(raw: str) -> str:
+    value = (raw or "").strip().lower()
+    if value not in ALLOWED_STATUSES:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=f"status must be one of: {', '.join(sorted(ALLOWED_STATUSES))}",
+        )
+    return value
+
+
+def _validate_destination_status_change(current_status: str, next_status: str) -> None:
+    if next_status == current_status:
+        return
+    if current_status == "pending" and next_status == "accepted":
+        return
+    if current_status == "accepted" and next_status == "completed":
+        return
+    if next_status == "cancelled" and current_status in {"pending", "accepted"}:
+        return
+    raise HTTPException(
+        status_code=status.HTTP_400_BAD_REQUEST,
+        detail=f"Cannot change referral status from {current_status} to {next_status}",
+    )
 
 
 def _apply_list_type_filter(query, current_user: User, referral_type: str | None):
@@ -164,11 +179,7 @@ async def create_referral(
         )
 
     if current_user.role == UserRole.PROVIDER:
-        if body.patient_id not in _provider_panel_patient_ids(db, current_user.id):
-            raise HTTPException(
-                status_code=status.HTTP_403_FORBIDDEN,
-                detail="You can only refer patients you have an appointment with",
-            )
+        require_provider_panel_access(db, current_user.id, body.patient_id, "create referrals")
 
     ref = Referral(
         patient_id=body.patient_id,
@@ -342,7 +353,10 @@ async def update_referral(
                 detail="Only pending referrals can be cancelled",
             )
     elif current_user.role in (UserRole.HOSPITAL, UserRole.LABORATORY, UserRole.IMAGING, UserRole.PHARMACIST):
-        pass
+        if "status" in data and data["status"] is not None:
+            next_status = _normalize_status(data["status"])
+            _validate_destination_status_change(ref.status, next_status)
+            data["status"] = next_status
     else:
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Not authorized")
 

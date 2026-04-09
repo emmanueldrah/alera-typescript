@@ -1,6 +1,6 @@
 import { useMemo, useState } from 'react';
 import { motion } from 'framer-motion';
-import { ScanLine, Upload, Plus, X, Inbox, Calendar, Trash2 } from 'lucide-react';
+import { Calendar, Download, FileImage, FileText, Inbox, Plus, ScanLine, Trash2, Upload, X } from 'lucide-react';
 import { useSearchParams } from 'react-router-dom';
 import { useAuth } from '@/contexts/useAuth';
 import { useAppData } from '@/contexts/useAppData';
@@ -14,6 +14,26 @@ import { api } from '@/lib/apiService';
 
 const SCAN_TYPES: ImagingScan['scanType'][] = ['X-Ray', 'MRI', 'CT Scan', 'Ultrasound', 'PET Scan', 'DEXA Scan'];
 
+const formatDateTime = (value?: string) => {
+  if (!value) return null;
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return value;
+  return date.toLocaleString([], {
+    year: 'numeric',
+    month: 'short',
+    day: 'numeric',
+    hour: '2-digit',
+    minute: '2-digit',
+  });
+};
+
+const formatFileSize = (bytes?: number) => {
+  if (!bytes || bytes <= 0) return null;
+  if (bytes < 1024) return `${bytes} B`;
+  if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`;
+  return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
+};
+
 const ImagingPage = () => {
   const { user, getUsers } = useAuth();
   const { appointments, imagingScans, addImagingScan, updateImagingScan, refreshAppData } = useAppData();
@@ -21,9 +41,23 @@ const ImagingPage = () => {
   const [searchParams] = useSearchParams();
   const [showUpload, setShowUpload] = useState<string | null>(null);
   const [showOrder, setShowOrder] = useState(false);
-  const [uploadResult, setUploadResult] = useState('');
-  const [orderForm, setOrderForm] = useState({ patientId: '', centerId: '', scanType: '' as ImagingScan['scanType'] | '', bodyPart: '' });
   const [deleteId, setDeleteId] = useState<string | null>(null);
+  const [uploadingId, setUploadingId] = useState<string | null>(null);
+  const [schedulingId, setSchedulingId] = useState<string | null>(null);
+  const [scheduleValue, setScheduleValue] = useState('');
+  const [orderForm, setOrderForm] = useState({
+    patientId: '',
+    centerId: '',
+    scanType: '' as ImagingScan['scanType'] | '',
+    bodyPart: '',
+    clinicalIndication: '',
+  });
+  const [uploadForm, setUploadForm] = useState({
+    findings: '',
+    impression: '',
+    reportFile: null as File | null,
+    imageFiles: [] as File[],
+  });
   const focusId = searchParams.get('focus');
   const effectiveRole = normalizeUserRole(user?.role) ?? user?.role;
   const currentPage = user?.role === 'imaging' ? 'scan-requests' : effectiveRole === 'doctor' ? 'imaging-referrals' : 'imaging';
@@ -36,39 +70,68 @@ const ImagingPage = () => {
     [imagingScans, user],
   );
 
-  const handleUpload = (id: string) => {
-    if (!uploadResult.trim()) return;
-    const target = imagingScans.find((scan) => scan.id === id);
-    updateImagingScan(id, (scan) => ({ ...scan, status: 'completed' as const, results: uploadResult }));
-    if (target) {
-      const doctorEmail = users.find((account) => account.id === target.doctorId)?.email;
-      const patientEmail = users.find((account) => account.id === target.patientId)?.email;
+  const resetUploadForm = () => {
+    setShowUpload(null);
+    setUploadForm({
+      findings: '',
+      impression: '',
+      reportFile: null,
+      imageFiles: [],
+    });
+  };
+
+  const handleUpload = async (scan: ImagingScan) => {
+    const hasPayload =
+      uploadForm.findings.trim() ||
+      uploadForm.impression.trim() ||
+      uploadForm.reportFile ||
+      uploadForm.imageFiles.length > 0;
+
+    if (!hasPayload) return;
+
+    setUploadingId(scan.id);
+    try {
+      await api.imaging.uploadImagingResults(scan.id, {
+        findings: uploadForm.findings,
+        impression: uploadForm.impression,
+        status: 'completed',
+        reportFile: uploadForm.reportFile,
+        imageFiles: uploadForm.imageFiles,
+      });
+      await refreshAppData();
+
+      const doctorEmail = users.find((account) => account.id === scan.doctorId)?.email;
+      const patientEmail = users.find((account) => account.id === scan.patientId)?.email;
       addNotification({
         title: 'Imaging Result Uploaded',
-        message: `${target.scanType}${target.bodyPart ? ' (' + target.bodyPart + ')' : ''} for ${target.patientName} is now complete.`,
+        message: `${scan.scanType}${scan.bodyPart ? ` (${scan.bodyPart})` : ''} for ${scan.patientName} is now complete.`,
         type: 'result',
         priority: 'high',
         audience: 'personal',
-        actionUrl: `/dashboard/${currentPage}?focus=${target.id}`,
+        actionUrl: `/dashboard/${currentPage}?focus=${scan.id}`,
         actionLabel: 'Open result',
         targetEmails: [doctorEmail, patientEmail].filter((value): value is string => Boolean(value)),
         excludeEmails: user?.email ? [user.email] : [],
         actionUrlByRole: {
-          imaging: `/dashboard/scan-requests?focus=${target.id}`,
-          doctor: `/dashboard/imaging-referrals?focus=${target.id}`,
-          patient: `/dashboard/imaging?focus=${target.id}`,
+          imaging: `/dashboard/scan-requests?focus=${scan.id}`,
+          doctor: `/dashboard/imaging-referrals?focus=${scan.id}`,
+          patient: `/dashboard/imaging?focus=${scan.id}`,
         },
       });
+      resetUploadForm();
+    } catch (error) {
+      console.error('Failed to upload imaging results:', error);
+    } finally {
+      setUploadingId(null);
     }
-    setShowUpload(null);
-    setUploadResult('');
   };
 
-  const handleOrder = () => {
+  const handleOrder = async () => {
     if (!orderForm.patientId || !orderForm.centerId || !orderForm.scanType) return;
     const patient = patientOptions.find((option) => option.id === orderForm.patientId);
     const center = imagingCenterOptions.find((option) => option.id === orderForm.centerId);
     if (!patient || !center) return;
+
     const scan: ImagingScan = {
       id: `img-${Date.now()}`,
       patientName: patient.name,
@@ -78,36 +141,54 @@ const ImagingPage = () => {
       centerId: center.id,
       destinationProviderName: center.name,
       scanType: orderForm.scanType as ImagingScan['scanType'],
-      bodyPart: orderForm.bodyPart,
+      bodyPart: orderForm.bodyPart.trim() || undefined,
+      clinicalIndication: orderForm.clinicalIndication.trim() || undefined,
       date: new Date().toISOString().split('T')[0],
       status: 'requested',
-      centerId: undefined,
     };
+
     addImagingScan(scan);
     addNotification({
       title: 'Imaging Ordered',
-      message: `${orderForm.scanType}${orderForm.bodyPart ? ' (' + orderForm.bodyPart + ')' : ''} was requested for ${patient.name} and sent to ${center.name}.`,
+      message: `${orderForm.scanType}${orderForm.bodyPart ? ` (${orderForm.bodyPart})` : ''} was requested for ${patient.name} and sent to ${center.name}.`,
       type: 'result',
       priority: 'medium',
       audience: 'personal',
-      actionUrl: `/dashboard/imaging-referrals?focus=${scan.id}`,
+      actionUrl: `/dashboard/imaging-referrals`,
       actionLabel: 'Open order',
       targetEmails: [user?.email, patient.email, center.email].filter((value): value is string => Boolean(value)),
       excludeEmails: user?.email ? [user.email] : [],
       actionUrlByRole: {
-        doctor: `/dashboard/imaging-referrals?focus=${scan.id}`,
-        imaging: `/dashboard/scan-requests?focus=${scan.id}`,
+        doctor: '/dashboard/imaging-referrals',
+        imaging: '/dashboard/scan-requests',
+        patient: '/dashboard/imaging',
       },
     });
     setShowOrder(false);
-    setOrderForm({ patientId: '', centerId: '', scanType: '', bodyPart: '' });
+    setOrderForm({ patientId: '', centerId: '', scanType: '', bodyPart: '', clinicalIndication: '' });
   };
 
   const handleStatusChange = (id: string, status: ImagingScan['status']) => {
     updateImagingScan(id, (scan) => ({ ...scan, status }));
     if (showUpload === id && status !== 'completed') {
-      setShowUpload(null);
-      setUploadResult('');
+      resetUploadForm();
+    }
+  };
+
+  const handleSchedule = async (scanId: string) => {
+    if (!scheduleValue) return;
+    setSchedulingId(scanId);
+    try {
+      await api.imaging.updateImagingScan(scanId, {
+        scheduled_at: new Date(scheduleValue).toISOString(),
+        status: 'scheduled',
+      });
+      await refreshAppData();
+      setSchedulingId(null);
+      setScheduleValue('');
+    } catch (error) {
+      console.error('Failed to schedule imaging scan:', error);
+      setSchedulingId(null);
     }
   };
 
@@ -133,7 +214,7 @@ const ImagingPage = () => {
             {user?.role === 'imaging' ? 'Scan Requests' : effectiveRole === 'doctor' ? 'Imaging Referrals' : 'Imaging Results'}
           </h1>
           <p className="text-muted-foreground mt-1">
-            {user?.role === 'imaging' ? 'Process and upload scan results' : effectiveRole === 'doctor' ? 'Order imaging scans' : 'View your imaging results'}
+            {user?.role === 'imaging' ? 'Schedule studies, process scans, and publish reports' : effectiveRole === 'doctor' ? 'Order medical imaging and track active studies' : 'View your imaging results and downloadable reports'}
           </p>
         </div>
         {effectiveRole === 'doctor' && (
@@ -143,7 +224,6 @@ const ImagingPage = () => {
         )}
       </div>
 
-      {/* Order Form */}
       {showOrder && (
         <motion.div initial={{ opacity: 0, y: -10 }} animate={{ opacity: 1, y: 0 }} className="bg-card rounded-2xl border border-border p-6">
           <div className="flex items-center justify-between mb-4">
@@ -156,6 +236,7 @@ const ImagingPage = () => {
             <div>
               <label className="text-sm font-medium text-card-foreground mb-1.5 block">Patient</label>
               <select
+                aria-label="Patient"
                 value={orderForm.patientId}
                 onChange={(e) => setOrderForm({ ...orderForm, patientId: e.target.value })}
                 className="w-full h-11 px-4 rounded-xl border border-input bg-background text-foreground focus:outline-none focus:ring-2 focus:ring-primary/30"
@@ -169,12 +250,13 @@ const ImagingPage = () => {
             <div>
               <label className="text-sm font-medium text-card-foreground mb-1.5 block">Scan Type</label>
               <select
+                aria-label="Scan Type"
                 value={orderForm.scanType}
-                onChange={(e) => setOrderForm({ ...orderForm, scanType: e.target.value })}
+                onChange={(e) => setOrderForm({ ...orderForm, scanType: e.target.value as ImagingScan['scanType'] | '' })}
                 className="w-full h-11 px-4 rounded-xl border border-input bg-background text-foreground focus:outline-none focus:ring-2 focus:ring-primary/30"
               >
                 <option value="">Select scan type</option>
-                {SCAN_TYPES.map(type => (
+                {SCAN_TYPES.map((type) => (
                   <option key={type} value={type}>{type}</option>
                 ))}
               </select>
@@ -182,6 +264,7 @@ const ImagingPage = () => {
             <div>
               <label className="text-sm font-medium text-card-foreground mb-1.5 block">Imaging Center</label>
               <select
+                aria-label="Imaging Center"
                 value={orderForm.centerId}
                 onChange={(e) => setOrderForm({ ...orderForm, centerId: e.target.value })}
                 className="w-full h-11 px-4 rounded-xl border border-input bg-background text-foreground focus:outline-none focus:ring-2 focus:ring-primary/30"
@@ -192,18 +275,30 @@ const ImagingPage = () => {
                 ))}
               </select>
             </div>
-            <div className="md:col-span-2">
-              <label className="text-sm font-medium text-card-foreground mb-1.5 block">Body Part / Area (Optional)</label>
+            <div>
+              <label className="text-sm font-medium text-card-foreground mb-1.5 block">Body Part / Area</label>
               <input
+                aria-label="Body Part / Area"
                 value={orderForm.bodyPart}
                 onChange={(e) => setOrderForm({ ...orderForm, bodyPart: e.target.value })}
                 placeholder="e.g., Chest, Knee, Head"
                 className="w-full h-11 px-4 rounded-xl border border-input bg-background text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-primary/30"
               />
             </div>
+            <div className="md:col-span-2">
+              <label className="text-sm font-medium text-card-foreground mb-1.5 block">Clinical Indication</label>
+              <textarea
+                aria-label="Clinical Indication"
+                value={orderForm.clinicalIndication}
+                onChange={(e) => setOrderForm({ ...orderForm, clinicalIndication: e.target.value })}
+                rows={3}
+                placeholder="Why is this study being ordered? Include symptoms, suspected diagnosis, or clinical question."
+                className="w-full px-4 py-3 rounded-xl border border-input bg-background text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-primary/30 resize-none"
+              />
+            </div>
           </div>
           <button
-            onClick={handleOrder}
+            onClick={() => void handleOrder()}
             disabled={!orderForm.patientId || !orderForm.centerId || !orderForm.scanType}
             className="mt-4 px-6 py-2.5 rounded-xl bg-gradient-primary text-primary-foreground text-sm font-semibold hover:opacity-90 transition disabled:opacity-50 disabled:cursor-not-allowed"
           >
@@ -212,7 +307,6 @@ const ImagingPage = () => {
         </motion.div>
       )}
 
-      {/* Scans List */}
       {visibleScans.length === 0 ? (
         <div className="flex flex-col items-center justify-center py-12 text-muted-foreground">
           <Inbox className="w-10 h-10 mb-3" />
@@ -220,131 +314,278 @@ const ImagingPage = () => {
         </div>
       ) : (
         <div className="space-y-3">
-          {visibleScans.map((scan, index) => (
-            <motion.div
-              key={scan.id}
-              {...card(index)}
-              className={`bg-card rounded-2xl border p-5 ${focusId === scan.id ? 'border-primary ring-2 ring-primary/20' : 'border-border'}`}
-            >
-              <div className="flex items-start justify-between">
-                <div className="flex items-start gap-4 flex-1">
-                  <div
-                    className={`w-12 h-12 rounded-xl flex items-center justify-center shrink-0 ${
-                      scan.status === 'completed' ? 'bg-success/10 text-success' : 'bg-primary/10 text-primary'
-                    }`}
-                  >
-                    <ScanLine className="w-6 h-6" />
-                  </div>
-                  <div className="flex-1">
-                    <div className="text-base font-semibold text-foreground">
-                      {scan.scanType}
-                      {scan.bodyPart && <span className="text-muted-foreground font-normal text-sm ml-2">({scan.bodyPart})</span>}
-                    </div>
-                    <div className="text-sm text-muted-foreground mt-1">Patient: {scan.patientName}</div>
-                    <div className="text-sm text-muted-foreground">Doctor: {scan.doctorName}</div>
-                    {scan.destinationProviderName ? <div className="text-xs text-muted-foreground">Imaging center: {scan.destinationProviderName}</div> : null}
-                    <div className="flex items-center gap-2 text-xs text-muted-foreground mt-1">
-                      <Calendar className="w-3 h-3" /> {scan.date}
-                    </div>
+          {visibleScans.map((scan, index) => {
+            const reportDownloadUrl = scan.reportFile?.downloadUrl || scan.reportUrl;
+            const canUpload = user?.role === 'imaging' && scan.status !== 'completed' && scan.status !== 'cancelled';
+            const canCancel = (user?.role === 'imaging' || effectiveRole === 'doctor') && scan.status !== 'completed' && scan.status !== 'cancelled';
+            const canDelete = effectiveRole === 'doctor';
 
-                    {scan.results && (
-                      <div className="mt-3 p-3 rounded-lg bg-success/5 border border-success/10">
-                        <div className="text-xs font-medium text-success mb-1">Results Available</div>
-                        <p className="text-sm text-card-foreground">{scan.results}</p>
+            return (
+              <motion.div
+                key={scan.id}
+                {...card(index)}
+                className={`bg-card rounded-2xl border p-5 ${focusId === scan.id ? 'border-primary ring-2 ring-primary/20' : 'border-border'}`}
+              >
+                <div className="flex items-start justify-between gap-4">
+                  <div className="flex items-start gap-4 flex-1">
+                    <div
+                      className={`w-12 h-12 rounded-xl flex items-center justify-center shrink-0 ${
+                        scan.status === 'completed' ? 'bg-success/10 text-success' : 'bg-primary/10 text-primary'
+                      }`}
+                    >
+                      <ScanLine className="w-6 h-6" />
+                    </div>
+                    <div className="flex-1 space-y-2">
+                      <div>
+                        <div className="text-base font-semibold text-foreground">
+                          {scan.scanType}
+                          {scan.bodyPart ? <span className="text-muted-foreground font-normal text-sm ml-2">({scan.bodyPart})</span> : null}
+                        </div>
+                        <div className="text-sm text-muted-foreground mt-1">Patient: {scan.patientName}</div>
+                        <div className="text-sm text-muted-foreground">Doctor: {scan.doctorName}</div>
+                        {scan.destinationProviderName ? <div className="text-xs text-muted-foreground">Imaging center: {scan.destinationProviderName}</div> : null}
                       </div>
-                    )}
+
+                      <div className="flex flex-wrap items-center gap-3 text-xs text-muted-foreground">
+                        <span className="inline-flex items-center gap-1">
+                          <Calendar className="w-3 h-3" /> Ordered {scan.date}
+                        </span>
+                        {scan.scheduledAt ? <span>Scheduled {formatDateTime(scan.scheduledAt)}</span> : null}
+                        {scan.completedAt ? <span>Completed {formatDateTime(scan.completedAt)}</span> : null}
+                      </div>
+
+                      {scan.clinicalIndication ? (
+                        <div className="rounded-lg border border-border/60 bg-secondary/40 px-3 py-2">
+                          <div className="text-xs font-medium text-muted-foreground uppercase tracking-wide">Clinical indication</div>
+                          <p className="mt-1 text-sm text-card-foreground">{scan.clinicalIndication}</p>
+                        </div>
+                      ) : null}
+
+                      {scan.results || scan.impression ? (
+                        <div className="space-y-2 rounded-lg bg-success/5 border border-success/10 p-3">
+                          {scan.results ? (
+                            <div>
+                              <div className="text-xs font-medium text-success mb-1">Findings</div>
+                              <p className="text-sm text-card-foreground whitespace-pre-wrap">{scan.results}</p>
+                            </div>
+                          ) : null}
+                          {scan.impression ? (
+                            <div>
+                              <div className="text-xs font-medium text-success mb-1">Impression</div>
+                              <p className="text-sm text-card-foreground whitespace-pre-wrap">{scan.impression}</p>
+                            </div>
+                          ) : null}
+                        </div>
+                      ) : null}
+
+                      {(reportDownloadUrl || (scan.imageFiles && scan.imageFiles.length > 0)) ? (
+                        <div className="flex flex-wrap gap-2">
+                          {reportDownloadUrl ? (
+                            <a
+                              href={reportDownloadUrl}
+                              target="_blank"
+                              rel="noreferrer"
+                              className="inline-flex items-center gap-2 px-3 py-2 rounded-lg bg-primary/10 text-primary text-xs font-medium hover:bg-primary/20 transition"
+                            >
+                              <FileText className="w-3 h-3" />
+                              {scan.reportFile?.filename || 'Download report'}
+                              {scan.reportFile?.fileSize ? <span className="text-primary/70">({formatFileSize(scan.reportFile.fileSize)})</span> : null}
+                            </a>
+                          ) : null}
+                          {(scan.imageFiles || []).map((file) => (
+                            <a
+                              key={file.fileId}
+                              href={file.downloadUrl || scan.imageUrl}
+                              target="_blank"
+                              rel="noreferrer"
+                              className="inline-flex items-center gap-2 px-3 py-2 rounded-lg bg-secondary text-secondary-foreground text-xs font-medium hover:bg-muted transition"
+                            >
+                              <FileImage className="w-3 h-3" />
+                              {file.filename}
+                              {file.fileSize ? <span className="text-muted-foreground">({formatFileSize(file.fileSize)})</span> : null}
+                            </a>
+                          ))}
+                          {!scan.imageFiles?.length && scan.imageUrl ? (
+                            <a
+                              href={scan.imageUrl}
+                              target="_blank"
+                              rel="noreferrer"
+                              className="inline-flex items-center gap-2 px-3 py-2 rounded-lg bg-secondary text-secondary-foreground text-xs font-medium hover:bg-muted transition"
+                            >
+                              <Download className="w-3 h-3" /> Open study image
+                            </a>
+                          ) : null}
+                        </div>
+                      ) : null}
+                    </div>
+                  </div>
+
+                  <div className="flex flex-col items-end gap-2 shrink-0">
+                    <span
+                      className={`px-3 py-1 rounded-lg text-xs font-medium whitespace-nowrap ${
+                        scan.status === 'requested'
+                          ? 'bg-warning/10 text-warning'
+                          : scan.status === 'in-progress'
+                            ? 'bg-info/10 text-info'
+                            : scan.status === 'cancelled'
+                              ? 'bg-muted text-muted-foreground'
+                              : 'bg-success/10 text-success'
+                      }`}
+                    >
+                      {scan.status === 'requested'
+                        ? 'Pending'
+                        : scan.status === 'in-progress'
+                          ? 'In Progress'
+                          : scan.status === 'cancelled'
+                            ? 'Cancelled'
+                            : 'Completed'}
+                    </span>
+
+                    <div className="flex flex-wrap justify-end gap-2">
+                      {user?.role === 'imaging' && scan.status === 'requested' && (
+                        <button
+                          onClick={() => handleStatusChange(scan.id, 'in-progress')}
+                          className="flex items-center gap-1 px-3 py-1.5 rounded-lg bg-info/10 text-info text-xs font-medium hover:bg-info/20 transition"
+                        >
+                          Start
+                        </button>
+                      )}
+                      {canUpload && (
+                        <button
+                          onClick={() => {
+                            setShowUpload(scan.id);
+                            setUploadForm({
+                              findings: scan.results || '',
+                              impression: scan.impression || '',
+                              reportFile: null,
+                              imageFiles: [],
+                            });
+                          }}
+                          className="flex items-center gap-1 px-3 py-1.5 rounded-lg bg-primary/10 text-primary text-xs font-medium hover:bg-primary/20 transition"
+                        >
+                          <Upload className="w-3 h-3" /> Upload Results
+                        </button>
+                      )}
+                      {canCancel ? (
+                        <button
+                          onClick={() => handleStatusChange(scan.id, 'cancelled')}
+                          className="flex items-center gap-1 px-3 py-1.5 rounded-lg bg-destructive/10 text-destructive text-xs font-medium hover:bg-destructive/20 transition"
+                        >
+                          Cancel
+                        </button>
+                      ) : null}
+                      {canDelete ? (
+                        <button
+                          onClick={() => void handleDelete(scan.id)}
+                          disabled={deleteId === scan.id}
+                          className="flex items-center gap-1 px-3 py-1.5 rounded-lg bg-destructive/10 text-destructive text-xs font-medium hover:bg-destructive/20 transition disabled:opacity-50"
+                        >
+                          <Trash2 className="w-3 h-3" /> {deleteId === scan.id ? 'Deleting...' : 'Delete'}
+                        </button>
+                      ) : null}
+                    </div>
                   </div>
                 </div>
 
-                <div className="flex flex-col items-end gap-2 shrink-0">
-                  <span
-                    className={`px-3 py-1 rounded-lg text-xs font-medium whitespace-nowrap ${
-                      scan.status === 'requested'
-                        ? 'bg-warning/10 text-warning'
-                        : scan.status === 'in-progress'
-                          ? 'bg-info/10 text-info'
-                          : scan.status === 'cancelled'
-                            ? 'bg-muted text-muted-foreground'
-                            : 'bg-success/10 text-success'
-                    }`}
-                  >
-                    {scan.status === 'requested'
-                      ? 'Pending'
-                      : scan.status === 'in-progress'
-                        ? 'In Progress'
-                        : scan.status === 'cancelled'
-                          ? 'Cancelled'
-                          : 'Completed'}
-                  </span>
-                  <div className="flex gap-2">
-                    {user?.role === 'imaging' && scan.status === 'requested' && (
+                {user?.role === 'imaging' && scan.status !== 'completed' && scan.status !== 'cancelled' ? (
+                  <div className="mt-4 rounded-xl border border-border/60 bg-secondary/30 p-4">
+                    <div className="flex flex-col gap-3 md:flex-row md:items-end">
+                      <div className="flex-1">
+                        <label className="text-xs font-medium text-muted-foreground uppercase tracking-wide">Schedule study</label>
+                        <input
+                          type="datetime-local"
+                          aria-label="Schedule study"
+                          value={scheduleValue}
+                          onChange={(e) => setScheduleValue(e.target.value)}
+                          className="mt-1 w-full h-11 px-4 rounded-xl border border-input bg-background text-foreground focus:outline-none focus:ring-2 focus:ring-primary/30"
+                        />
+                      </div>
                       <button
-                        onClick={() => handleStatusChange(scan.id, 'in-progress')}
-                        className="flex items-center gap-1 px-3 py-1.5 rounded-lg bg-info/10 text-info text-xs font-medium hover:bg-info/20 transition"
+                        onClick={() => void handleSchedule(scan.id)}
+                        disabled={!scheduleValue || schedulingId === scan.id}
+                        className="px-4 py-2.5 rounded-xl bg-secondary text-secondary-foreground text-sm font-medium hover:bg-muted transition disabled:opacity-50"
                       >
-                        Start
+                        {schedulingId === scan.id ? 'Saving...' : 'Save schedule'}
                       </button>
-                    )}
-                    {user?.role === 'imaging' && scan.status !== 'completed' && scan.status !== 'cancelled' && (
+                    </div>
+                  </div>
+                ) : null}
+
+                {showUpload === scan.id && (
+                  <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="mt-4 p-4 rounded-xl bg-secondary/50 space-y-4">
+                    <div className="grid gap-4 md:grid-cols-2">
+                      <div className="md:col-span-2">
+                        <label className="text-sm font-medium text-card-foreground mb-1.5 block">Findings</label>
+                        <textarea
+                          aria-label="Findings"
+                          value={uploadForm.findings}
+                          onChange={(e) => setUploadForm((prev) => ({ ...prev, findings: e.target.value }))}
+                          rows={4}
+                          placeholder="Describe the imaging findings..."
+                          className="w-full px-4 py-3 rounded-xl border border-input bg-background text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-primary/30 resize-none"
+                        />
+                      </div>
+                      <div className="md:col-span-2">
+                        <label className="text-sm font-medium text-card-foreground mb-1.5 block">Impression</label>
+                        <textarea
+                          aria-label="Impression"
+                          value={uploadForm.impression}
+                          onChange={(e) => setUploadForm((prev) => ({ ...prev, impression: e.target.value }))}
+                          rows={3}
+                          placeholder="Summarize the radiologist's impression..."
+                          className="w-full px-4 py-3 rounded-xl border border-input bg-background text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-primary/30 resize-none"
+                        />
+                      </div>
+                      <div>
+                        <label className="text-sm font-medium text-card-foreground mb-1.5 block">Report File</label>
+                        <input
+                          type="file"
+                          aria-label="Report File"
+                          accept=".pdf,.doc,.docx,.txt,image/*"
+                          onChange={(e) => setUploadForm((prev) => ({ ...prev, reportFile: e.target.files?.[0] || null }))}
+                          className="block w-full text-sm text-muted-foreground file:mr-4 file:rounded-lg file:border-0 file:bg-primary/10 file:px-3 file:py-2 file:text-primary file:font-medium hover:file:bg-primary/20"
+                        />
+                      </div>
+                      <div>
+                        <label className="text-sm font-medium text-card-foreground mb-1.5 block">Study Images</label>
+                        <input
+                          type="file"
+                          multiple
+                          aria-label="Study Images"
+                          accept="image/*,.dcm,.dicom,.pdf"
+                          onChange={(e) => setUploadForm((prev) => ({ ...prev, imageFiles: Array.from(e.target.files || []) }))}
+                          className="block w-full text-sm text-muted-foreground file:mr-4 file:rounded-lg file:border-0 file:bg-secondary file:px-3 file:py-2 file:text-secondary-foreground file:font-medium hover:file:bg-muted"
+                        />
+                      </div>
+                    </div>
+
+                    {uploadForm.reportFile || uploadForm.imageFiles.length > 0 ? (
+                      <div className="rounded-lg border border-border/60 bg-background px-3 py-2 text-xs text-muted-foreground">
+                        {uploadForm.reportFile ? <div>Report: {uploadForm.reportFile.name}</div> : null}
+                        {uploadForm.imageFiles.length > 0 ? <div>{uploadForm.imageFiles.length} study image file(s) selected</div> : null}
+                      </div>
+                    ) : null}
+
+                    <div className="flex gap-2">
                       <button
-                        onClick={() => setShowUpload(scan.id)}
-                        className="flex items-center gap-1 px-3 py-1.5 rounded-lg bg-primary/10 text-primary text-xs font-medium hover:bg-primary/20 transition"
+                        onClick={() => void handleUpload(scan)}
+                        disabled={uploadingId === scan.id}
+                        className="px-4 py-2 rounded-lg bg-gradient-primary text-primary-foreground text-sm font-medium hover:opacity-90 transition disabled:opacity-50"
                       >
-                        <Upload className="w-3 h-3" /> Upload Results
+                        {uploadingId === scan.id ? 'Submitting...' : 'Submit Results'}
                       </button>
-                    )}
-                    {(user?.role === 'imaging' || effectiveRole === 'doctor') && scan.status !== 'completed' && scan.status !== 'cancelled' && (
                       <button
-                        onClick={() => handleStatusChange(scan.id, 'cancelled')}
-                        className="flex items-center gap-1 px-3 py-1.5 rounded-lg bg-destructive/10 text-destructive text-xs font-medium hover:bg-destructive/20 transition"
+                        onClick={resetUploadForm}
+                        className="px-4 py-2 rounded-lg bg-secondary text-secondary-foreground text-sm font-medium hover:bg-muted transition"
                       >
                         Cancel
                       </button>
-                    )}
-                    {effectiveRole === 'doctor' && (
-                      <button
-                        onClick={() => void handleDelete(scan.id)}
-                        disabled={deleteId === scan.id}
-                        className="flex items-center gap-1 px-3 py-1.5 rounded-lg bg-destructive/10 text-destructive text-xs font-medium hover:bg-destructive/20 transition disabled:opacity-50"
-                      >
-                        <Trash2 className="w-3 h-3" /> {deleteId === scan.id ? 'Deleting...' : 'Delete'}
-                      </button>
-                    )}
-                  </div>
-                </div>
-              </div>
-
-              {/* Upload Results Form */}
-              {showUpload === scan.id && (
-                <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="mt-4 p-4 rounded-xl bg-secondary/50">
-                  <textarea
-                    value={uploadResult}
-                    onChange={(e) => setUploadResult(e.target.value)}
-                    rows={3}
-                    placeholder="Enter scan results and findings..."
-                    className="w-full px-4 py-3 rounded-xl border border-input bg-background text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-primary/30 resize-none"
-                  />
-                  <div className="flex gap-2 mt-2">
-                    <button
-                      onClick={() => handleUpload(scan.id)}
-                      className="px-4 py-2 rounded-lg bg-gradient-primary text-primary-foreground text-sm font-medium hover:opacity-90 transition"
-                    >
-                      Submit Results
-                    </button>
-                    <button
-                      onClick={() => {
-                        setShowUpload(null);
-                        setUploadResult('');
-                      }}
-                      className="px-4 py-2 rounded-lg bg-secondary text-secondary-foreground text-sm font-medium hover:bg-muted transition"
-                    >
-                      Cancel
-                    </button>
-                  </div>
-                </motion.div>
-              )}
-            </motion.div>
-          ))}
+                    </div>
+                  </motion.div>
+                )}
+              </motion.div>
+            );
+          })}
         </div>
       )}
     </div>

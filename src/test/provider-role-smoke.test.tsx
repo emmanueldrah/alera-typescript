@@ -172,6 +172,7 @@ const mockAppData = {
       expiryDate: '2026-12-31',
     },
   ],
+  ambulanceRequests: [],
   updateInventoryItem: vi.fn(),
   addLabTest: vi.fn(),
   updateLabTest: vi.fn(),
@@ -244,6 +245,6 @@ describe('provider role smoke tests', () => {
       </MemoryRouter>,
     );
 
-    expect(screen.getByText(heading)).toBeInTheDocument();
+    expect(screen.getByRole('heading', { name: heading })).toBeInTheDocument();
   });
 });
