@@ -355,6 +355,15 @@ class ImagingScanUpdate(BaseModel):
     completed_at: Optional[datetime] = None
 
 
+class ImagingFileAsset(BaseModel):
+    file_id: str
+    filename: str
+    mime_type: str
+    file_size: int
+    upload_time: Optional[str] = None
+    download_url: Optional[str] = None
+
+
 class ImagingScanResponse(ImagingScanBase):
     id: int
     patient_id: int
@@ -367,6 +376,8 @@ class ImagingScanResponse(ImagingScanBase):
     impression: Optional[str] = None
     report_url: Optional[str] = None
     image_url: Optional[str] = None
+    report_file: Optional[ImagingFileAsset] = None
+    image_files: List[ImagingFileAsset] = Field(default_factory=list)
     scheduled_at: Optional[datetime] = None
     ordered_at: datetime
     completed_at: Optional[datetime] = None

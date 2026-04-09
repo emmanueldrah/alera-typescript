@@ -292,6 +292,31 @@ def _patch_destination_routing_columns():
                 print(f"WARNING: Could not patch {table_name}.{column_name} column: {e}")
 
 
+def _patch_imaging_result_asset_columns():
+    """Add structured imaging report/image metadata columns for uploaded studies."""
+    try:
+        existing = {column["name"] for column in inspect(engine).get_columns("imaging_scans")}
+    except Exception:
+        return
+
+    patches = {
+        "report_file_id": "VARCHAR(255)",
+        "report_filename": "VARCHAR(500)",
+        "report_mime_type": "VARCHAR(255)",
+        "report_file_size": "INTEGER",
+        "image_files": "JSON",
+    }
+
+    for column_name, ddl in patches.items():
+        if column_name in existing:
+            continue
+        try:
+            with engine.begin() as conn:
+                conn.execute(text(f"ALTER TABLE imaging_scans ADD COLUMN {column_name} {ddl}"))
+        except Exception as e:
+            print(f"WARNING: Could not patch imaging_scans.{column_name} column: {e}")
+
+
 def _collect_sqlalchemy_enum_specs() -> dict[str, list[str]]:
     """Collect the desired persisted labels for every SQLAlchemy enum in metadata."""
 
@@ -514,6 +539,7 @@ def init_db():
         _patch_users_live_location_columns()
         _patch_ambulance_request_tracking_columns()
         _patch_destination_routing_columns()
+        _patch_imaging_result_asset_columns()
         _patch_userrole_enum_values()
         _patch_postgres_enum_values()
         _patch_admin_accounts_email_verified()

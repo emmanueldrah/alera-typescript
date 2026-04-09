@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import asyncio
+from io import BytesIO
 from datetime import datetime, timedelta, timezone
 from urllib.parse import parse_qs, urlparse
 
@@ -8,6 +9,7 @@ import pytest
 from fastapi import HTTPException
 from fastapi.security import HTTPAuthorizationCredentials
 from pydantic import ValidationError
+from starlette.datastructures import UploadFile
 
 from app.models import PatientDocument
 from app.models.additional_features import DocumentType
@@ -15,6 +17,7 @@ from app.models.ambulance import AmbulanceRequest, AmbulanceRequestStatus, Emerg
 from app.models.appointment import Appointment, AppointmentStatus, AppointmentType
 from app.models.lab_imaging import ImagingScan, ImagingScanStatus, LabTest, LabTestStatus
 from app.models.user import User, UserRole
+from app.routes.imaging import download_imaging_asset, download_imaging_report, upload_imaging_results
 from app.routes.admin import approve_provider, deactivate_user, list_verifications
 from app.routes.admin import change_user_role
 from app.routes.appointments import create_appointment
@@ -99,6 +102,49 @@ def seed_document(db_session, *, patient_id: int, uploaded_by: int, is_private: 
     db_session.commit()
     db_session.refresh(document)
     return document
+
+
+def seed_user(
+    db_session,
+    *,
+    email: str,
+    role: UserRole,
+    first_name: str,
+    last_name: str,
+    is_verified: bool = True,
+) -> User:
+    user = User(
+        email=email,
+        username=email.split("@", 1)[0],
+        hashed_password=ADMIN_PASSWORD_HASH,
+        first_name=first_name,
+        last_name=last_name,
+        role=role,
+        is_active=True,
+        is_verified=is_verified,
+        email_verified=True,
+        email_verified_at=utcnow(),
+    )
+    db_session.add(user)
+    db_session.commit()
+    db_session.refresh(user)
+    return user
+
+
+def seed_imaging_scan(db_session, *, patient_id: int, ordered_by: int, center_id: int) -> ImagingScan:
+    scan = ImagingScan(
+        patient_id=patient_id,
+        ordered_by=ordered_by,
+        destination_provider_id=center_id,
+        scan_type="MRI",
+        body_part="Head",
+        clinical_indication="Headache",
+        status=ImagingScanStatus.ORDERED,
+    )
+    db_session.add(scan)
+    db_session.commit()
+    db_session.refresh(scan)
+    return scan
 
 
 def _make_email_capture():
@@ -664,3 +710,157 @@ def test_password_reset_flow_revokes_sessions_and_allows_new_login(db_session, m
 
     new_login = run(login(LoginRequest(email="resetme@example.com", password="newpassword123"), db_session))
     assert new_login["access_token"]
+
+
+def test_imaging_center_can_upload_report_and_multiple_scan_files(db_session):
+    patient = seed_user(
+        db_session,
+        email="patient-imaging@example.com",
+        role=UserRole.PATIENT,
+        first_name="Pat",
+        last_name="Ient",
+    )
+    provider = seed_user(
+        db_session,
+        email="doctor-imaging@example.com",
+        role=UserRole.PROVIDER,
+        first_name="Doc",
+        last_name="Tor",
+    )
+    center = seed_user(
+        db_session,
+        email="center-imaging@example.com",
+        role=UserRole.IMAGING,
+        first_name="Scan",
+        last_name="Center",
+    )
+    scan = seed_imaging_scan(db_session, patient_id=patient.id, ordered_by=provider.id, center_id=center.id)
+
+    response = run(
+        upload_imaging_results(
+            scan.id,
+            findings="No acute intracranial abnormality.",
+            impression="Normal MRI brain.",
+            status_value="completed",
+            report_file=UploadFile(filename="report.pdf", file=BytesIO(b"%PDF-1.4 test"), headers={"content-type": "application/pdf"}),
+            image_files=[
+                UploadFile(filename="study-1.dcm", file=BytesIO(b"DICM study 1"), headers={"content-type": "application/dicom"}),
+                UploadFile(filename="study-2.dcm", file=BytesIO(b"DICM study 2"), headers={"content-type": "application/dicom"}),
+            ],
+            current_user=center,
+            db=db_session,
+        )
+    )
+
+    db_session.refresh(scan)
+    assert response.status == "completed"
+    assert response.report_file is not None
+    assert response.report_file.filename == "report.pdf"
+    assert len(response.image_files) == 2
+    assert response.image_files[0].filename == "study-1.dcm"
+    assert scan.report_url == f"/api/imaging/{scan.id}/report"
+    assert scan.image_url == f"/api/imaging/{scan.id}/images/{response.image_files[0].file_id}"
+    assert scan.completed_at is not None
+
+
+def test_other_imaging_center_cannot_upload_results_for_foreign_scan(db_session):
+    patient = seed_user(
+        db_session,
+        email="patient-foreign@example.com",
+        role=UserRole.PATIENT,
+        first_name="Pat",
+        last_name="Foreign",
+    )
+    provider = seed_user(
+        db_session,
+        email="doctor-foreign@example.com",
+        role=UserRole.PROVIDER,
+        first_name="Doc",
+        last_name="Foreign",
+    )
+    center = seed_user(
+        db_session,
+        email="center-owned@example.com",
+        role=UserRole.IMAGING,
+        first_name="Owned",
+        last_name="Center",
+    )
+    other_center = seed_user(
+        db_session,
+        email="center-other@example.com",
+        role=UserRole.IMAGING,
+        first_name="Other",
+        last_name="Center",
+    )
+    scan = seed_imaging_scan(db_session, patient_id=patient.id, ordered_by=provider.id, center_id=center.id)
+
+    with pytest.raises(HTTPException) as exc_info:
+        run(
+            upload_imaging_results(
+                scan.id,
+                findings="Attempted upload",
+                impression=None,
+                status_value="completed",
+                report_file=None,
+                image_files=[],
+                current_user=other_center,
+                db=db_session,
+            )
+        )
+
+    assert exc_info.value.status_code == 403
+
+
+def test_imaging_download_endpoints_require_authorized_user(db_session):
+    patient = seed_user(
+        db_session,
+        email="patient-download@example.com",
+        role=UserRole.PATIENT,
+        first_name="Pat",
+        last_name="Download",
+    )
+    provider = seed_user(
+        db_session,
+        email="doctor-download@example.com",
+        role=UserRole.PROVIDER,
+        first_name="Doc",
+        last_name="Download",
+    )
+    center = seed_user(
+        db_session,
+        email="center-download@example.com",
+        role=UserRole.IMAGING,
+        first_name="Scan",
+        last_name="Download",
+    )
+    outsider = seed_user(
+        db_session,
+        email="patient-outsider@example.com",
+        role=UserRole.PATIENT,
+        first_name="Out",
+        last_name="Sider",
+    )
+    scan = seed_imaging_scan(db_session, patient_id=patient.id, ordered_by=provider.id, center_id=center.id)
+    result = run(
+        upload_imaging_results(
+            scan.id,
+            findings="Stable study",
+            impression="Stable study",
+            status_value="completed",
+            report_file=UploadFile(filename="report.pdf", file=BytesIO(b"%PDF-1.4 ok"), headers={"content-type": "application/pdf"}),
+            image_files=[UploadFile(filename="study.dcm", file=BytesIO(b"DICM"), headers={"content-type": "application/dicom"})],
+            current_user=center,
+            db=db_session,
+        )
+    )
+
+    report_response = run(download_imaging_report(scan.id, current_user=patient, db=db_session))
+    image_response = run(download_imaging_asset(scan.id, result.image_files[0].file_id, current_user=provider, db=db_session))
+
+    assert report_response.filename == "report.pdf"
+    assert image_response.filename == "study.dcm"
+
+    with pytest.raises(HTTPException) as exc_info:
+        run(download_imaging_report(scan.id, current_user=outsider, db=db_session))
+
+    assert exc_info.value.status_code == 403

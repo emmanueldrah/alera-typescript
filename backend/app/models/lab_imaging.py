@@ -2,7 +2,7 @@
 Lab test and imaging scan database models
 """
 
-from sqlalchemy import Column, String, DateTime, Integer, Text, ForeignKey, Enum as SQLEnum
+from sqlalchemy import Column, String, DateTime, Integer, Text, ForeignKey, Enum as SQLEnum, JSON
 from sqlalchemy.orm import relationship
 from datetime import datetime
 import enum
@@ -102,6 +102,11 @@ class ImagingScan(Base):
     impression = Column(Text, nullable=True)
     report_url = Column(String, nullable=True)
     image_url = Column(String, nullable=True)
+    report_file_id = Column(String, nullable=True)
+    report_filename = Column(String, nullable=True)
+    report_mime_type = Column(String, nullable=True)
+    report_file_size = Column(Integer, nullable=True)
+    image_files = Column(JSON, nullable=True)
 
     scheduled_at = Column(DateTime, nullable=True)
     ordered_at = Column(DateTime, default=utcnow)
@@ -129,6 +134,11 @@ class ImagingScan(Base):
             "impression": self.impression,
             "report_url": self.report_url,
             "image_url": self.image_url,
+            "report_file_id": self.report_file_id,
+            "report_filename": self.report_filename,
+            "report_mime_type": self.report_mime_type,
+            "report_file_size": self.report_file_size,
+            "image_files": self.image_files or [],
             "scheduled_at": self.scheduled_at.isoformat() if self.scheduled_at else None,
             "ordered_at": self.ordered_at.isoformat() if self.ordered_at else None,
             "completed_at": self.completed_at.isoformat() if self.completed_at else None,

@@ -1,10 +1,13 @@
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, File, Form, HTTPException, UploadFile, status
+from fastapi.responses import FileResponse
 from sqlalchemy.orm import Session, joinedload
 from database import get_db
 from app.models import ImagingScan, User, UserRole, ImagingScanStatus
-from app.schemas import ImagingScanResponse, ImagingScanCreate, ImagingScanUpdate
+from app.schemas import ImagingFileAsset, ImagingScanResponse, ImagingScanCreate, ImagingScanUpdate
+from app.services.file_service import FileStorageService
 from app.utils.dependencies import get_current_user
 from app.utils.access import require_verified_workforce_member
+from app.utils.time import utcnow
 
 router = APIRouter(prefix="/api/imaging", tags=["imaging"])
 
@@ -17,6 +20,22 @@ def _display_name(user: User | None) -> str | None:
 
 
 def imaging_to_response(scan: ImagingScan) -> ImagingScanResponse:
+    report_file = None
+    if scan.report_file_id:
+        report_file = ImagingFileAsset(
+            file_id=scan.report_file_id,
+            filename=scan.report_filename or "report",
+            mime_type=scan.report_mime_type or "application/octet-stream",
+            file_size=scan.report_file_size or 0,
+            download_url=scan.report_url,
+        )
+
+    image_files = [
+        ImagingFileAsset(**asset)
+        for asset in (scan.image_files or [])
+        if isinstance(asset, dict) and asset.get("file_id") and asset.get("filename")
+    ]
+
     return ImagingScanResponse(
         id=scan.id,
         patient_id=scan.patient_id,
@@ -32,6 +51,8 @@ def imaging_to_response(scan: ImagingScan) -> ImagingScanResponse:
         impression=scan.impression,
         report_url=scan.report_url,
         image_url=scan.image_url,
+        report_file=report_file,
+        image_files=image_files,
         scheduled_at=scan.scheduled_at,
         ordered_at=scan.ordered_at,
         completed_at=scan.completed_at,
@@ -39,6 +60,32 @@ def imaging_to_response(scan: ImagingScan) -> ImagingScanResponse:
         patient_name=_display_name(scan.patient),
         ordered_by_name=_display_name(scan.doctor),
     )
+
+
+def _can_access_scan(current_user: User, scan: ImagingScan) -> bool:
+    if current_user.role == UserRole.ADMIN:
+        return True
+    if current_user.role == UserRole.PATIENT:
+        return scan.patient_id == current_user.id
+    if current_user.role == UserRole.PROVIDER:
+        require_verified_workforce_member(current_user, "access imaging scans")
+        return scan.ordered_by == current_user.id
+    if current_user.role == UserRole.IMAGING:
+        require_verified_workforce_member(current_user, "access imaging scans")
+        return scan.destination_provider_id == current_user.id
+    return False
+
+
+def _storage_subfolder(scan: ImagingScan) -> str:
+    return f"imaging/{scan.id}"
+
+
+def _report_download_url(scan_id: int) -> str:
+    return f"/api/imaging/{scan_id}/report"
+
+
+def _image_download_url(scan_id: int, file_id: str) -> str:
+    return f"/api/imaging/{scan_id}/images/{file_id}"
 
 
 def _load_scan_with_users(db: Session, scan_id: int) -> ImagingScan | None:
@@ -165,13 +212,8 @@ async def get_imaging_scan(
             status_code=status.HTTP_403_FORBIDDEN,
             detail="Not authorized",
         )
-    if current_user.role == UserRole.PROVIDER and db_imaging_scan.ordered_by != current_user.id:
-        raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN,
-            detail="Not authorized",
-        )
-    if current_user.role in (UserRole.PROVIDER, UserRole.IMAGING):
-        require_verified_workforce_member(current_user, "view imaging scans")
+    if not _can_access_scan(current_user, db_imaging_scan):
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Not authorized")
 
     return imaging_to_response(db_imaging_scan)
 
@@ -198,6 +240,11 @@ async def update_imaging_scan(
             detail="Not authorized to update imaging scans",
         )
     if current_user.role == UserRole.PROVIDER and db_imaging_scan.ordered_by != current_user.id:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Not authorized to update this imaging scan",
+        )
+    if current_user.role == UserRole.IMAGING and db_imaging_scan.destination_provider_id != current_user.id:
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
             detail="Not authorized to update this imaging scan",
@@ -242,6 +289,153 @@ async def update_imaging_scan(
     return imaging_to_response(loaded)
 
 
+@router.post("/{scan_id}/results", response_model=ImagingScanResponse)
+async def upload_imaging_results(
+    scan_id: int,
+    findings: str | None = Form(default=None),
+    impression: str | None = Form(default=None),
+    status_value: str | None = Form(default="completed", alias="status"),
+    report_file: UploadFile | None = File(default=None),
+    image_files: list[UploadFile] | None = File(default=None),
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    """Upload imaging artifacts and written results for an imaging study."""
+
+    db_imaging_scan = db.query(ImagingScan).filter(ImagingScan.id == scan_id).first()
+    if not db_imaging_scan:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Imaging scan not found")
+
+    if current_user.role not in (UserRole.IMAGING, UserRole.ADMIN):
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Only imaging centers can upload imaging results")
+    if current_user.role == UserRole.IMAGING:
+        require_verified_workforce_member(current_user, "upload imaging results")
+        if db_imaging_scan.destination_provider_id != current_user.id:
+            raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Not authorized to upload results for this imaging scan")
+
+    normalized_images = [file for file in (image_files or []) if file and file.filename]
+    if not report_file and not normalized_images and not findings and not impression:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Provide at least one report field, report file, or imaging file",
+        )
+
+    subfolder = _storage_subfolder(db_imaging_scan)
+
+    if report_file and report_file.filename:
+        report_info = await FileStorageService.save_file(report_file, subfolder=subfolder, prefix="report")
+        db_imaging_scan.report_file_id = report_info["file_id"]
+        db_imaging_scan.report_filename = report_info["filename"]
+        db_imaging_scan.report_mime_type = report_info["mime_type"]
+        db_imaging_scan.report_file_size = report_info["file_size"]
+        db_imaging_scan.report_url = _report_download_url(scan_id)
+
+    if normalized_images:
+        saved_images: list[dict] = []
+        for image_file in normalized_images:
+            image_info = await FileStorageService.save_file(image_file, subfolder=subfolder, prefix="image")
+            saved_images.append(
+                {
+                    "file_id": image_info["file_id"],
+                    "filename": image_info["filename"],
+                    "mime_type": image_info["mime_type"],
+                    "file_size": image_info["file_size"],
+                    "upload_time": image_info["upload_time"],
+                    "download_url": _image_download_url(scan_id, image_info["file_id"]),
+                }
+            )
+        db_imaging_scan.image_files = saved_images
+        db_imaging_scan.image_url = saved_images[0]["download_url"]
+
+    if findings is not None:
+        db_imaging_scan.findings = findings
+    if impression is not None:
+        db_imaging_scan.impression = impression
+
+    if status_value:
+        try:
+            db_imaging_scan.status = ImagingScanStatus(str(status_value))
+        except ValueError:
+            raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Invalid imaging scan status") from None
+
+    if db_imaging_scan.status == ImagingScanStatus.COMPLETED and not db_imaging_scan.completed_at:
+        db_imaging_scan.completed_at = utcnow()
+
+    db_imaging_scan.processed_by = current_user.id
+    db.commit()
+
+    loaded = _load_scan_with_users(db, scan_id)
+    if not loaded:
+        raise HTTPException(status_code=500, detail="Failed to load imaging scan")
+
+    from app.routes.audit import log_action
+
+    await log_action(
+        db=db,
+        user_id=current_user.id,
+        action="imaging_scan.upload_results",
+        resource_type="imaging_scan",
+        resource_id=loaded.id,
+        description=f"Uploaded imaging results for scan {loaded.id}",
+        status="updated",
+    )
+    return imaging_to_response(loaded)
+
+
+@router.get("/{scan_id}/report")
+async def download_imaging_report(
+    scan_id: int,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    db_imaging_scan = db.query(ImagingScan).filter(ImagingScan.id == scan_id).first()
+    if not db_imaging_scan:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Imaging scan not found")
+    if not _can_access_scan(current_user, db_imaging_scan):
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Not authorized")
+    if not db_imaging_scan.report_file_id:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Imaging report file not found")
+
+    file_path = FileStorageService.get_file_path(db_imaging_scan.report_file_id, _storage_subfolder(db_imaging_scan))
+    if not file_path or not file_path.exists():
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Imaging report file not found")
+
+    return FileResponse(
+        path=file_path,
+        filename=db_imaging_scan.report_filename or file_path.name,
+        media_type=db_imaging_scan.report_mime_type or "application/octet-stream",
+    )
+
+
+@router.get("/{scan_id}/images/{file_id}")
+async def download_imaging_asset(
+    scan_id: int,
+    file_id: str,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    db_imaging_scan = db.query(ImagingScan).filter(ImagingScan.id == scan_id).first()
+    if not db_imaging_scan:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Imaging scan not found")
+    if not _can_access_scan(current_user, db_imaging_scan):
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Not authorized")
+
+    image_assets = db_imaging_scan.image_files or []
+    asset = next((item for item in image_assets if isinstance(item, dict) and item.get("file_id") == file_id), None)
+    if not asset:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Imaging file not found")
+
+    file_path = FileStorageService.get_file_path(file_id, _storage_subfolder(db_imaging_scan))
+    if not file_path or not file_path.exists():
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Imaging file not found")
+
+    return FileResponse(
+        path=file_path,
+        filename=asset.get("filename") or file_path.name,
+        media_type=asset.get("mime_type") or "application/octet-stream",
+    )
+
+
 @router.delete("/{scan_id}", status_code=status.HTTP_204_NO_CONTENT)
 async def delete_imaging_scan(
     scan_id: int,
@@ -273,13 +467,3 @@ async def delete_imaging_scan(
     db.delete(db_imaging_scan)
     db.commit()
     return None
-    if current_user.role == UserRole.IMAGING and db_imaging_scan.destination_provider_id != current_user.id:
-        raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN,
-            detail="Not authorized",
-        )
-    if current_user.role == UserRole.IMAGING and db_imaging_scan.destination_provider_id != current_user.id:
-        raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN,
-            detail="Not authorized to update this imaging scan",
-        )

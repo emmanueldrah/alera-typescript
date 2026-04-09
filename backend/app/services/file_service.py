@@ -16,7 +16,23 @@ from app.utils.time import utcnow
 
 
 # Configuration constants
-ALLOWED_EXTENSIONS = {".pdf", ".doc", ".docx", ".jpg", ".jpeg", ".png", ".txt", ".xls", ".xlsx"}
+ALLOWED_EXTENSIONS = {
+    ".pdf",
+    ".doc",
+    ".docx",
+    ".jpg",
+    ".jpeg",
+    ".png",
+    ".txt",
+    ".xls",
+    ".xlsx",
+    ".dcm",
+    ".dicom",
+    ".tif",
+    ".tiff",
+    ".bmp",
+    ".zip",
+}
 MAX_FILE_SIZE = 25 * 1024 * 1024  # 25 MB
 
 # Upload directory cache
