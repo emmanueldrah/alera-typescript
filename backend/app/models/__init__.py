@@ -18,6 +18,8 @@ from .additional_features import (
     DocumentType,
 )
 from .structured_record import StructuredRecord
+from .organization import Organization
+from .canonical_records import MedicalRecord, MedicalDocument, PatientPermission
 
 __all__ = [
     "User",
@@ -46,6 +48,10 @@ __all__ = [
     "SMSTemplate",
     "DocumentType",
     "StructuredRecord",
+    "Organization",
+    "MedicalRecord",
+    "MedicalDocument",
+    "PatientPermission",
 ]
 
 import sys

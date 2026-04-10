@@ -5,6 +5,7 @@ from app.models import LabTest, User, UserRole, LabTestStatus
 from app.schemas import LabTestResponse, LabTestCreate, LabTestUpdate
 from app.utils.dependencies import get_current_user
 from app.utils.access import require_verified_workforce_member
+from app.services.medical_record_sync import create_db_notification, upsert_medical_record
 
 router = APIRouter(prefix="/api/lab-tests", tags=["lab-tests"])
 
@@ -108,6 +109,20 @@ async def create_lab_test(
         description=f"Ordered lab test {loaded.test_name} for patient {loaded.patient_id}",
         status="created",
     )
+    upsert_medical_record(
+        db,
+        patient_id=loaded.patient_id,
+        provider=loaded.doctor,
+        record_type="lab_result",
+        category="laboratory",
+        title=loaded.test_name,
+        summary=loaded.description,
+        status=loaded.status,
+        event_time=loaded.ordered_at,
+        source_record_id=f"lab-test:{loaded.id}",
+        payload=loaded.to_dict(),
+    )
+    db.commit()
     return lab_test_to_response(loaded)
 
 
@@ -240,6 +255,29 @@ async def update_lab_test(
         description=f"Updated lab test {loaded.id}",
         status="updated",
     )
+    upsert_medical_record(
+        db,
+        patient_id=loaded.patient_id,
+        provider=loaded.doctor,
+        record_type="lab_result",
+        category="laboratory",
+        title=loaded.test_name,
+        summary=loaded.result_notes or loaded.description,
+        status=loaded.status,
+        event_time=loaded.completed_at or loaded.ordered_at,
+        source_record_id=f"lab-test:{loaded.id}",
+        payload=loaded.to_dict(),
+    )
+    db.commit()
+    if loaded.status == LabTestStatus.COMPLETED.value:
+        await create_db_notification(
+            db,
+            user_id=loaded.patient_id,
+            title="New lab result available",
+            message=f"{loaded.test_name} results were added to your unified medical record.",
+            notification_type="medical_record",
+            action_url="/dashboard/medical-history",
+        )
     return lab_test_to_response(loaded)
 
 

@@ -196,6 +196,23 @@ def _patch_users_live_location_columns():
             print(f"WARNING: Could not patch users.{column_name} column: {e}")
 
 
+def _patch_users_organization_column():
+    """Add organization_id to users when enabling organization-level permissions."""
+    try:
+        columns = {column["name"] for column in inspect(engine).get_columns("users")}
+    except Exception:
+        return
+
+    if "organization_id" in columns:
+        return
+
+    try:
+        with engine.begin() as conn:
+            conn.execute(text("ALTER TABLE users ADD COLUMN organization_id INTEGER"))
+    except Exception as e:
+        print(f"WARNING: Could not patch users.organization_id column: {e}")
+
+
 def _patch_ambulance_request_tracking_columns():
     """Add assignment and richer tracking columns to ambulance requests."""
     try:
@@ -537,6 +554,7 @@ def init_db():
         _patch_users_account_recovery_columns()
         _patch_users_notification_preferences_columns()
         _patch_users_live_location_columns()
+        _patch_users_organization_column()
         _patch_ambulance_request_tracking_columns()
         _patch_destination_routing_columns()
         _patch_imaging_result_asset_columns()

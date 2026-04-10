@@ -5,7 +5,7 @@ from fastapi.responses import JSONResponse
 import os
 from config import settings
 from database import init_db
-from app.routes import auth, users, appointments, prescriptions, allergies, notifications, telemedicine, admin, documents, consents, reminders_templates, audit, lab_tests, imaging, ambulance, referrals, records, location_ws, live_locations
+from app.routes import auth, users, appointments, prescriptions, allergies, notifications, telemedicine, admin, documents, consents, reminders_templates, audit, lab_tests, imaging, ambulance, referrals, records, location_ws, live_locations, organizations, patient_permissions, medical_records, medical_documents, external_ingestion
 from app.utils.csrf import validate_csrf_token
 
 # Create FastAPI app
@@ -81,6 +81,11 @@ app.include_router(imaging.router)
 app.include_router(ambulance.router)
 app.include_router(referrals.router)
 app.include_router(records.router)
+app.include_router(organizations.router)
+app.include_router(patient_permissions.router)
+app.include_router(medical_records.router)
+app.include_router(medical_documents.router)
+app.include_router(external_ingestion.router)
 app.include_router(location_ws.router)
 app.include_router(live_locations.router)
 

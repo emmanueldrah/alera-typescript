@@ -6,6 +6,7 @@ from app.models.user import User
 from app.schemas import AppointmentResponse, AppointmentCreate, AppointmentUpdate
 from app.utils.dependencies import get_current_user
 from app.utils.access import require_verified_workforce_member
+from app.services.medical_record_sync import create_db_notification, upsert_medical_record
 
 router = APIRouter(prefix="/api/appointments", tags=["appointments"])
 
@@ -115,6 +116,27 @@ async def create_appointment(
         appointment_time=apt.scheduled_time.isoformat(),
         provider_name=_display_name(provider),
     )
+
+    upsert_medical_record(
+        db,
+        patient_id=apt.patient_id,
+        provider=provider,
+        record_type="appointment",
+        category="encounter",
+        title=apt.title,
+        summary=apt.description,
+        status=apt.status,
+        event_time=apt.scheduled_time,
+        source_record_id=f"appointment:{apt.id}",
+        payload={
+            "appointment_id": apt.id,
+            "provider_name": _display_name(provider),
+            "appointment_type": apt.appointment_type,
+            "location": apt.location,
+            "notes": apt.notes,
+        },
+    )
+    db.commit()
 
     return serialize_appointment(apt)
 
@@ -231,6 +253,26 @@ async def update_appointment(
         description=f"Updated appointment {apt.id}",
         status="updated",
     )
+    upsert_medical_record(
+        db,
+        patient_id=apt.patient_id,
+        provider=apt.provider,
+        record_type="appointment",
+        category="encounter",
+        title=apt.title,
+        summary=apt.description,
+        status=apt.status,
+        event_time=apt.scheduled_time,
+        source_record_id=f"appointment:{apt.id}",
+        payload={
+            "appointment_id": apt.id,
+            "provider_name": _display_name(apt.provider),
+            "appointment_type": apt.appointment_type,
+            "location": apt.location,
+            "notes": apt.notes,
+        },
+    )
+    db.commit()
     return serialize_appointment(apt)
 
 
@@ -274,5 +316,27 @@ async def delete_appointment(
         description=f"Cancelled appointment {appointment.id}",
         status="warning",
     )
+    loaded = _load_appointment(db, appointment.id)
+    if loaded:
+        upsert_medical_record(
+            db,
+            patient_id=loaded.patient_id,
+            provider=loaded.provider,
+            record_type="appointment",
+            category="encounter",
+            title=loaded.title,
+            summary=loaded.description,
+            status=loaded.status,
+            event_time=loaded.scheduled_time,
+            source_record_id=f"appointment:{loaded.id}",
+            payload={
+                "appointment_id": loaded.id,
+                "provider_name": _display_name(loaded.provider),
+                "appointment_type": loaded.appointment_type,
+                "location": loaded.location,
+                "notes": loaded.notes,
+            },
+        )
+        db.commit()
 
     return {"message": "Appointment cancelled"}

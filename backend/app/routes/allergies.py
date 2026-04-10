@@ -7,6 +7,7 @@ from app.models.user import User, UserRole
 from app.schemas import AllergyResponse, AllergyCreate, AllergyUpdate
 from app.utils.dependencies import get_current_user
 from app.utils.access import require_verified_workforce_member
+from app.services.medical_record_sync import upsert_medical_record
 
 router = APIRouter(prefix="/api/allergies", tags=["allergies"])
 
@@ -203,6 +204,24 @@ async def create_allergy(
         allergen=loaded.allergen,
         severity=loaded.severity,
     )
+    upsert_medical_record(
+        db,
+        patient_id=loaded.patient_id,
+        provider=current_user if current_user.role != UserRole.PATIENT else None,
+        record_type="allergy",
+        category="allergy",
+        title=loaded.allergen,
+        summary=loaded.reaction_description,
+        status=loaded.severity,
+        event_time=loaded.created_at,
+        source_record_id=f"allergy:{loaded.id}",
+        payload={
+            "allergen_type": loaded.allergen_type,
+            "treatment": loaded.treatment,
+            "confirmed": loaded.confirmed,
+        },
+    )
+    db.commit()
 
     return allergy_to_response(loaded)
 
@@ -254,6 +273,24 @@ async def update_allergy(
         description=f"Updated allergy {loaded.id}",
         status="updated",
     )
+    upsert_medical_record(
+        db,
+        patient_id=loaded.patient_id,
+        provider=current_user if current_user.role != UserRole.PATIENT else None,
+        record_type="allergy",
+        category="allergy",
+        title=loaded.allergen,
+        summary=loaded.reaction_description,
+        status=loaded.severity,
+        event_time=loaded.created_at,
+        source_record_id=f"allergy:{loaded.id}",
+        payload={
+            "allergen_type": loaded.allergen_type,
+            "treatment": loaded.treatment,
+            "confirmed": loaded.confirmed,
+        },
+    )
+    db.commit()
     return allergy_to_response(loaded)
 
 

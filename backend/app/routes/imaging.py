@@ -8,6 +8,7 @@ from app.services.file_service import FileStorageService
 from app.utils.dependencies import get_current_user
 from app.utils.access import require_verified_workforce_member
 from app.utils.time import utcnow
+from app.services.medical_record_sync import attach_document_to_record, create_db_notification, upsert_medical_record
 
 router = APIRouter(prefix="/api/imaging", tags=["imaging"])
 
@@ -154,6 +155,20 @@ async def order_imaging_scan(
         description=f"Ordered imaging scan {loaded.scan_type} for patient {loaded.patient_id}",
         status="created",
     )
+    upsert_medical_record(
+        db,
+        patient_id=loaded.patient_id,
+        provider=loaded.doctor,
+        record_type="imaging_result",
+        category="imaging",
+        title=loaded.scan_type,
+        summary=loaded.clinical_indication,
+        status=loaded.status,
+        event_time=loaded.ordered_at,
+        source_record_id=f"imaging:{loaded.id}",
+        payload=loaded.to_dict(),
+    )
+    db.commit()
     return imaging_to_response(loaded)
 
 
@@ -286,6 +301,20 @@ async def update_imaging_scan(
         description=f"Updated imaging scan {loaded.id}",
         status="updated",
     )
+    upsert_medical_record(
+        db,
+        patient_id=loaded.patient_id,
+        provider=loaded.doctor,
+        record_type="imaging_result",
+        category="imaging",
+        title=loaded.scan_type,
+        summary=loaded.impression or loaded.findings or loaded.clinical_indication,
+        status=loaded.status,
+        event_time=loaded.completed_at or loaded.ordered_at,
+        source_record_id=f"imaging:{loaded.id}",
+        payload=loaded.to_dict(),
+    )
+    db.commit()
     return imaging_to_response(loaded)
 
 
@@ -378,6 +407,44 @@ async def upload_imaging_results(
         resource_id=loaded.id,
         description=f"Uploaded imaging results for scan {loaded.id}",
         status="updated",
+    )
+    record = upsert_medical_record(
+        db,
+        patient_id=loaded.patient_id,
+        provider=loaded.doctor,
+        record_type="imaging_result",
+        category="imaging",
+        title=loaded.scan_type,
+        summary=loaded.impression or loaded.findings or loaded.clinical_indication,
+        status=loaded.status,
+        event_time=loaded.completed_at or loaded.ordered_at,
+        source_record_id=f"imaging:{loaded.id}",
+        payload=loaded.to_dict(),
+    )
+    if loaded.report_file_id:
+        await attach_document_to_record(
+            db,
+            medical_record=record,
+            uploaded_by=current_user,
+            existing_file_id=loaded.report_file_id,
+            filename=loaded.report_filename,
+            mime_type=loaded.report_mime_type,
+            file_size=loaded.report_file_size,
+            storage_subpath=subfolder,
+            document_type="imaging",
+            description="Imaging report",
+            is_external=False,
+            source_system="alera",
+            source_document_id=f"imaging-report:{loaded.id}",
+        )
+    db.commit()
+    await create_db_notification(
+        db,
+        user_id=loaded.patient_id,
+        title="New imaging result available",
+        message=f"{loaded.scan_type} results were added to your unified medical record.",
+        notification_type="medical_record",
+        action_url="/dashboard/medical-history",
     )
     return imaging_to_response(loaded)
 

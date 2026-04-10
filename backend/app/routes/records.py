@@ -10,8 +10,10 @@ from database import get_db
 from app.models.additional_features import PatientConsent
 from app.models.allergy import Allergy
 from app.models.appointment import Appointment
+from app.models.canonical_records import MedicalRecord, PatientPermission
 from app.models.lab_imaging import ImagingScan, LabTest
 from app.models.medical_history import MedicalHistory
+from app.models.organization import Organization
 from app.models.prescription import Prescription
 from app.models.structured_record import StructuredRecord
 from app.models.user import User, UserRole
@@ -27,12 +29,16 @@ from app.schemas.records import (
 )
 from app.utils.access import (
     authorize_shared_history_access,
+    current_user_organization,
     patient_has_active_shared_history_consent,
     patient_interaction_user_ids,
     provider_panel_patient_ids,
+    require_medical_record_access,
     require_verified_workforce_member,
 )
 from app.utils.dependencies import get_current_user
+from app.services.medical_record_sync import backfill_patient_canonical_records
+from app.services.medical_record_sync import upsert_medical_record
 
 router = APIRouter(prefix="/api/records", tags=["records"])
 
@@ -371,81 +377,64 @@ async def get_synchronized_history(
     if not patient or patient.role != UserRole.PATIENT:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Patient not found")
 
-    access_scope = authorize_shared_history_access(db, current_user, patient_id)
+    if current_user.role == UserRole.PATIENT and current_user.id == patient_id:
+        access_scope = "self"
+    elif current_user.role in (UserRole.ADMIN, UserRole.SUPER_ADMIN):
+        access_scope = "metadata"
+    else:
+        try:
+            access_scope = require_medical_record_access(db, current_user, patient_id)
+        except HTTPException:
+            access_scope = authorize_shared_history_access(db, current_user, patient_id)
 
-    appointments = (
-        db.query(Appointment)
-        .filter(Appointment.patient_id == patient_id)
-        .order_by(Appointment.scheduled_time.desc())
-        .all()
-    )
-    allergies = (
-        db.query(Allergy)
-        .filter(Allergy.patient_id == patient_id)
-        .order_by(Allergy.created_at.desc())
-        .all()
-    )
-    medical_history_entries = (
-        db.query(MedicalHistory)
-        .filter(MedicalHistory.patient_id == patient_id)
-        .order_by(MedicalHistory.created_at.desc())
-        .all()
-    )
-    prescriptions = (
-        db.query(Prescription)
-        .filter(Prescription.patient_id == patient_id)
-        .order_by(Prescription.prescribed_date.desc())
-        .all()
-    )
-    lab_tests = (
-        db.query(LabTest)
-        .filter(LabTest.patient_id == patient_id)
-        .order_by(LabTest.ordered_at.desc())
-        .all()
-    )
-    imaging_scans = (
-        db.query(ImagingScan)
-        .filter(ImagingScan.patient_id == patient_id)
-        .order_by(ImagingScan.ordered_at.desc())
-        .all()
-    )
-    consents = (
-        db.query(PatientConsent)
-        .filter(PatientConsent.patient_id == patient_id)
-        .order_by(PatientConsent.created_at.desc())
-        .all()
-    )
-    structured_records = (
-        db.query(StructuredRecord)
-        .filter(StructuredRecord.patient_id == patient_id)
-        .order_by(StructuredRecord.created_at.desc())
-        .all()
-    )
+    backfill_patient_canonical_records(db, patient_id)
 
-    interaction_ids = patient_interaction_user_ids(db, patient_id)
-    lookup_ids = interaction_ids | {
-        appointment.provider_id for appointment in appointments if appointment.provider_id is not None
-    }
-    lookup_ids |= {prescription.provider_id for prescription in prescriptions if prescription.provider_id is not None}
-    lookup_ids |= {prescription.pharmacy_id for prescription in prescriptions if prescription.pharmacy_id is not None}
-    lookup_ids |= {lab_test.ordered_by for lab_test in lab_tests if lab_test.ordered_by is not None}
-    lookup_ids |= {lab_test.destination_provider_id for lab_test in lab_tests if lab_test.destination_provider_id is not None}
-    lookup_ids |= {lab_test.processed_by for lab_test in lab_tests if lab_test.processed_by is not None}
-    lookup_ids |= {scan.ordered_by for scan in imaging_scans if scan.ordered_by is not None}
-    lookup_ids |= {scan.destination_provider_id for scan in imaging_scans if scan.destination_provider_id is not None}
-    lookup_ids |= {scan.processed_by for scan in imaging_scans if scan.processed_by is not None}
-    lookup_ids |= {consent.requested_by for consent in consents if consent.requested_by is not None}
-    lookup_ids |= {record.provider_id for record in structured_records if record.provider_id is not None}
+    canonical_records = (
+        db.query(MedicalRecord)
+        .filter(MedicalRecord.patient_id == patient_id, MedicalRecord.is_deleted.is_(False))
+        .order_by(MedicalRecord.event_time.desc(), MedicalRecord.created_at.desc())
+        .all()
+    )
+    appointments = [record for record in canonical_records if record.record_type == "appointment"]
+    allergies = [record for record in canonical_records if record.record_type == "allergy"]
+    medical_history_entries = [record for record in canonical_records if record.record_type in {"medical_condition", "medical_history"}]
+    prescriptions = [record for record in canonical_records if record.record_type == "prescription"]
+    lab_tests = [record for record in canonical_records if record.record_type == "lab_result"]
+    imaging_scans = [record for record in canonical_records if record.record_type == "imaging_result"]
+    structured_records = [record for record in canonical_records if record.record_type not in {"appointment", "allergy", "medical_condition", "medical_history", "prescription", "lab_result", "imaging_result"}]
 
-    users_by_id = _load_users_by_id(db, lookup_ids)
+    org_ids = {record.organization_id for record in canonical_records if record.organization_id is not None}
+    granted_permissions = (
+        db.query(PatientPermission)
+        .filter(PatientPermission.patient_id == patient_id, PatientPermission.status == "granted")
+        .all()
+    )
+    org_ids |= {permission.organization_id for permission in granted_permissions if permission.organization_id is not None}
+    organizations = db.query(Organization).filter(Organization.id.in_(org_ids)).all() if org_ids else []
+    interaction_ids = patient_interaction_user_ids(db, patient_id) | {record.provider_id for record in canonical_records if record.provider_id is not None}
+    users_by_id = _load_users_by_id(db, interaction_ids)
 
-    appointment_items = [_serialize_appointment(appointment, users_by_id) for appointment in appointments]
-    allergy_items = [_serialize_allergy(allergy) for allergy in allergies]
-    medical_history_items = [_serialize_medical_history(entry) for entry in medical_history_entries]
-    prescription_items = [_serialize_prescription(prescription, users_by_id) for prescription in prescriptions]
-    lab_test_items = [lab_test.to_dict() for lab_test in lab_tests]
-    imaging_scan_items = [scan.to_dict() for scan in imaging_scans]
-    structured_record_items = [_serialize(record) for record in structured_records]
+    appointment_items = [record.payload | {"id": record.id, "title": record.title, "status": record.status, "scheduled_time": record.event_time.isoformat() if record.event_time else None} for record in appointments]
+    allergy_items = [record.payload | {"id": record.id, "allergen": record.title, "severity": record.status, "created_at": record.event_time.isoformat() if record.event_time else None} for record in allergies]
+    medical_history_items = [record.payload | {"id": record.id, "condition_name": record.title, "status": record.status, "created_at": record.event_time.isoformat() if record.event_time else None, "description": record.summary} for record in medical_history_entries]
+    prescription_items = [record.payload | {"id": record.id, "medication_name": record.title, "status": record.status, "prescribed_date": record.event_time.isoformat() if record.event_time else None, "provider_id": record.provider_id} for record in prescriptions]
+    lab_test_items = [record.payload | {"id": record.id, "test_name": record.title, "status": record.status, "ordered_at": record.event_time.isoformat() if record.event_time else None, "ordered_by": record.provider_id} for record in lab_tests]
+    imaging_scan_items = [record.payload | {"id": record.id, "scan_type": record.title, "status": record.status, "ordered_at": record.event_time.isoformat() if record.event_time else None, "ordered_by": record.provider_id} for record in imaging_scans]
+    structured_record_items = [
+        StructuredRecordResponse(
+            id=record.id,
+            record_type=record.record_type,
+            patient_id=record.patient_id,
+            provider_id=record.provider_id,
+            created_by=record.provider_id,
+            appointment_id=record.payload.get("appointment_id") if isinstance(record.payload, dict) else None,
+            status=record.status,
+            payload=record.payload if isinstance(record.payload, dict) else {},
+            created_at=record.created_at,
+            updated_at=record.updated_at,
+        )
+        for record in structured_records
+    ]
 
     interacting_organizations = [
         SynchronizedHistoryParticipant(
@@ -457,20 +446,24 @@ async def get_synchronized_history(
         if (user := users_by_id.get(user_id)) is not None
     ]
 
-    timeline = _build_timeline(
-        appointments=appointment_items,
-        allergies=allergy_items,
-        medical_history=medical_history_items,
-        prescriptions=prescription_items,
-        lab_tests=lab_test_items,
-        imaging_scans=imaging_scan_items,
-        structured_records=structured_record_items,
-    )
+    timeline = [
+        SynchronizedHistoryTimelineEntry(
+            source=record.record_type,
+            source_id=record.id,
+            title=record.title,
+            status=record.status,
+            timestamp=record.event_time,
+            provider_id=record.provider_id,
+            provider_name=None,
+            payload=record.payload if isinstance(record.payload, dict) else {},
+        )
+        for record in canonical_records
+    ]
 
     return SynchronizedHistoryResponse(
         patient_id=patient_id,
         access_scope=access_scope,
-        has_shared_history_consent=patient_has_active_shared_history_consent(db, patient_id),
+        has_shared_history_consent=bool(granted_permissions) or patient_has_active_shared_history_consent(db, patient_id),
         interacting_organizations=interacting_organizations,
         counts=SynchronizedHistoryCounts(
             appointments=len(appointment_items),
@@ -552,6 +545,31 @@ async def create_record(
     db.add(record)
     db.commit()
     db.refresh(record)
+    if body.record_type in {
+        "medical_history",
+        "clinical_note",
+        "patient_problem",
+        "patient_consent",
+        "medication_adherence",
+        "billing_record",
+        "invoice",
+        "service_charge",
+    }:
+        upsert_medical_record(
+            db,
+            patient_id=record.patient_id or current_user.id,
+            provider=current_user if current_user.role != UserRole.PATIENT else None,
+            record_type=body.record_type,
+            category="structured",
+            title=str(body.payload.get("title") or body.payload.get("name") or body.record_type.replace("_", " ").title()),
+            summary=body.status,
+            status=body.status,
+            event_time=record.created_at,
+            source_record_id=f"structured:{record.id}",
+            payload=body.payload,
+            is_external=False,
+        )
+        db.commit()
     return _serialize(record)
 
 
@@ -617,6 +635,30 @@ async def update_record(
 
     db.commit()
     db.refresh(record)
+    if record.patient_id and record.record_type in {
+        "medical_history",
+        "clinical_note",
+        "patient_problem",
+        "patient_consent",
+        "medication_adherence",
+        "billing_record",
+        "invoice",
+        "service_charge",
+    }:
+        upsert_medical_record(
+            db,
+            patient_id=record.patient_id,
+            provider=current_user if current_user.role != UserRole.PATIENT else None,
+            record_type=record.record_type,
+            category="structured",
+            title=str((record.payload or {}).get("title") or (record.payload or {}).get("name") or record.record_type.replace("_", " ").title()),
+            summary=record.status,
+            status=record.status,
+            event_time=record.created_at,
+            source_record_id=f"structured:{record.id}",
+            payload=record.payload if isinstance(record.payload, dict) else {},
+        )
+        db.commit()
     return _serialize(record)
 
 

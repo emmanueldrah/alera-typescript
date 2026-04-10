@@ -1,4 +1,4 @@
-from sqlalchemy import Integer, String, Enum as SQLEnum, DateTime, Boolean, Text, Index, Float
+from sqlalchemy import Integer, String, Enum as SQLEnum, DateTime, Boolean, Text, Index, Float, ForeignKey
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 from datetime import datetime
 import enum
@@ -67,6 +67,7 @@ class User(Base):
     license_number: Mapped[str | None] = mapped_column(String(255), nullable=True)
     specialty: Mapped[str | None] = mapped_column(String(255), nullable=True)
     license_state: Mapped[str | None] = mapped_column(String(100), nullable=True)
+    organization_id: Mapped[int | None] = mapped_column(Integer, ForeignKey("organizations.id"), nullable=True, index=True)
 
     # Timestamps
     created_at: Mapped[datetime] = mapped_column(DateTime, default=utcnow, nullable=False)
@@ -82,6 +83,7 @@ class User(Base):
     medical_histories = relationship("MedicalHistory", back_populates="patient")
     notifications = relationship("Notification", back_populates="user")
     audit_logs = relationship("AuditLog", back_populates="user")
+    organization = relationship("Organization", back_populates="members", foreign_keys=[organization_id])
 
     # Indexes
     __table_args__ = (

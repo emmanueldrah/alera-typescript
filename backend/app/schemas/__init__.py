@@ -102,6 +102,7 @@ class UserResponse(BaseModel):
     license_number: Optional[str] = None
     specialty: Optional[str] = None
     license_state: Optional[str] = None
+    organization_id: Optional[int] = None
     
     model_config = ConfigDict(from_attributes=True)
 

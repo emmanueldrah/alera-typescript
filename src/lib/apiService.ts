@@ -28,6 +28,7 @@ export interface ApiUser {
   license_number?: string;
   license_state?: string;
   specialty?: string;
+  organization_id?: number | null;
 }
 
 export interface ApiAuthResponse {
@@ -96,6 +97,89 @@ export interface SynchronizedHistoryResponse {
   imaging_scans: Record<string, unknown>[];
   structured_records: StructuredRecordResponse[];
   timeline: SynchronizedHistoryTimelineEntry[];
+}
+
+export interface OrganizationApiResponse {
+  id: number;
+  name: string;
+  slug: string;
+  organization_type: string;
+  description?: string | null;
+  is_active: boolean;
+  created_by?: number | null;
+  created_at?: string | null;
+  updated_at?: string | null;
+}
+
+export interface PatientPermissionResponse {
+  id: string;
+  patient_id: number;
+  organization_id: number;
+  requested_by?: number | null;
+  granted_by?: number | null;
+  revoked_by?: number | null;
+  scope: string[];
+  status: string;
+  reason?: string | null;
+  requested_at?: string | null;
+  granted_at?: string | null;
+  revoked_at?: string | null;
+  expires_at?: string | null;
+  created_at?: string | null;
+  updated_at?: string | null;
+}
+
+export interface MedicalDocumentApiResponse {
+  id: string;
+  medical_record_id: string;
+  patient_id: number;
+  organization_id?: number | null;
+  uploaded_by?: number | null;
+  file_id: string;
+  filename: string;
+  mime_type: string;
+  file_size: number;
+  document_type: string;
+  storage_subpath: string;
+  description?: string | null;
+  is_external: boolean;
+  source_system: string;
+  source_document_id?: string | null;
+  created_at?: string | null;
+  updated_at?: string | null;
+}
+
+export interface MedicalRecordApiResponse {
+  id: string;
+  patient_id: number;
+  organization_id?: number | null;
+  provider_id?: number | null;
+  parent_record_id?: string | null;
+  record_type: string;
+  category?: string | null;
+  title: string;
+  summary?: string | null;
+  status?: string | null;
+  event_time?: string | null;
+  source_system: string;
+  source_record_id?: string | null;
+  source_version?: string | null;
+  is_external: boolean;
+  is_deleted: boolean;
+  sync_status: string;
+  payload: Record<string, unknown>;
+  created_at?: string | null;
+  updated_at?: string | null;
+  documents: MedicalDocumentApiResponse[];
+}
+
+export interface UnifiedPatientRecordApiResponse {
+  patient_id: number;
+  organization_access: OrganizationApiResponse[];
+  permissions: PatientPermissionResponse[];
+  records: MedicalRecordApiResponse[];
+  timeline: MedicalRecordApiResponse[];
+  document_count: number;
 }
 
 export interface ImagingFileAsset {
@@ -1071,6 +1155,64 @@ export const recordsApi = {
   },
 };
 
+export const organizationsApi = {
+  listOrganizations: async () => {
+    const response = await apiClient.get<{ total: number; items: OrganizationApiResponse[] }>('/organizations');
+    return response.data;
+  },
+};
+
+export const patientPermissionsApi = {
+  listPermissions: async (patientId?: string | number) => {
+    const response = await apiClient.get<{ total: number; items: PatientPermissionResponse[] }>('/patient-permissions', {
+      params: patientId ? { patient_id: patientId } : undefined,
+    });
+    return response.data;
+  },
+
+  requestAccess: async (body: {
+    patient_id: number;
+    organization_id: number;
+    scope?: string[];
+    reason?: string;
+  }) => {
+    const response = await apiClient.post<PatientPermissionResponse>('/patient-permissions/request', body);
+    return response.data;
+  },
+
+  grantAccess: async (body: {
+    patient_id: number;
+    organization_id: number;
+    scope?: string[];
+    reason?: string;
+  }) => {
+    const response = await apiClient.post<PatientPermissionResponse>('/patient-permissions/grant', body);
+    return response.data;
+  },
+
+  approveAccess: async (permissionId: string, body?: { reason?: string; expires_at?: string | null }) => {
+    const response = await apiClient.post<PatientPermissionResponse>(`/patient-permissions/${permissionId}/approve`, body || {});
+    return response.data;
+  },
+
+  denyAccess: async (permissionId: string, body?: { reason?: string }) => {
+    const response = await apiClient.post<PatientPermissionResponse>(`/patient-permissions/${permissionId}/deny`, body || {});
+    return response.data;
+  },
+
+  revokeAccess: async (permissionId: string, body?: { reason?: string }) => {
+    const response = await apiClient.post<PatientPermissionResponse>(`/patient-permissions/${permissionId}/revoke`, body || {});
+    return response.data;
+  },
+};
+
+export const medicalRecordsApi = {
+  getUnifiedRecord: async (patientId: string | number) => {
+    const response = await apiClient.get<UnifiedPatientRecordApiResponse>(`/medical-records/unified/${patientId}`);
+    return response.data;
+  },
+};
+
 // ============================================================================
 // EXPORT ALL APIS
 // ============================================================================
@@ -1092,4 +1234,7 @@ export const api = {
   ambulance: ambulanceApi,
   liveLocation: liveLocationApi,
   records: recordsApi,
+  organizations: organizationsApi,
+  patientPermissions: patientPermissionsApi,
+  medicalRecords: medicalRecordsApi,
 };

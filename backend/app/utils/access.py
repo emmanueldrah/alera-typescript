@@ -4,10 +4,13 @@ from sqlalchemy.orm import Session
 
 from app.models.additional_features import PatientConsent
 from app.models.appointment import Appointment
+from app.models.canonical_records import PatientPermission
 from app.models.lab_imaging import ImagingScan, LabTest
+from app.models.organization import Organization
 from app.models.prescription import Prescription
 from app.models.structured_record import StructuredRecord
 from app.models.user import User, UserRole
+from app.services.medical_record_sync import organization_for_user, permission_allows_scope
 from app.utils.time import utcnow
 
 
@@ -177,3 +180,44 @@ def authorize_shared_history_access(db: Session, current_user: User, patient_id:
         )
 
     return "shared_history"
+
+
+def require_medical_record_access(db: Session, current_user: User, patient_id: int, scope: str = "full_record") -> str:
+    if current_user.role in (UserRole.ADMIN, UserRole.SUPER_ADMIN):
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Admins can only access medical-record metadata.",
+        )
+
+    if current_user.role == UserRole.PATIENT:
+        if current_user.id != patient_id:
+            raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Not authorized")
+        return "self"
+
+    if current_user.role not in WORKFORCE_ROLES:
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Not authorized")
+
+    require_verified_workforce_member(current_user, "view patient medical records")
+    organization = organization_for_user(db, current_user)
+    if organization is None:
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="No organization is linked to this account.")
+
+    permission = (
+        db.query(PatientPermission)
+        .filter(
+            PatientPermission.patient_id == patient_id,
+            PatientPermission.organization_id == organization.id,
+        )
+        .order_by(PatientPermission.updated_at.desc())
+        .first()
+    )
+    if not permission or not permission_allows_scope(permission, scope):
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="This organization does not have active permission to access the requested patient record.",
+        )
+    return "organization"
+
+
+def current_user_organization(db: Session, current_user: User) -> Organization | None:
+    return organization_for_user(db, current_user)

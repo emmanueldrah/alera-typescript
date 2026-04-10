@@ -5,9 +5,12 @@ import {
   AlertCircle,
   Building2,
   Calendar,
+  CheckCircle2,
   FileText,
   FlaskConical,
   Heart,
+  Image as ImageIcon,
+  LockKeyhole,
   Pill,
   Plus,
   ScanLine,
@@ -18,7 +21,17 @@ import {
 import { useSearchParams } from 'react-router-dom';
 import { useAuth } from '@/contexts/useAuth';
 import { useAppData } from '@/contexts/useAppData';
-import { recordsApi, type SynchronizedHistoryResponse, type SynchronizedHistoryTimelineEntry } from '@/lib/apiService';
+import {
+  medicalRecordsApi,
+  organizationsApi,
+  patientPermissionsApi,
+  recordsApi,
+  type OrganizationApiResponse,
+  type PatientPermissionResponse,
+  type SynchronizedHistoryResponse,
+  type SynchronizedHistoryTimelineEntry,
+  type UnifiedPatientRecordApiResponse,
+} from '@/lib/apiService';
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
@@ -137,8 +150,11 @@ const MedicalHistoryPage = () => {
   const [formType, setFormType] = useState<RecordFormType>('condition');
   const [selectedPatientId, setSelectedPatientId] = useState('');
   const [syncedHistory, setSyncedHistory] = useState<SynchronizedHistoryResponse | null>(null);
+  const [unifiedRecord, setUnifiedRecord] = useState<UnifiedPatientRecordApiResponse | null>(null);
+  const [currentOrganization, setCurrentOrganization] = useState<OrganizationApiResponse | null>(null);
   const [isLoadingSyncedHistory, setIsLoadingSyncedHistory] = useState(false);
   const [syncError, setSyncError] = useState<string | null>(null);
+  const [permissionActionLoading, setPermissionActionLoading] = useState<string | null>(null);
   const [formData, setFormData] = useState({
     name: '',
     date: '',
@@ -213,12 +229,17 @@ const MedicalHistoryPage = () => {
       setSyncError(null);
 
       try {
-        const response = await recordsApi.getSynchronizedHistory(focusedPatientId);
+        const [response, unified] = await Promise.all([
+          recordsApi.getSynchronizedHistory(focusedPatientId),
+          medicalRecordsApi.getUnifiedRecord(focusedPatientId),
+        ]);
         if (!active) return;
         setSyncedHistory(response);
+        setUnifiedRecord(unified);
       } catch (error) {
         if (!active) return;
         setSyncedHistory(null);
+        setUnifiedRecord(null);
         setSyncError(getErrorMessage(error));
       } finally {
         if (active) setIsLoadingSyncedHistory(false);
@@ -231,6 +252,30 @@ const MedicalHistoryPage = () => {
       active = false;
     };
   }, [focusedPatientId]);
+
+  useEffect(() => {
+    if (!user || user.role === 'patient') {
+      setCurrentOrganization(null);
+      return;
+    }
+
+    let active = true;
+    const loadOrganizations = async () => {
+      try {
+        const response = await organizationsApi.listOrganizations();
+        if (!active) return;
+        setCurrentOrganization(response.items?.[0] ?? null);
+      } catch (error) {
+        if (!active) return;
+        setCurrentOrganization(null);
+      }
+    };
+
+    void loadOrganizations();
+    return () => {
+      active = false;
+    };
+  }, [user]);
 
   const handleAddHistoryItem = () => {
     if (!user) return;
@@ -362,6 +407,90 @@ const MedicalHistoryPage = () => {
   const unifiedLabTests = syncedHistory?.lab_tests ?? [];
   const unifiedImagingScans = syncedHistory?.imaging_scans ?? [];
   const unifiedTimeline = syncedHistory?.timeline ?? [];
+  const unifiedDocuments = useMemo(
+    () => (unifiedRecord?.records ?? []).flatMap((record) => record.documents ?? []),
+    [unifiedRecord],
+  );
+  const unifiedPermissions = unifiedRecord?.permissions ?? [];
+  const activeGrantedPermissions = unifiedPermissions.filter((permission) => permission.status === 'granted');
+  const pendingPermissions = unifiedPermissions.filter((permission) => permission.status === 'requested');
+  const currentOrgPermission = currentOrganization
+    ? unifiedPermissions.find((permission) => permission.organization_id === currentOrganization.id && permission.status === 'granted')
+    : null;
+
+  const refreshUnifiedRecord = async () => {
+    if (!focusedPatientId) return;
+    const [history, unified] = await Promise.all([
+      recordsApi.getSynchronizedHistory(focusedPatientId),
+      medicalRecordsApi.getUnifiedRecord(focusedPatientId),
+    ]);
+    setSyncedHistory(history);
+    setUnifiedRecord(unified);
+  };
+
+  useEffect(() => {
+    if (!focusedPatientId) return;
+
+    const interval = window.setInterval(() => {
+      void refreshUnifiedRecord();
+    }, 15000);
+
+    return () => window.clearInterval(interval);
+  }, [focusedPatientId]);
+
+  const handleRequestAccess = async () => {
+    if (!focusedPatientId || !currentOrganization) return;
+    setPermissionActionLoading('request');
+    try {
+      await patientPermissionsApi.requestAccess({
+        patient_id: Number(focusedPatientId),
+        organization_id: currentOrganization.id,
+        scope: ['full_record'],
+        reason: 'Clinical review requested from unified medical record',
+      });
+      await refreshUnifiedRecord();
+    } catch (error) {
+      setSyncError(getErrorMessage(error));
+    } finally {
+      setPermissionActionLoading(null);
+    }
+  };
+
+  const handleApprovePermission = async (permissionId: string) => {
+    setPermissionActionLoading(permissionId);
+    try {
+      await patientPermissionsApi.approveAccess(permissionId);
+      await refreshUnifiedRecord();
+    } catch (error) {
+      setSyncError(getErrorMessage(error));
+    } finally {
+      setPermissionActionLoading(null);
+    }
+  };
+
+  const handleDenyPermission = async (permissionId: string) => {
+    setPermissionActionLoading(permissionId);
+    try {
+      await patientPermissionsApi.denyAccess(permissionId);
+      await refreshUnifiedRecord();
+    } catch (error) {
+      setSyncError(getErrorMessage(error));
+    } finally {
+      setPermissionActionLoading(null);
+    }
+  };
+
+  const handleRevokePermission = async (permissionId: string) => {
+    setPermissionActionLoading(permissionId);
+    try {
+      await patientPermissionsApi.revokeAccess(permissionId);
+      await refreshUnifiedRecord();
+    } catch (error) {
+      setSyncError(getErrorMessage(error));
+    } finally {
+      setPermissionActionLoading(null);
+    }
+  };
 
   const renderPatientComposer = isPatientView ? (
     <Dialog open={showForm} onOpenChange={setShowForm}>
@@ -663,7 +792,7 @@ const MedicalHistoryPage = () => {
             <SummaryCard label="Appointments" value={syncedHistory.counts.appointments} helper="Clinical encounters on file" />
             <SummaryCard label="Prescriptions" value={syncedHistory.counts.prescriptions} helper="Medication records synchronized" />
             <SummaryCard label="Diagnostics" value={syncedHistory.counts.lab_tests + syncedHistory.counts.imaging_scans} helper="Lab and imaging studies" />
-            <SummaryCard label="Organizations" value={syncedHistory.interacting_organizations.length} helper="Linked care organizations" />
+            <SummaryCard label="Documents" value={unifiedRecord?.document_count ?? unifiedDocuments.length} helper="Files linked to the unified record" />
           </div>
 
           <div className="grid gap-4 lg:grid-cols-[1.35fr_0.95fr]">
@@ -683,10 +812,22 @@ const MedicalHistoryPage = () => {
                   <Badge variant={syncedHistory.has_shared_history_consent ? 'default' : 'secondary'}>
                     {syncedHistory.has_shared_history_consent ? 'Consent active' : 'Consent missing'}
                   </Badge>
+                  <Badge variant="secondary">Granted orgs: {activeGrantedPermissions.length}</Badge>
                 </div>
                 <p className="text-sm text-muted-foreground">
                   Shared history is only exposed when the patient has interacted with the organization and has an active consent on file.
                 </p>
+                {!isPatientView && currentOrganization ? (
+                  currentOrgPermission ? (
+                    <div className="rounded-xl border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm text-emerald-800">
+                      Your organization already has active access to this patient&apos;s unified record.
+                    </div>
+                  ) : (
+                    <Button onClick={handleRequestAccess} disabled={permissionActionLoading === 'request'}>
+                      {permissionActionLoading === 'request' ? 'Requesting access...' : 'Request Organization Access'}
+                    </Button>
+                  )
+                ) : null}
               </CardContent>
             </Card>
 
@@ -719,6 +860,8 @@ const MedicalHistoryPage = () => {
               <TabsTrigger value="conditions">Conditions</TabsTrigger>
               <TabsTrigger value="medications">Medications</TabsTrigger>
               <TabsTrigger value="diagnostics">Diagnostics</TabsTrigger>
+              <TabsTrigger value="documents">Documents</TabsTrigger>
+              <TabsTrigger value="access">Access Control</TabsTrigger>
               {isPatientView ? <TabsTrigger value="personal">Personal Entries</TabsTrigger> : null}
             </TabsList>
 
@@ -847,6 +990,123 @@ const MedicalHistoryPage = () => {
                       ))
                     ) : (
                       <div className="text-sm text-muted-foreground">No synchronized imaging studies recorded yet.</div>
+                    )}
+                  </CardContent>
+                </Card>
+              </div>
+            </TabsContent>
+
+            <TabsContent value="documents" className="space-y-4">
+              <Card>
+                <CardHeader>
+                  <CardTitle className="text-lg">Attached Documents</CardTitle>
+                  <CardDescription>PDFs, scans, reports, and imported files linked to the unified patient record.</CardDescription>
+                </CardHeader>
+                <CardContent className="space-y-4">
+                  {unifiedDocuments.length > 0 ? (
+                    unifiedDocuments.map((document) => (
+                      <div key={document.id} className="flex items-center justify-between rounded-2xl border border-border bg-background p-4">
+                        <div className="flex items-center gap-3">
+                          <div className="flex h-10 w-10 items-center justify-center rounded-full bg-slate-100 text-slate-700">
+                            {document.mime_type?.startsWith('image/') ? <ImageIcon className="h-4 w-4" /> : <FileText className="h-4 w-4" />}
+                          </div>
+                          <div>
+                            <div className="font-semibold text-foreground">{document.filename}</div>
+                            <div className="mt-1 text-sm text-muted-foreground">
+                              {document.document_type} · {Math.max(1, Math.round(document.file_size / 1024))} KB · {formatDate(document.created_at)}
+                            </div>
+                          </div>
+                        </div>
+                        <Badge variant="secondary">{document.source_system}</Badge>
+                      </div>
+                    ))
+                  ) : (
+                    <div className="text-sm text-muted-foreground">No documents linked to this record yet.</div>
+                  )}
+                </CardContent>
+              </Card>
+            </TabsContent>
+
+            <TabsContent value="access" className="space-y-4">
+              <div className="grid gap-4 xl:grid-cols-2">
+                <Card>
+                  <CardHeader>
+                    <CardTitle className="flex items-center gap-2 text-lg">
+                      <LockKeyhole className="h-5 w-5 text-primary" />
+                      Granted Access
+                    </CardTitle>
+                    <CardDescription>Organizations with permission to view this patient&apos;s unified record.</CardDescription>
+                  </CardHeader>
+                  <CardContent className="space-y-3">
+                    {activeGrantedPermissions.length > 0 ? (
+                      activeGrantedPermissions.map((permission) => {
+                        const org = unifiedRecord?.organization_access.find((item) => item.id === permission.organization_id);
+                        return (
+                          <div key={permission.id} className="rounded-2xl border border-border bg-background p-4">
+                            <div className="flex items-start justify-between gap-3">
+                              <div>
+                                <div className="font-semibold text-foreground">{org?.name ?? `Organization ${permission.organization_id}`}</div>
+                                <div className="mt-1 text-sm text-muted-foreground">Scope: {permission.scope.join(', ') || 'full_record'}</div>
+                                <div className="text-sm text-muted-foreground">Granted: {formatDate(permission.granted_at)}</div>
+                              </div>
+                              <div className="flex items-center gap-2">
+                                <Badge variant="secondary">{permission.status}</Badge>
+                                {isPatientView ? (
+                                  <Button
+                                    variant="outline"
+                                    size="sm"
+                                    onClick={() => handleRevokePermission(permission.id)}
+                                    disabled={permissionActionLoading === permission.id}
+                                  >
+                                    Revoke
+                                  </Button>
+                                ) : null}
+                              </div>
+                            </div>
+                          </div>
+                        );
+                      })
+                    ) : (
+                      <div className="text-sm text-muted-foreground">No active organization permissions yet.</div>
+                    )}
+                  </CardContent>
+                </Card>
+
+                <Card>
+                  <CardHeader>
+                    <CardTitle className="flex items-center gap-2 text-lg">
+                      <CheckCircle2 className="h-5 w-5 text-primary" />
+                      Pending Requests
+                    </CardTitle>
+                    <CardDescription>Review organization requests and keep access under patient control.</CardDescription>
+                  </CardHeader>
+                  <CardContent className="space-y-3">
+                    {pendingPermissions.length > 0 ? (
+                      pendingPermissions.map((permission) => {
+                        const org = unifiedRecord?.organization_access.find((item) => item.id === permission.organization_id);
+                        return (
+                          <div key={permission.id} className="rounded-2xl border border-border bg-background p-4">
+                            <div className="font-semibold text-foreground">{org?.name ?? `Organization ${permission.organization_id}`}</div>
+                            <div className="mt-1 text-sm text-muted-foreground">Requested: {formatDate(permission.requested_at)}</div>
+                            <div className="mt-3 flex gap-2">
+                              {isPatientView ? (
+                                <>
+                                  <Button size="sm" onClick={() => handleApprovePermission(permission.id)} disabled={permissionActionLoading === permission.id}>
+                                    Approve
+                                  </Button>
+                                  <Button variant="outline" size="sm" onClick={() => handleDenyPermission(permission.id)} disabled={permissionActionLoading === permission.id}>
+                                    Deny
+                                  </Button>
+                                </>
+                              ) : (
+                                <Badge variant="secondary">Awaiting patient approval</Badge>
+                              )}
+                            </div>
+                          </div>
+                        );
+                      })
+                    ) : (
+                      <div className="text-sm text-muted-foreground">No pending access requests.</div>
                     )}
                   </CardContent>
                 </Card>
