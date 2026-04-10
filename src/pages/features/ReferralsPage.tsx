@@ -1,4 +1,4 @@
-import { useState, useMemo } from 'react';
+import { useState, useMemo, useEffect } from 'react';
 import { motion } from 'framer-motion';
 import { FileText, CheckCircle, Clock, Inbox, Plus, Send, X } from 'lucide-react';
 import { useAuth } from '@/contexts/useAuth';
