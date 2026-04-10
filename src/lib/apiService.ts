@@ -55,6 +55,49 @@ export interface StructuredRecordResponse<T = Record<string, unknown>> {
   updated_at: string;
 }
 
+export interface SynchronizedHistoryParticipant {
+  user_id: number;
+  role: string;
+  name: string;
+}
+
+export interface SynchronizedHistoryCounts {
+  appointments: number;
+  allergies: number;
+  medical_history_entries: number;
+  prescriptions: number;
+  lab_tests: number;
+  imaging_scans: number;
+  structured_records: number;
+}
+
+export interface SynchronizedHistoryTimelineEntry {
+  source: string;
+  source_id: string;
+  title: string;
+  status?: string | null;
+  timestamp?: string | null;
+  provider_id?: number | null;
+  provider_name?: string | null;
+  payload: Record<string, unknown>;
+}
+
+export interface SynchronizedHistoryResponse {
+  patient_id: number;
+  access_scope: string;
+  has_shared_history_consent: boolean;
+  interacting_organizations: SynchronizedHistoryParticipant[];
+  counts: SynchronizedHistoryCounts;
+  appointments: Record<string, unknown>[];
+  allergies: Record<string, unknown>[];
+  medical_history: Record<string, unknown>[];
+  prescriptions: Record<string, unknown>[];
+  lab_tests: Record<string, unknown>[];
+  imaging_scans: Record<string, unknown>[];
+  structured_records: StructuredRecordResponse[];
+  timeline: SynchronizedHistoryTimelineEntry[];
+}
+
 export interface ImagingFileAsset {
   file_id: string;
   filename: string;
@@ -1019,6 +1062,11 @@ export const recordsApi = {
 
   deleteRecord: async (recordId: string) => {
     const response = await apiClient.delete(`/records/${recordId}`);
+    return response.data;
+  },
+
+  getSynchronizedHistory: async (patientId: string | number) => {
+    const response = await apiClient.get<SynchronizedHistoryResponse>(`/records/synchronized-history/${patientId}`);
     return response.data;
   },
 };
