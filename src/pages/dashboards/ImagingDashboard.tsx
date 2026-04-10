@@ -2,7 +2,7 @@ import { motion } from 'framer-motion';
 import { Clock, CheckCircle, AlertCircle, ArrowRight, Inbox, FileText } from 'lucide-react';
 import { Link } from 'react-router-dom';
 import { useAuth } from '@/contexts/useAuth';
-import { useAppData } from '@/contexts/AppData';
+import { useAppData } from '@/contexts/useAppData';
 import { getVisibleImagingScans } from '@/lib/recordVisibility';
 import { getVisibleReferrals } from '@/lib/referralUtils';
 

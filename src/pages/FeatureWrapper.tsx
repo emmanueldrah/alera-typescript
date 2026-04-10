@@ -53,7 +53,7 @@ const pageMap: Record<string, FeatureConfig> = {
   'lab-referrals': { component: ReferralsPage, props: { referralKind: 'laboratory' as ReferralKind } },
   'test-requests': { component: LabResultsPage },
   imaging: { component: ImagingPage },
-  'imaging-referrals': { component: ReferralsPage, props: { referralKind: 'imaging' as ReferralKind } },
+  'imaging-referrals': { component: ImagingPage },
   'scan-requests': { component: ImagingPage },
   ambulance: { component: AmbulancePage },
   requests: { component: AmbulancePage },

@@ -31,8 +31,8 @@ const DoctorDashboard = () => {
   const pendingImagingScans = imagingScans.filter(
     (scan) => scan.doctorId === user?.id && (scan.status === 'requested' || scan.status === 'in-progress'),
   );
-  const pendingImagingReferrals = referrals.filter(
-    (referral) => referral.fromDoctorId === user?.id && referral.referralType === 'imaging' && referral.status !== 'completed' && referral.status !== 'cancelled',
+  const pendingImagingReferrals = imagingScans.filter(
+    (scan) => scan.doctorId === user?.id && scan.status !== 'completed' && scan.status !== 'cancelled',
   );
 
   return (

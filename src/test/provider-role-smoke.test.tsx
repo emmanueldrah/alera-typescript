@@ -232,6 +232,7 @@ describe('provider role smoke tests', () => {
 
   it.each([
     ['doctor', 'patients', /my patients/i],
+    ['doctor', 'imaging-referrals', /imaging referrals/i],
     ['hospital', 'referrals', /hospital referrals/i],
     ['laboratory', 'test-requests', /test requests/i],
     ['imaging', 'scan-requests', /scan requests/i],
