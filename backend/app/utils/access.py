@@ -153,7 +153,7 @@ def patient_has_active_shared_history_consent(db: Session, patient_id: int) -> b
 
 
 def authorize_shared_history_access(db: Session, current_user: User, patient_id: int) -> str:
-    if current_user.role == UserRole.ADMIN:
+    if current_user.role in (UserRole.ADMIN, UserRole.SUPER_ADMIN):
         return "admin"
 
     if current_user.role == UserRole.PATIENT and current_user.id == patient_id:

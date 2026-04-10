@@ -30,7 +30,7 @@ export const featureAccessMap: Record<string, UserRole[]> = {
   'appointment-reminders': ['patient', 'doctor'],
   allergies: ['patient', 'doctor'],
   'prescription-refills': ['patient'],
-  'medical-history': ['patient', 'doctor'],
+  'medical-history': ['patient', 'doctor', 'hospital', 'admin'],
   consent: ['patient'],
   'clinical-notes': ['patient', 'doctor'],
   'problem-list': ['patient'],

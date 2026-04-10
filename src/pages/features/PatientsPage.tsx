@@ -25,7 +25,7 @@ const PatientsPage = () => {
 
   const card = (i: number) => ({ initial: { opacity: 0, y: 15 }, animate: { opacity: 1, y: 0 }, transition: { delay: i * 0.05 } });
   const canMessagePatient = user?.role === 'doctor';
-  const canViewHistory = user?.role === 'doctor';
+  const canViewHistory = user?.role === 'doctor' || user?.role === 'hospital' || user?.role === 'admin' || user?.role === 'super_admin';
 
   if (user?.role !== 'doctor' && user?.role !== 'admin' && user?.role !== 'hospital') {
     return (
@@ -122,7 +122,7 @@ const PatientsPage = () => {
                     )}
                     {canViewHistory && (
                       <button
-                        onClick={() => navigate(`/dashboard/timeline?patient=${patient.id}`)}
+                        onClick={() => navigate(`/dashboard/medical-history?patient=${patient.id}`)}
                         className="px-4 py-2 rounded-lg bg-secondary text-secondary-foreground text-sm font-medium hover:bg-muted transition"
                       >
                         History
