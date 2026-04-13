@@ -3,9 +3,10 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Checkbox } from '@/components/ui/checkbox';
-import { AlertCircle, Bell, CheckCircle2, Clock, Send } from 'lucide-react';
+import { AlertCircle, Bell, CheckCircle2, Clock, Search, Send } from 'lucide-react';
 import { useAppData } from '@/contexts/useAppData';
 import { useAuth } from '@/contexts/useAuth';
+import { toast } from '@/components/ui/use-toast';
 import type { Appointment } from '@/data/mockData';
 
 export const SmartAppointmentRemindersPage: React.FC = () => {
@@ -14,6 +15,7 @@ export const SmartAppointmentRemindersPage: React.FC = () => {
   const [selectedAppointments, setSelectedAppointments] = useState<Set<string>>(new Set());
   const [selectedReminders, setSelectedReminders] = useState<Set<'24h' | '1h' | '15m'>>(new Set(['24h', '1h']));
   const [activeTab, setActiveTab] = useState<'generate' | 'manage'>('generate');
+  const [searchQuery, setSearchQuery] = useState('');
 
   // Filter appointments: upcoming, not cancelled, no existing reminders
   const upcomingAppointments = useMemo(() => {
@@ -36,6 +38,20 @@ export const SmartAppointmentRemindersPage: React.FC = () => {
     if (user?.role === 'doctor') return [];
     return getPatientReminders(user?.id || '');
   }, [user, getPatientReminders]);
+  const filteredPatientReminders = useMemo(() => {
+    const needle = searchQuery.trim().toLowerCase();
+    if (!needle) return patientReminders;
+    return patientReminders.filter((reminder) => {
+      const appointment = appointments.find((item) => item.id === reminder.appointmentId);
+      return Boolean(
+        appointment && (
+          appointment.doctorName.toLowerCase().includes(needle)
+          || appointment.type.toLowerCase().includes(needle)
+          || reminder.reminderType.toLowerCase().includes(needle)
+        )
+      );
+    });
+  }, [appointments, patientReminders, searchQuery]);
 
   const handleSelectAppointment = (appointmentId: string) => {
     const newSelected = new Set(selectedAppointments);
@@ -63,14 +79,26 @@ export const SmartAppointmentRemindersPage: React.FC = () => {
     });
     setSelectedAppointments(new Set());
     setActiveTab('manage');
+    toast({
+      title: 'Reminders generated',
+      description: `Created reminders for ${selectedAppointments.size} appointment${selectedAppointments.size === 1 ? '' : 's'}.`,
+    });
   };
 
   const handleResendReminder = (reminderId: string) => {
     sendReminder(reminderId, 'email');
+    toast({
+      title: 'Reminder resent',
+      description: 'The reminder was sent again by email.',
+    });
   };
 
   const handleAcknowledgeReminder = (reminderId: string) => {
     acknowledgeReminder(reminderId, user?.id || '');
+    toast({
+      title: 'Reminder acknowledged',
+      description: 'This reminder has been marked as acknowledged.',
+    });
   };
 
   // Reminder status badge
@@ -232,18 +260,27 @@ export const SmartAppointmentRemindersPage: React.FC = () => {
       {/* Manage Reminders Tab */}
       {activeTab === 'manage' && (
         <div className="space-y-6">
-          {patientReminders.length === 0 ? (
+          <div className="relative max-w-xl">
+            <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-gray-500" />
+            <input
+              value={searchQuery}
+              onChange={(event) => setSearchQuery(event.target.value)}
+              placeholder="Search reminders by appointment or doctor..."
+              className="h-11 w-full rounded-xl border border-input bg-background pl-10 pr-4 text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-primary/30"
+            />
+          </div>
+          {filteredPatientReminders.length === 0 ? (
             <Card className="bg-gray-50 border-gray-200">
               <CardContent className="pt-6">
-                <p className="text-gray-700">No reminders created yet. Go to the "Generate Reminders" tab to create some.</p>
+                <p className="text-gray-700">{patientReminders.length === 0 ? 'No reminders created yet. Go to the "Generate Reminders" tab to create some.' : 'No reminders match your current search.'}</p>
               </CardContent>
             </Card>
           ) : (
             <div className="space-y-4">
               {/* Group reminders by appointment */}
-              {Array.from(new Set(patientReminders.map((r) => r.appointmentId)))
+              {Array.from(new Set(filteredPatientReminders.map((r) => r.appointmentId)))
                 .map((aptId) => {
-                  const reminders = patientReminders.filter((r) => r.appointmentId === aptId);
+                  const reminders = filteredPatientReminders.filter((r) => r.appointmentId === aptId);
                   const appointment = appointments.find((a) => a.id === aptId);
                   return (
                     <Card key={aptId}>

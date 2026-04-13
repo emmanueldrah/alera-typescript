@@ -1,10 +1,11 @@
 import { useState, useMemo } from 'react';
 import { motion } from 'framer-motion';
-import { Bell, Clock, CheckCircle, AlertCircle, Send, Filter, Calendar, User, Stethoscope } from 'lucide-react';
+import { Bell, Clock, CheckCircle, AlertCircle, Download, Send, Calendar, Search, User, Stethoscope } from 'lucide-react';
 import { useAuth } from '@/contexts/useAuth';
 import { useAppData } from '@/contexts/useAppData';
 import { useNotifications } from '@/contexts/useNotifications';
 import { Button } from '@/components/ui/button';
+import { toast } from '@/components/ui/use-toast';
 import type { Appointment } from '@/data/mockData';
 import { getAppointmentTimeUntilLabel, isWithinNext24Hours, isWithinNextHour, parseAppointmentDateTime } from '@/lib/appointmentUtils';
 
@@ -12,6 +13,7 @@ const AppointmentRemindersPage = () => {
   const { user } = useAuth();
   const { appointments, updateAppointment } = useAppData();
   const { addNotification } = useNotifications();
+  const [searchQuery, setSearchQuery] = useState('');
   const [statusFilter, setStatusFilter] = useState('all');
   const [reminderFilter, setReminderFilter] = useState('all');
 
@@ -24,13 +26,17 @@ const AppointmentRemindersPage = () => {
 
   const filtered = useMemo(() => {
     return userAppointments.filter(apt => {
+      const matchesSearch = !searchQuery.trim()
+        || apt.type.toLowerCase().includes(searchQuery.trim().toLowerCase())
+        || apt.doctorName.toLowerCase().includes(searchQuery.trim().toLowerCase())
+        || apt.patientName.toLowerCase().includes(searchQuery.trim().toLowerCase());
       const matchesStatus = statusFilter === 'all' || apt.status === statusFilter;
-      if (reminderFilter === 'all') return matchesStatus;
-      if (reminderFilter === 'pending') return matchesStatus && (!apt.reminder24hSent || !apt.reminder1hSent);
-      if (reminderFilter === 'sent') return matchesStatus && (apt.reminder24hSent || apt.reminder1hSent);
-      return matchesStatus;
+      if (reminderFilter === 'all') return matchesSearch && matchesStatus;
+      if (reminderFilter === 'pending') return matchesSearch && matchesStatus && (!apt.reminder24hSent || !apt.reminder1hSent);
+      if (reminderFilter === 'sent') return matchesSearch && matchesStatus && (apt.reminder24hSent || apt.reminder1hSent);
+      return matchesSearch && matchesStatus;
     });
-  }, [userAppointments, statusFilter, reminderFilter]);
+  }, [userAppointments, searchQuery, statusFilter, reminderFilter]);
 
   const sorted = useMemo(() => {
     return [...filtered].sort((a, b) => {
@@ -67,6 +73,10 @@ const AppointmentRemindersPage = () => {
         actionLabel: 'Open appointment',
       });
       updateAppointment(appointment.id, prev => ({ ...prev, reminder24hSent: true }));
+      toast({
+        title: '24-hour reminder sent',
+        description: `Reminder queued for ${appointment.type} on ${appointment.date}.`,
+      });
     }
   };
 
@@ -85,7 +95,48 @@ const AppointmentRemindersPage = () => {
         actionLabel: 'Open appointment',
       });
       updateAppointment(appointment.id, prev => ({ ...prev, reminder1hSent: true }));
+      toast({
+        title: '1-hour reminder sent',
+        description: `Reminder queued for ${appointment.type} on ${appointment.date}.`,
+      });
     }
+  };
+
+  const handleExportReminders = () => {
+    if (sorted.length === 0) {
+      toast({
+        title: 'Nothing to export',
+        description: 'There are no reminder rows in the current view.',
+        variant: 'destructive',
+      });
+      return;
+    }
+
+    const csv = [
+      ['Appointment Type', 'Doctor', 'Patient', 'Date', 'Time', 'Mode', '24h Reminder', '1h Reminder'].join(','),
+      ...sorted.map((appointment) => [
+        appointment.type,
+        appointment.doctorName,
+        appointment.patientName,
+        appointment.date,
+        appointment.time,
+        appointment.appointmentMode,
+        appointment.reminder24hSent ? 'sent' : 'pending',
+        appointment.reminder1hSent ? 'sent' : 'pending',
+      ].map((value) => `"${String(value).replace(/"/g, '""')}"`).join(',')),
+    ].join('\n');
+
+    const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    link.href = url;
+    link.download = `appointment-reminders-${new Date().toISOString().slice(0, 10)}.csv`;
+    link.click();
+    URL.revokeObjectURL(url);
+    toast({
+      title: 'Reminders exported',
+      description: 'The current reminder view was downloaded as CSV.',
+    });
   };
 
   const card = (i: number) => ({ initial: { opacity: 0, y: 10 }, animate: { opacity: 1, y: 0 }, transition: { delay: i * 0.03 } });
@@ -97,6 +148,10 @@ const AppointmentRemindersPage = () => {
           <h1 className="text-2xl font-display font-bold text-foreground">Appointment Reminders</h1>
           <p className="text-muted-foreground mt-1">Manage notifications for your upcoming appointments</p>
         </div>
+        <Button variant="outline" onClick={handleExportReminders} className="gap-2">
+          <Download className="w-4 h-4" />
+          Export CSV
+        </Button>
       </div>
 
       <div className="grid grid-cols-4 gap-3">
@@ -125,6 +180,15 @@ const AppointmentRemindersPage = () => {
       </div>
 
       <div className="flex flex-col md:flex-row gap-3">
+        <div className="relative flex-1">
+          <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+          <input
+            value={searchQuery}
+            onChange={e => setSearchQuery(e.target.value)}
+            placeholder="Search by appointment, doctor, or patient..."
+            className="h-11 w-full rounded-xl border border-input bg-background pl-10 pr-4 text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-primary/30"
+          />
+        </div>
         <select
           value={statusFilter}
           onChange={e => setStatusFilter(e.target.value)}
@@ -149,7 +213,7 @@ const AppointmentRemindersPage = () => {
       {sorted.length === 0 ? (
         <div className="flex flex-col items-center justify-center py-12 text-muted-foreground bg-card rounded-2xl border border-border">
           <Calendar className="w-10 h-10 mb-3" />
-          <p className="text-sm">No upcoming appointments</p>
+          <p className="text-sm">{userAppointments.length === 0 ? 'No upcoming appointments' : 'No appointments match your current search or filter'}</p>
         </div>
       ) : (
         <div className="space-y-2">

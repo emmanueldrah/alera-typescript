@@ -1,6 +1,6 @@
 import { useState, useMemo, useEffect } from 'react';
 import { motion } from 'framer-motion';
-import { Activity, Heart, Thermometer, Wind, Droplets, Plus, Loader, TrendingUp, TrendingDown, AlertCircle, CheckCircle, Inbox, LineChart, Scale, CalendarClock, NotebookPen } from 'lucide-react';
+import { Activity, Heart, Thermometer, Wind, Download, Droplets, Plus, Loader, TrendingUp, TrendingDown, AlertCircle, CheckCircle, Inbox, LineChart, Scale, CalendarClock, NotebookPen } from 'lucide-react';
 import { useAuth } from '@/contexts/useAuth';
 import { useAppData } from '@/contexts/useAppData';
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
@@ -8,6 +8,7 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
 import { useNotifications } from '@/contexts/useNotifications';
+import { toast } from '@/components/ui/use-toast';
 import type { VitalSigns } from '@/data/mockData';
 
 const vitalMetrics = [
@@ -165,11 +166,52 @@ const HealthMetricsPage = () => {
       addVitalSigns(newVital);
       setFormData({ heartRate: '', systolicBP: '', diastolicBP: '', temperature: '', oxygenLevel: '', weight: '', notes: '' });
       setIsDialogOpen(false);
+      toast({
+        title: 'Vitals logged',
+        description: 'Your latest health metrics were saved successfully.',
+      });
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to add vital signs');
     } finally {
       setIsLoading(false);
     }
+  };
+
+  const handleExportVitals = () => {
+    if (sortedVitals.length === 0) {
+      toast({
+        title: 'Nothing to export',
+        description: 'There are no vitals to export yet.',
+        variant: 'destructive',
+      });
+      return;
+    }
+
+    const csv = [
+      ['Timestamp', 'Heart Rate', 'Systolic BP', 'Diastolic BP', 'Temperature', 'Oxygen Level', 'Weight', 'Notes'].join(','),
+      ...sortedVitals.map((vital) => [
+        vital.timestamp,
+        String(vital.heartRate),
+        String(vital.systolicBP),
+        String(vital.diastolicBP),
+        String(vital.temperature),
+        String(vital.oxygenLevel),
+        String(vital.weight),
+        vital.notes ?? '',
+      ].map((value) => `"${String(value).replace(/"/g, '""')}"`).join(',')),
+    ].join('\n');
+
+    const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    link.href = url;
+    link.download = `health-metrics-${new Date().toISOString().slice(0, 10)}.csv`;
+    link.click();
+    URL.revokeObjectURL(url);
+    toast({
+      title: 'Health metrics exported',
+      description: 'Your vitals history was downloaded as CSV.',
+    });
   };
 
   const card = (i: number) => ({ initial: { opacity: 0, y: 15 }, animate: { opacity: 1, y: 0 }, transition: { delay: i * 0.05 } });
@@ -206,6 +248,10 @@ const HealthMetricsPage = () => {
           <h1 className="text-2xl font-display font-bold text-foreground">Health Metrics</h1>
           <p className="text-muted-foreground mt-1">Track your vital signs and health indicators</p>
         </div>
+        <Button variant="outline" onClick={handleExportVitals} className="gap-2">
+          <Download className="w-4 h-4" />
+          Export CSV
+        </Button>
         <Dialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>
           <DialogTrigger asChild>
             <Button className="gap-2">
