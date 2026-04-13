@@ -84,7 +84,6 @@ const App = () => {
                   <BrowserRouter future={{ v7_startTransition: true, v7_relativeSplatPath: true }}>
                     <Suspense fallback={<RouteLoader />}>
                       <Routes>
-                        <Route path="/test" element={<div className="p-10 bg-blue-500 text-white text-4xl">TEST PAGE - React is working!</div>} />
                         <Route element={<AuthRedirect><MainLayout /></AuthRedirect>}>
                           <Route path="/" element={<LandingHome />} />
                           <Route path="/how-it-works" element={<LandingHowItWorks />} />

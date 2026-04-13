@@ -1,7 +1,8 @@
-import React, { useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import { motion } from 'framer-motion';
-import { AlertCircle, Check, X, Calendar, TrendingUp, Pill, Activity, Plus } from 'lucide-react';
+import { AlertCircle, Check, X, Calendar, TrendingUp, Pill, Activity, Plus, Search } from 'lucide-react';
 import { Button } from '@/components/ui/button';
+import { toast } from '@/components/ui/use-toast';
 import { useAuth } from '@/contexts/useAuth';
 import { useAppData } from '@/contexts/useAppData';
 import type { MedicationAdherence } from '@/data/mockData';
@@ -11,11 +12,14 @@ const MedicationAdherencePage: React.FC = () => {
   const { medicationAdherence, recordMedicationAdherence, prescriptions } = useAppData();
   const [selectedPrescription, setSelectedPrescription] = useState<string | null>(null);
   const [showForm, setShowForm] = useState(false);
+  const [searchQuery, setSearchQuery] = useState('');
+  const [focusFilter, setFocusFilter] = useState<'all' | 'excellent' | 'needs-help'>('all');
 
   const patientId = user?.role === 'patient' ? user.id : '';
 
   const patientAdherence = medicationAdherence.filter((a) => a.patientId === patientId);
   const patientPrescriptions = prescriptions.filter((p) => p.patientId === patientId);
+  const selectedPrescriptionRecord = patientPrescriptions.find((prescription) => prescription.id === formData.prescriptionId);
 
   const [formData, setFormData] = useState({
     prescriptionId: selectedPrescription || '',
@@ -40,13 +44,33 @@ const MedicationAdherencePage: React.FC = () => {
     };
   }, [patientAdherence]);
 
+  useEffect(() => {
+    if (!selectedPrescriptionRecord) {
+      return;
+    }
+
+    const nextMedicationName = selectedPrescriptionRecord.medications[0]?.name || '';
+    setFormData((current) => ({
+      ...current,
+      medicationName: current.medicationName || nextMedicationName,
+    }));
+  }, [selectedPrescriptionRecord]);
+
   const handleRecordAdherence = () => {
     if (!patientId) {
-      alert('No patient is signed in');
+      toast({
+        title: 'Patient sign-in required',
+        description: 'You need an active patient session to record adherence.',
+        variant: 'destructive',
+      });
       return;
     }
     if (!formData.prescriptionId || !formData.medicationName) {
-      alert('Please select a prescription and enter medication name');
+      toast({
+        title: 'Complete the record first',
+        description: 'Choose a prescription and confirm the medication name before saving.',
+        variant: 'destructive',
+      });
       return;
     }
 
@@ -64,6 +88,10 @@ const MedicationAdherencePage: React.FC = () => {
     };
 
     recordMedicationAdherence(newAdherence);
+    toast({
+      title: formData.tookDose ? 'Dose recorded' : 'Missed dose recorded',
+      description: `${formData.medicationName} has been added to your adherence history.`,
+    });
     setFormData({ prescriptionId: selectedPrescription || '', medicationName: '', tookDose: true, notes: '' });
     setShowForm(false);
   };
@@ -88,9 +116,26 @@ const MedicationAdherencePage: React.FC = () => {
     transition: { delay: index * 0.05 },
   });
 
-  const filteredAdherence = selectedPrescription
-    ? patientAdherence.filter((a) => a.prescriptionId === selectedPrescription)
-    : patientAdherence;
+  const filteredAdherence = useMemo(() => {
+    const normalizedQuery = searchQuery.trim().toLowerCase();
+    return patientAdherence
+      .filter((adherence) => !selectedPrescription || adherence.prescriptionId === selectedPrescription)
+      .filter((adherence) => (
+        focusFilter === 'all'
+        || (focusFilter === 'excellent' && adherence.adherencePercentage >= 95)
+        || (focusFilter === 'needs-help' && adherence.adherencePercentage < 80)
+      ))
+      .filter((adherence) => (
+        !normalizedQuery
+        || adherence.medicationName.toLowerCase().includes(normalizedQuery)
+        || (adherence.notes || '').toLowerCase().includes(normalizedQuery)
+      ))
+      .sort((left, right) => {
+        const leftDate = left.lastDoseDate || left.startDate;
+        const rightDate = right.lastDoseDate || right.startDate;
+        return new Date(rightDate).getTime() - new Date(leftDate).getTime();
+      });
+  }, [focusFilter, patientAdherence, searchQuery, selectedPrescription]);
 
   return (
     <div className="space-y-6">
@@ -171,6 +216,7 @@ const MedicationAdherencePage: React.FC = () => {
                   setFormData((prev) => ({
                     ...prev,
                     prescriptionId: e.target.value,
+                    medicationName: patientPrescriptions.find((rx) => rx.id === e.target.value)?.medications[0]?.name || prev.medicationName,
                   }))
                 }
                 className="w-full h-11 px-4 rounded-xl border border-input bg-background mt-2 focus:outline-none focus:ring-2 focus:ring-primary/30"
@@ -265,11 +311,36 @@ const MedicationAdherencePage: React.FC = () => {
         ))}
       </div>
 
+      <div className="grid gap-3 md:grid-cols-[minmax(0,1fr)_220px]">
+        <div className="relative">
+          <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+          <input
+            value={searchQuery}
+            onChange={(event) => setSearchQuery(event.target.value)}
+            placeholder="Search adherence notes or medication names..."
+            className="h-11 w-full rounded-xl border border-input bg-background pl-10 pr-4 text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-primary/30"
+          />
+        </div>
+        <select
+          value={focusFilter}
+          onChange={(event) => setFocusFilter(event.target.value as 'all' | 'excellent' | 'needs-help')}
+          className="h-11 rounded-xl border border-input bg-background px-4 text-foreground focus:outline-none focus:ring-2 focus:ring-primary/30"
+        >
+          <option value="all">All records</option>
+          <option value="excellent">Excellent only</option>
+          <option value="needs-help">Needs help</option>
+        </select>
+      </div>
+
       {/* Adherence Records */}
       {filteredAdherence.length === 0 ? (
         <div className="flex flex-col items-center justify-center py-12 text-muted-foreground bg-card rounded-2xl border border-border">
           <Pill className="w-10 h-10 mb-3 opacity-50" />
-          <p className="text-sm">{patientAdherence.length === 0 ? 'No adherence records yet' : 'No records for this medication'}</p>
+          <p className="text-sm">
+            {patientAdherence.length === 0
+              ? 'No adherence records yet'
+              : 'No records match your current medication search or filter'}
+          </p>
         </div>
       ) : (
         <div className="space-y-3">

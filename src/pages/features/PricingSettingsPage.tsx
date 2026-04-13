@@ -1,7 +1,8 @@
-import React, { useState } from 'react';
+import React, { useMemo, useState } from 'react';
 import { motion } from 'framer-motion';
-import { Plus, Edit2, Trash2, DollarSign, AlertCircle, Check } from 'lucide-react';
+import { Plus, Edit2, Trash2, DollarSign, AlertCircle, Check, Search } from 'lucide-react';
 import { Button } from '@/components/ui/button';
+import { toast } from '@/components/ui/use-toast';
 import { useAuth } from '@/contexts/useAuth';
 import { useAppData } from '@/contexts/useAppData';
 import type { ProviderPricing } from '@/data/mockData';
@@ -12,11 +13,25 @@ const PricingSettingsPage: React.FC = () => {
   const [showForm, setShowForm] = useState(false);
   const [editingId, setEditingId] = useState<string | null>(null);
   const [successMsg, setSuccessMsg] = useState<string>('');
+  const [searchQuery, setSearchQuery] = useState('');
+  const [serviceTypeFilter, setServiceTypeFilter] = useState<'all' | ProviderPricing['serviceType']>('all');
   
   const doctorId = user?.role === 'doctor' ? user.id : '';
   const doctorName = user?.name || 'Current Provider';
   
   const myPricing = providerPricing.filter((p) => p.providerId === doctorId);
+  const filteredPricing = useMemo(() => {
+    const normalizedQuery = searchQuery.trim().toLowerCase();
+    return myPricing
+      .filter((pricing) => serviceTypeFilter === 'all' || pricing.serviceType === serviceTypeFilter)
+      .filter((pricing) => (
+        !normalizedQuery
+        || pricing.serviceDescription.toLowerCase().includes(normalizedQuery)
+        || pricing.serviceType.toLowerCase().includes(normalizedQuery)
+        || (pricing.notes || '').toLowerCase().includes(normalizedQuery)
+      ))
+      .sort((left, right) => new Date(right.lastUpdated).getTime() - new Date(left.lastUpdated).getTime());
+  }, [myPricing, searchQuery, serviceTypeFilter]);
   
   const [formData, setFormData] = useState({
     serviceType: 'consultation' as 'consultation' | 'procedure' | 'test' | 'imaging' | 'follow-up' | 'other',
@@ -36,11 +51,35 @@ const PricingSettingsPage: React.FC = () => {
 
   const handleAddPrice = () => {
     if (!doctorId) {
-      alert('You must be signed in as a provider to manage pricing');
+      toast({
+        title: 'Provider account required',
+        description: 'Sign in as a verified provider to manage pricing.',
+        variant: 'destructive',
+      });
       return;
     }
     if (!formData.serviceDescription || formData.priceGHS <= 0) {
-      alert('Please fill in all fields with valid amounts');
+      toast({
+        title: 'Incomplete pricing details',
+        description: 'Add a service description and a valid amount before saving.',
+        variant: 'destructive',
+      });
+      return;
+    }
+
+    const normalizedDescription = formData.serviceDescription.trim().toLowerCase();
+    const duplicatePricing = myPricing.find((pricing) => (
+      pricing.id !== editingId
+      && pricing.serviceType === formData.serviceType
+      && pricing.serviceDescription.trim().toLowerCase() === normalizedDescription
+    ));
+
+    if (duplicatePricing) {
+      toast({
+        title: 'Pricing already exists',
+        description: 'Update the existing item instead of adding a duplicate service entry.',
+        variant: 'destructive',
+      });
       return;
     }
 
@@ -58,6 +97,10 @@ const PricingSettingsPage: React.FC = () => {
 
     setProviderPricing(newPricing);
     setSuccessMsg(`Price ${editingId ? 'updated' : 'added'} successfully!`);
+    toast({
+      title: editingId ? 'Pricing updated' : 'Pricing added',
+      description: `${formData.serviceDescription} is now available for patients and admins.`,
+    });
     setFormData({ serviceType: 'consultation', serviceDescription: '', priceGHS: 0, notes: '' });
     setShowForm(false);
     setEditingId(null);
@@ -79,6 +122,10 @@ const PricingSettingsPage: React.FC = () => {
     if (confirm('Delete this pricing? This cannot be undone.')) {
       deleteProviderPricing(id);
       setSuccessMsg('Price deleted successfully!');
+      toast({
+        title: 'Pricing removed',
+        description: 'The service price has been deleted.',
+      });
       setTimeout(() => setSuccessMsg(''), 3000);
     }
   };
@@ -241,15 +288,44 @@ const PricingSettingsPage: React.FC = () => {
         </motion.div>
       )}
 
+      <div className="grid gap-3 md:grid-cols-[minmax(0,1fr)_220px]">
+        <div className="relative">
+          <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+          <input
+            value={searchQuery}
+            onChange={(event) => setSearchQuery(event.target.value)}
+            placeholder="Search your pricing by service, type, or notes..."
+            className="h-11 w-full rounded-xl border border-input bg-background pl-10 pr-4 text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-primary/30"
+          />
+        </div>
+        <select
+          value={serviceTypeFilter}
+          onChange={(event) => setServiceTypeFilter(event.target.value as 'all' | ProviderPricing['serviceType'])}
+          className="h-11 rounded-xl border border-input bg-background px-4 text-foreground focus:outline-none focus:ring-2 focus:ring-primary/30"
+        >
+          <option value="all">All service types</option>
+          {serviceTypes.map((type) => (
+            <option key={type} value={type}>
+              {type.charAt(0).toUpperCase() + type.slice(1)}
+            </option>
+          ))}
+        </select>
+      </div>
+
       {/* Pricing List */}
       {myPricing.length === 0 ? (
         <div className="flex flex-col items-center justify-center py-12 text-muted-foreground bg-card rounded-2xl border border-border">
           <DollarSign className="w-10 h-10 mb-3 opacity-50" />
           <p className="text-sm">No pricing set yet. Create your first pricing above.</p>
         </div>
+      ) : filteredPricing.length === 0 ? (
+        <div className="flex flex-col items-center justify-center py-12 text-muted-foreground bg-card rounded-2xl border border-border">
+          <Search className="mb-3 h-10 w-10 opacity-50" />
+          <p className="text-sm">No pricing entries match your current search or filter.</p>
+        </div>
       ) : (
         <div className="space-y-3">
-          {myPricing.map((pricing, i) => (
+          {filteredPricing.map((pricing, i) => (
             <motion.div
               key={pricing.id}
               initial={{ opacity: 0, y: 10 }}

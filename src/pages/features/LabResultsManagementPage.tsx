@@ -1,7 +1,8 @@
 import React, { useMemo, useState } from 'react';
 import { motion } from 'framer-motion';
-import { AlertCircle, Upload, FileText, CheckCircle, Clock, Download, Eye, Trash2 } from 'lucide-react';
+import { AlertCircle, Upload, FileText, CheckCircle, Clock, Download, Eye, Search, Trash2 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
+import { toast } from '@/components/ui/use-toast';
 import { useAuth } from '@/contexts/useAuth';
 import { useAppData } from '@/contexts/useAppData';
 import type { LabTest } from '@/data/mockData';
@@ -12,18 +13,30 @@ const LabResultsManagementPage: React.FC = () => {
   const [selectedTest, setSelectedTest] = useState<LabTest | null>(null);
   const [uploadingTestId, setUploadingTestId] = useState<string | null>(null);
   const [filterStatus, setFilterStatus] = useState<'all' | 'requested' | 'in-progress' | 'completed'>('all');
+  const [searchQuery, setSearchQuery] = useState('');
 
   const patientId = user?.role === 'patient' ? user.id : '';
 
   const patientTests = labTests.filter((test) => test.patientId === patientId);
+  const activeSelectedTest = selectedTest
+    ? patientTests.find((test) => test.id === selectedTest.id) ?? selectedTest
+    : null;
 
   const filtered = useMemo(() => {
     let result = patientTests;
     if (filterStatus !== 'all') {
       result = result.filter((test) => test.status === filterStatus);
     }
+    const normalizedQuery = searchQuery.trim().toLowerCase();
+    if (normalizedQuery) {
+      result = result.filter((test) => (
+        test.testName.toLowerCase().includes(normalizedQuery)
+        || test.doctorName.toLowerCase().includes(normalizedQuery)
+        || (test.results || '').toLowerCase().includes(normalizedQuery)
+      ));
+    }
     return result.sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
-  }, [patientTests, filterStatus]);
+  }, [patientTests, filterStatus, searchQuery]);
 
   const stats = useMemo(
     () => ({
@@ -42,13 +55,21 @@ const LabResultsManagementPage: React.FC = () => {
     // Validate file type
     const allowedTypes = ['application/pdf', 'image/jpeg', 'image/png', 'image/jpg'];
     if (!allowedTypes.includes(file.type)) {
-      alert('Please upload a PDF or image file (JPEG, PNG)');
+      toast({
+        title: 'Unsupported file type',
+        description: 'Upload a PDF, JPEG, or PNG document.',
+        variant: 'destructive',
+      });
       return;
     }
 
     // Validate file size (max 5MB)
     if (file.size > 5 * 1024 * 1024) {
-      alert('File size must be less than 5MB');
+      toast({
+        title: 'File too large',
+        description: 'Choose a file smaller than 5MB.',
+        variant: 'destructive',
+      });
       return;
     }
 
@@ -59,13 +80,24 @@ const LabResultsManagementPage: React.FC = () => {
     const reader = new FileReader();
     reader.onload = (e) => {
       const dataUrl = e.target?.result as string;
+      const uploadedOn = new Date().toLocaleDateString();
       updateLabTest(testId, (test) => ({
         ...test,
         documentUrl: dataUrl,
-        notes: `${test.notes || ''}\n📎 Document uploaded: ${file.name} (${new Date().toLocaleDateString()})`,
+        notes: `${test.notes || ''}\nDocument uploaded: ${file.name} (${uploadedOn})`.trim(),
       }));
       setUploadingTestId(null);
-      alert('Document uploaded successfully!');
+      if (activeSelectedTest?.id === testId) {
+        setSelectedTest((current) => current ? {
+          ...current,
+          documentUrl: dataUrl,
+          notes: `${current.notes || ''}\nDocument uploaded: ${file.name} (${uploadedOn})`.trim(),
+        } : current);
+      }
+      toast({
+        title: 'Document uploaded',
+        description: `${file.name} is now attached to this lab result.`,
+      });
     };
     reader.readAsDataURL(file);
   };
@@ -76,6 +108,16 @@ const LabResultsManagementPage: React.FC = () => {
         ...test,
         documentUrl: undefined,
       }));
+      if (activeSelectedTest?.id === testId) {
+        setSelectedTest((current) => current ? {
+          ...current,
+          documentUrl: undefined,
+        } : current);
+      }
+      toast({
+        title: 'Document deleted',
+        description: 'The lab result attachment was removed.',
+      });
     }
   };
 
@@ -166,8 +208,18 @@ const LabResultsManagementPage: React.FC = () => {
         ))}
       </div>
 
+      <div className="relative max-w-xl">
+        <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+        <input
+          value={searchQuery}
+          onChange={(event) => setSearchQuery(event.target.value)}
+          placeholder="Search tests, ordering doctor, or results..."
+          className="h-11 w-full rounded-xl border border-input bg-background pl-10 pr-4 text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-primary/30"
+        />
+      </div>
+
       {/* Test List or Detail View */}
-      {selectedTest ? (
+      {activeSelectedTest ? (
         <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="space-y-6">
           <Button variant="outline" onClick={() => setSelectedTest(null)}>
             ← Back to Tests
@@ -177,45 +229,45 @@ const LabResultsManagementPage: React.FC = () => {
           <div className="bg-card rounded-2xl border border-border p-8 space-y-6">
             <div className="flex items-start justify-between">
               <div>
-                <h2 className="text-3xl font-bold text-foreground">{selectedTest.testName}</h2>
+                <h2 className="text-3xl font-bold text-foreground">{activeSelectedTest.testName}</h2>
                 <p className="text-muted-foreground mt-2">
-                  Doctor: {selectedTest.doctorName} • Lab: {selectedTest.labId || 'Central Lab'}
+                  Doctor: {activeSelectedTest.doctorName} • Lab: {activeSelectedTest.labId || 'Central Lab'}
                 </p>
                 <p className="text-muted-foreground">
-                  Ordered: {new Date(selectedTest.date).toLocaleDateString()}
+                  Ordered: {new Date(activeSelectedTest.date).toLocaleDateString()}
                 </p>
               </div>
               <div
                 className={`px-4 py-2 rounded-lg text-sm font-semibold flex items-center gap-2 ${getStatusBadge(
-                  selectedTest.status,
+                  activeSelectedTest.status,
                 )}`}
               >
-                {getStatusIcon(selectedTest.status)}
-                {selectedTest.status.charAt(0).toUpperCase() + selectedTest.status.slice(1)}
+                {getStatusIcon(activeSelectedTest.status)}
+                {activeSelectedTest.status.charAt(0).toUpperCase() + activeSelectedTest.status.slice(1)}
               </div>
             </div>
 
             {/* Results */}
-            {selectedTest.results && (
+            {activeSelectedTest.results && (
               <div className="bg-secondary/30 rounded-xl p-4 border border-border">
                 <h3 className="font-semibold text-foreground mb-2">Results</h3>
-                <p className="text-foreground whitespace-pre-wrap">{selectedTest.results}</p>
+                <p className="text-foreground whitespace-pre-wrap">{activeSelectedTest.results}</p>
               </div>
             )}
 
             {/* Reference Range */}
-            {selectedTest.referenceRange && (
+            {activeSelectedTest.referenceRange && (
               <div className="bg-blue-50 rounded-xl p-4 border border-blue-200">
                 <h3 className="font-semibold text-blue-900 mb-2">Reference Range</h3>
-                <p className="text-blue-800">{selectedTest.referenceRange}</p>
+                <p className="text-blue-800">{activeSelectedTest.referenceRange}</p>
               </div>
             )}
 
             {/* Notes */}
-            {selectedTest.notes && (
+            {activeSelectedTest.notes && (
               <div className="bg-secondary/30 rounded-xl p-4 border border-border">
                 <h3 className="font-semibold text-foreground mb-2">Notes</h3>
-                <p className="text-foreground whitespace-pre-wrap text-sm">{selectedTest.notes}</p>
+                <p className="text-foreground whitespace-pre-wrap text-sm">{activeSelectedTest.notes}</p>
               </div>
             )}
 
@@ -223,7 +275,7 @@ const LabResultsManagementPage: React.FC = () => {
             <div className="border-t border-border pt-6">
               <h3 className="font-semibold text-foreground mb-4">Test Document</h3>
 
-              {selectedTest.documentUrl ? (
+              {activeSelectedTest.documentUrl ? (
                 <div className="bg-emerald-50 rounded-xl border border-emerald-200 p-4 space-y-3">
                   <div className="flex items-center gap-3">
                     <FileText className="w-8 h-8 text-emerald-600" />
@@ -234,7 +286,7 @@ const LabResultsManagementPage: React.FC = () => {
                   </div>
 
                   <div className="flex gap-2">
-                    <a href={selectedTest.documentUrl} target="_blank" rel="noopener noreferrer">
+                    <a href={activeSelectedTest.documentUrl} target="_blank" rel="noopener noreferrer">
                       <Button className="gap-2">
                         <Download className="w-4 h-4" />
                         View Document
@@ -243,7 +295,7 @@ const LabResultsManagementPage: React.FC = () => {
                     <Button
                       variant="destructive"
                       size="sm"
-                      onClick={() => handleDeleteDocument(selectedTest.id)}
+                      onClick={() => handleDeleteDocument(activeSelectedTest.id)}
                       className="gap-2"
                     >
                       <Trash2 className="w-4 h-4" />
@@ -258,13 +310,13 @@ const LabResultsManagementPage: React.FC = () => {
                   <label className="flex items-center justify-center gap-2 px-4 py-3 rounded-lg border-2 border-dashed border-orange-300 cursor-pointer hover:bg-orange-100/50 transition">
                     <Upload className="w-5 h-5 text-orange-600" />
                     <span className="text-sm font-medium text-orange-700">
-                      {uploadingTestId === selectedTest.id ? 'Uploading...' : 'Upload Document (PDF/Image)'}
+                      {uploadingTestId === activeSelectedTest.id ? 'Uploading...' : 'Upload Document (PDF/Image)'}
                     </span>
                     <input
                       type="file"
                       accept=".pdf,.jpg,.jpeg,.png"
-                      onChange={(e) => handleFileUpload(selectedTest.id, e)}
-                      disabled={uploadingTestId === selectedTest.id}
+                      onChange={(e) => handleFileUpload(activeSelectedTest.id, e)}
+                      disabled={uploadingTestId === activeSelectedTest.id}
                       className="hidden"
                     />
                   </label>
