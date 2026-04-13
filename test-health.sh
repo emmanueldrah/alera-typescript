@@ -1,17 +1,23 @@
 #!/bin/bash
 
-# Test script to check API health endpoint
-API_URL="https://alera-gamma.vercel.app"
+set -e
 
-echo "Testing ALERA API Health Endpoint..."
-echo "URL: $API_URL/api/health"
+API_URL="${1:-https://alera-gamma.vercel.app}"
+
+echo "Testing ALERA deployment health..."
+echo "Base URL: $API_URL"
 echo ""
 
-# Test with curl and show response
+echo "Checking /api/health"
 curl -X GET "$API_URL/api/health" \
   -H "Content-Type: application/json" \
-  -w "\n\nHTTP Status: %{http_code}\n" \
+  -w "\nHTTP Status: %{http_code}\n\n" \
   -s
 
-echo ""
-echo "Test complete. Status should be 200 if healthy."
+echo "Checking /api/ready"
+curl -X GET "$API_URL/api/ready" \
+  -H "Content-Type: application/json" \
+  -w "\nHTTP Status: %{http_code}\n\n" \
+  -s
+
+echo "Deployment health checks complete."

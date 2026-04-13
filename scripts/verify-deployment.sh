@@ -127,7 +127,52 @@ else
     fail "TypeScript errors found. Run: npm run type-check"
 fi
 
-# 10. Summary
+# 10. Check frontend tests
+echo ""
+echo "🔟  Running frontend tests..."
+if npm test > /tmp/alera-frontend-tests.log 2>&1; then
+    pass "Frontend tests passing"
+else
+    fail "Frontend tests failed. Run: npm test"
+fi
+
+# 11. Check backend tests
+echo ""
+echo "1️⃣1️⃣  Running backend tests..."
+if python3 -m pytest -q backend/tests > /tmp/alera-backend-tests.log 2>&1; then
+    pass "Backend tests passing"
+else
+    fail "Backend tests failed. Run: pytest -q backend/tests"
+fi
+
+# 12. Check production build
+echo ""
+echo "1️⃣2️⃣  Building production bundle..."
+if npm run build > /tmp/alera-build.log 2>&1; then
+    pass "Production build successful"
+else
+    fail "Production build failed. Run: npm run build"
+fi
+
+# 13. Warn about required production env vars
+echo ""
+echo "1️⃣3️⃣  Checking production environment guidance..."
+REQUIRED_ENV_VARS=(
+    "DATABASE_URL"
+    "SECRET_KEY"
+    "ENCRYPTION_KEY"
+    "FRONTEND_URL"
+)
+
+for env_var in "${REQUIRED_ENV_VARS[@]}"; do
+    if [ -z "${!env_var}" ]; then
+        warn "$env_var is not set in the current shell. Make sure it is configured in production."
+    else
+        pass "$env_var is set in the current shell"
+    fi
+done
+
+# 14. Summary
 echo ""
 echo "======================================"
 echo -e "${GREEN}✅ All checks passed!${NC}"
