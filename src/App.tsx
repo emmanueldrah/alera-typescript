@@ -16,6 +16,9 @@ import LandingHowItWorks from "./pages/Landing/HowItWorks";
 import LandingFeatures from "./pages/Landing/Features";
 import LandingTrust from "./pages/Landing/Trust";
 import LandingWhoWeServe from "./pages/Landing/WhoWeServe";
+import LandingWhyAlera from "./pages/Landing/WhyAlera";
+import PrivacyPolicy from "./pages/Landing/PrivacyPolicy";
+import TermsOfService from "./pages/Landing/TermsOfService";
 import Login from "./pages/Login";
 import Signup from "./pages/Signup";
 import ForgotPassword from "./pages/ForgotPassword";
@@ -35,7 +38,7 @@ const AuthRedirect = ({ children }: { children: React.ReactNode }) => {
   const isOnAuthPage = ['/login', '/signup', '/forgot-password', '/reset-password', '/verify-email'].includes(location.pathname);
 
   // Only redirect from landing pages if authenticated
-  const isOnLandingPage = ['/', '/how-it-works', '/features', '/trust', '/who-we-serve'].includes(location.pathname);
+  const isOnLandingPage = ['/', '/how-it-works', '/features', '/trust', '/who-we-serve', '/why-alera', '/privacy-policy', '/terms'].includes(location.pathname);
 
   if (!isLoading && isAuthenticated && isOnLandingPage) return <Navigate to="/dashboard" replace />;
   return <>{children}</>;
@@ -73,6 +76,10 @@ const App = () => {
                         <Route path="/features" element={<LandingFeatures />} />
                         <Route path="/trust" element={<LandingTrust />} />
                         <Route path="/who-we-serve" element={<LandingWhoWeServe />} />
+                        <Route path="/why-alera" element={<LandingWhyAlera />} />
+                        <Route path="/privacy-policy" element={<PrivacyPolicy />} />
+                        <Route path="/terms" element={<TermsOfService />} />
+                        <Route path="/cookies" element={<PrivacyPolicy />} />
                       </Route>
                       <Route path="/login" element={<Login />} />
                       <Route path="/signup" element={<Signup />} />

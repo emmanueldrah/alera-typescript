@@ -2,7 +2,6 @@ from pydantic_settings import BaseSettings, SettingsConfigDict
 from pydantic import field_validator, Field, model_validator
 from typing import List
 import sys
-import secrets
 import os
 
 # Set default environment
@@ -45,6 +44,7 @@ class Settings(BaseSettings):
         "https://alera-gamma.vercel.app"
     ]
     CORS_ORIGIN_REGEX: str = r"https://.*\.vercel\.app"
+    EXPOSE_API_DOCS: bool = Field(default=False, description="Expose OpenAPI docs endpoints")
 
     # Email
     EMAIL_PROVIDER: str = "auto"
@@ -103,6 +103,24 @@ class Settings(BaseSettings):
             if normalized in {"1", "true", "yes", "on", "debug", "development", "dev"}:
                 return True
             if normalized in {"0", "false", "no", "off", "release", "production", "prod"}:
+                return False
+
+        return bool(value)
+
+    @field_validator("EXPOSE_API_DOCS", mode="before")
+    @classmethod
+    def parse_docs_flag(cls, value):
+        if isinstance(value, bool):
+            return value
+
+        if value is None:
+            return False
+
+        if isinstance(value, str):
+            normalized = value.strip().lower()
+            if normalized in {"1", "true", "yes", "on"}:
+                return True
+            if normalized in {"0", "false", "no", "off"}:
                 return False
 
         return bool(value)
