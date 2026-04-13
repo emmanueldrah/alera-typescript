@@ -50,6 +50,8 @@ class User(Base):
     profile_image_url: Mapped[str | None] = mapped_column(String(500), nullable=True)
     bio: Mapped[str | None] = mapped_column(Text, nullable=True)
     notification_email: Mapped[bool] = mapped_column(Boolean, default=True, nullable=False)
+    postdicom_api_url: Mapped[str | None] = mapped_column(String(500), nullable=True)
+    postdicom_api_key: Mapped[str | None] = mapped_column(String(255), nullable=True)
     notification_sms: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
     privacy_public_profile: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
     live_location_sharing_enabled: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)

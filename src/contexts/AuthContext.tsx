@@ -28,6 +28,7 @@ export interface UserProfile {
   dateOfBirth?: string;
   bio?: string;
   avatar?: string;
+  postdicomApiUrl?: string;
   notificationEmail: boolean;
   notificationSms: boolean;
   privacyPublicProfile: boolean;
@@ -44,6 +45,7 @@ export interface User {
   emailVerifiedAt?: string | null;
   avatar?: string;
   profile?: UserProfile;
+  postdicomApiUrl?: string;
   createdAt?: string;
   lastLogin?: string;
 }
@@ -93,6 +95,7 @@ const mapBackendUser = (data: ApiUser): User => {
     emailVerified: data.email_verified ?? false,
     emailVerifiedAt: data.email_verified_at ?? null,
     avatar: data.avatar || data.profile_image_url,
+    postdicomApiUrl: data.postdicom_api_url,
     createdAt: data.created_at,
     lastLogin: data.last_login,
     profile: {
@@ -262,6 +265,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       date_of_birth: profile.dateOfBirth,
       bio: profile.bio,
       profile_image_url: profile.avatar,
+      postdicom_api_url: profile.postdicomApiUrl,
       notification_email: profile.notificationEmail,
       notification_sms: profile.notificationSms,
       privacy_public_profile: profile.privacyPublicProfile,

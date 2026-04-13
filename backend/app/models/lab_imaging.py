@@ -107,6 +107,8 @@ class ImagingScan(Base):
     report_mime_type = Column(String, nullable=True)
     report_file_size = Column(Integer, nullable=True)
     image_files = Column(JSON, nullable=True)
+    postdicom_study_id = Column(String(255), nullable=True)
+    postdicom_study_url = Column(String(500), nullable=True)
 
     scheduled_at = Column(DateTime, nullable=True)
     ordered_at = Column(DateTime, default=utcnow)
@@ -139,6 +141,8 @@ class ImagingScan(Base):
             "report_mime_type": self.report_mime_type,
             "report_file_size": self.report_file_size,
             "image_files": self.image_files or [],
+            "postdicom_study_id": self.postdicom_study_id,
+            "postdicom_study_url": self.postdicom_study_url,
             "scheduled_at": self.scheduled_at.isoformat() if self.scheduled_at else None,
             "ordered_at": self.ordered_at.isoformat() if self.ordered_at else None,
             "completed_at": self.completed_at.isoformat() if self.completed_at else None,

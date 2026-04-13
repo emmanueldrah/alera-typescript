@@ -5,6 +5,7 @@ from database import get_db
 from app.models import ImagingScan, User, UserRole, ImagingScanStatus
 from app.schemas import ImagingFileAsset, ImagingScanResponse, ImagingScanCreate, ImagingScanUpdate
 from app.services.file_service import FileStorageService
+from app.services.postdicom_service import PostDICOMService
 from app.utils.dependencies import get_current_user
 from app.utils.access import require_verified_workforce_member
 from app.utils.time import utcnow
@@ -54,6 +55,8 @@ def imaging_to_response(scan: ImagingScan) -> ImagingScanResponse:
         image_url=scan.image_url,
         report_file=report_file,
         image_files=image_files,
+        postdicom_study_id=scan.postdicom_study_id,
+        postdicom_study_url=scan.postdicom_study_url,
         scheduled_at=scan.scheduled_at,
         ordered_at=scan.ordered_at,
         completed_at=scan.completed_at,
@@ -350,6 +353,18 @@ async def upload_imaging_results(
         )
 
     subfolder = _storage_subfolder(db_imaging_scan)
+
+    if current_user.role == UserRole.IMAGING and current_user.postdicom_api_url:
+        postdicom_result = await PostDICOMService.upload_imaging_results(
+            current_user.postdicom_api_url,
+            current_user.postdicom_api_key,
+            db_imaging_scan,
+            report_file,
+            normalized_images,
+        )
+        if isinstance(postdicom_result, dict):
+            db_imaging_scan.postdicom_study_id = postdicom_result.get("study_id") or postdicom_result.get("id")
+            db_imaging_scan.postdicom_study_url = postdicom_result.get("study_url") or postdicom_result.get("url")
 
     if report_file and report_file.filename:
         report_info = await FileStorageService.save_file(report_file, subfolder=subfolder, prefix="report")

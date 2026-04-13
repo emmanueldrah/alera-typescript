@@ -52,6 +52,7 @@ const ProfilePage = () => {
   const [state, setState] = useState(profile?.state || '');
   const [zipCode, setZipCode] = useState(profile?.zipCode || '');
   const [bio, setBio] = useState(profile?.bio || '');
+  const [postdicomApiUrl, setPostdicomApiUrl] = useState(user?.postdicomApiUrl || '');
 
   // Security State
   const [oldPassword, setOldPassword] = useState('');
@@ -82,7 +83,8 @@ const ProfilePage = () => {
     setNotifEmail(profile.notificationEmail ?? true);
     setNotifSms(profile.notificationSms ?? false);
     setPublicProfile(profile.privacyPublicProfile ?? false);
-  }, [profile]);
+    setPostdicomApiUrl(user?.postdicomApiUrl || '');
+  }, [profile, user]);
 
   // Delete Account State
   const [deletePassword, setDeletePassword] = useState('');
@@ -142,7 +144,7 @@ const ProfilePage = () => {
     
     setIsLoading(true);
     try {
-      await updateProfile({ phone, address, city, state, zipCode, bio });
+      await updateProfile({ phone, address, city, state, zipCode, bio, postdicomApiUrl });
       showMessage('Contact information updated successfully', 'success');
     } catch (err) {
       showMessage(err instanceof Error ? err.message : 'Failed to update', 'error');
@@ -384,6 +386,22 @@ const ProfilePage = () => {
               <label className="block text-sm font-medium text-foreground mb-2">Bio</label>
               <textarea value={bio} onChange={e => setBio(e.target.value)} placeholder="Tell us about yourself..." rows={3} className="w-full px-4 py-3 rounded-lg border border-input bg-card text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-primary/30" />
             </div>
+
+            {user.role === 'imaging' && (
+              <div>
+                <label className="block text-sm font-medium text-foreground mb-2">PostDICOM Endpoint</label>
+                <input
+                  type="url"
+                  value={postdicomApiUrl}
+                  onChange={e => setPostdicomApiUrl(e.target.value)}
+                  placeholder="https://your-postdicom-instance.com/api/upload"
+                  className="w-full h-10 px-4 rounded-lg border border-input bg-card text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-primary/30"
+                />
+                <p className="text-xs text-muted-foreground mt-2">
+                  Enter the PostDICOM upload URL for imaging center file transfers. This will be used for image/result uploads.
+                </p>
+              </div>
+            )}
 
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
               <div>

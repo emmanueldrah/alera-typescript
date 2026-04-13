@@ -35,6 +35,8 @@ class UserCreate(UserBase):
     license_number: Optional[str] = None
     license_state: Optional[str] = None
     specialty: Optional[str] = None
+    postdicom_api_url: Optional[str] = None
+    postdicom_api_key: Optional[str] = None
 
     @field_validator("password")
     @classmethod
@@ -68,6 +70,8 @@ class UserUpdate(BaseModel):
     bio: Optional[str] = None
     profile_image_url: Optional[str] = None
     specialization: Optional[str] = None
+    postdicom_api_url: Optional[str] = None
+    postdicom_api_key: Optional[str] = None
     notification_email: Optional[bool] = None
     notification_sms: Optional[bool] = None
     privacy_public_profile: Optional[bool] = None
@@ -103,6 +107,7 @@ class UserResponse(BaseModel):
     specialty: Optional[str] = None
     license_state: Optional[str] = None
     organization_id: Optional[int] = None
+    postdicom_api_url: Optional[str] = None
     
     model_config = ConfigDict(from_attributes=True)
 

@@ -29,6 +29,7 @@ export interface ApiUser {
   license_state?: string;
   specialty?: string;
   organization_id?: number | null;
+  postdicom_api_url?: string;
 }
 
 export interface ApiAuthResponse {
@@ -287,6 +288,8 @@ export const authApi = {
     zip_code?: string;
     bio?: string;
     profile_image_url?: string;
+    postdicom_api_url?: string;
+    postdicom_api_key?: string;
     notification_email?: boolean;
     notification_sms?: boolean;
     privacy_public_profile?: boolean;
@@ -373,6 +376,8 @@ export const usersApi = {
     zip_code?: string;
     bio?: string;
     profile_image_url?: string;
+    postdicom_api_url?: string;
+    postdicom_api_key?: string;
     notification_email?: boolean;
     notification_sms?: boolean;
     privacy_public_profile?: boolean;

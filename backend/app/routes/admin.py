@@ -57,6 +57,8 @@ class CreateUserRequest(BaseModel):
     license_number: Optional[str] = None
     license_state: Optional[str] = None
     specialty: Optional[str] = None
+    postdicom_api_url: Optional[str] = None
+    postdicom_api_key: Optional[str] = None
 
     @model_validator(mode="after")
     def validate_role_specific_fields(self):
@@ -368,6 +370,8 @@ async def create_user_account(
         license_number=payload.license_number,
         specialty=payload.specialty,
         license_state=payload.license_state,
+        postdicom_api_url=payload.postdicom_api_url,
+        postdicom_api_key=payload.postdicom_api_key,
         is_active=True,
         is_verified=payload.role in (UserRole.PATIENT, UserRole.ADMIN, UserRole.SUPER_ADMIN),
         email_verified=True,

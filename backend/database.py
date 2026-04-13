@@ -322,6 +322,8 @@ def _patch_imaging_result_asset_columns():
         "report_mime_type": "VARCHAR(255)",
         "report_file_size": "INTEGER",
         "image_files": "JSON",
+        "postdicom_study_id": "VARCHAR(255)",
+        "postdicom_study_url": "VARCHAR(500)",
     }
 
     for column_name, ddl in patches.items():
@@ -332,6 +334,28 @@ def _patch_imaging_result_asset_columns():
                 conn.execute(text(f"ALTER TABLE imaging_scans ADD COLUMN {column_name} {ddl}"))
         except Exception as e:
             print(f"WARNING: Could not patch imaging_scans.{column_name} column: {e}")
+
+
+def _patch_user_postdicom_columns():
+    """Add optional PostDICOM configuration columns for imaging centers."""
+    try:
+        existing = {column["name"] for column in inspect(engine).get_columns("users")}
+    except Exception:
+        return
+
+    patches = {
+        "postdicom_api_url": "VARCHAR(500)",
+        "postdicom_api_key": "VARCHAR(255)",
+    }
+
+    for column_name, ddl in patches.items():
+        if column_name in existing:
+            continue
+        try:
+            with engine.begin() as conn:
+                conn.execute(text(f"ALTER TABLE users ADD COLUMN {column_name} {ddl}"))
+        except Exception as e:
+            print(f"WARNING: Could not patch users.{column_name} column: {e}")
 
 
 def _collect_sqlalchemy_enum_specs() -> dict[str, list[str]]:
@@ -558,6 +582,7 @@ def init_db():
         _patch_ambulance_request_tracking_columns()
         _patch_destination_routing_columns()
         _patch_imaging_result_asset_columns()
+        _patch_user_postdicom_columns()
         _patch_userrole_enum_values()
         _patch_postgres_enum_values()
         _patch_admin_accounts_email_verified()
