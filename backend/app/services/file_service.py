@@ -8,9 +8,7 @@ import os
 import uuid
 from pathlib import Path
 from typing import Optional
-from datetime import datetime
 from fastapi import UploadFile, HTTPException
-import shutil
 from config import settings
 from app.utils.time import utcnow
 
@@ -85,8 +83,12 @@ class FileStorageService:
         if not file.filename:
             return False, "No filename provided"
 
+        sanitized_name = Path(file.filename).name.strip()
+        if not sanitized_name or sanitized_name in {".", ".."}:
+            return False, "Invalid filename"
+
         # Check file extension
-        file_ext = Path(file.filename).suffix.lower()
+        file_ext = Path(sanitized_name).suffix.lower()
         if file_ext not in ALLOWED_EXTENSIONS:
             allowed = ", ".join(ALLOWED_EXTENSIONS)
             return False, f"File type not allowed. Allowed types: {allowed}"
@@ -131,7 +133,7 @@ class FileStorageService:
             pass
 
         # Generate unique filename
-        filename = file.filename if file.filename else "unknown"
+        filename = Path(file.filename).name if file.filename else "unknown"
         file_ext = Path(filename).suffix.lower()
         file_id = f"{prefix}_{uuid.uuid4().hex[:12]}"
         unique_filename = f"{file_id}{file_ext}"
@@ -152,12 +154,19 @@ class FileStorageService:
 
             return {
                 "file_id": file_id,
-                "filename": file.filename,
+                "filename": filename,
                 "file_path": str(file_path),
                 "file_size": len(contents),
                 "mime_type": file.content_type or "application/octet-stream",
                 "upload_time": utcnow().isoformat(),
             }
+        except HTTPException:
+            try:
+                if file_path.exists():
+                    file_path.unlink()
+            except Exception:
+                pass
+            raise
         except Exception as e:
             try:
                 if file_path.exists():

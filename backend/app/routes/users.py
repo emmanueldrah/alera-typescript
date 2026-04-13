@@ -72,7 +72,7 @@ async def list_accessible_users(
 
     role_text = normalized_enum_text(User.role)
 
-    if current_user.role.value == "admin":
+    if current_user.role in (UserRole.ADMIN, UserRole.SUPER_ADMIN):
         return db.query(User).filter(User.is_active.is_(True)).all()
 
     if current_user.role.value == "patient":
@@ -153,7 +153,7 @@ async def get_user(
             detail="User not found"
         )
 
-    if current_user.id != user_id and current_user.role.value != "admin":
+    if current_user.id != user_id and current_user.role not in (UserRole.ADMIN, UserRole.SUPER_ADMIN):
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
             detail="Not authorized to view this user",
@@ -170,12 +170,13 @@ async def list_users(
     db: Session = Depends(get_db)
 ):
     """List all users (admin only)"""
-    
-    if current_user.role.value != "admin":
+
+    if current_user.role not in (UserRole.ADMIN, UserRole.SUPER_ADMIN):
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
             detail="Only admins can list all users"
         )
-    
-    users = db.query(User).offset(skip).limit(limit).all()
+
+    limit = min(max(limit, 1), 200)
+    users = db.query(User).offset(max(skip, 0)).limit(limit).all()
     return users

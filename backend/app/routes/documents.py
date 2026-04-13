@@ -159,7 +159,7 @@ async def list_documents(
             PatientDocument.is_private == False
         )
     # Admins see all documents
-    elif current_user.role.value == "admin":
+    elif current_user.is_admin_or_super():
         query = db.query(PatientDocument)
     else:
         raise HTTPException(status_code=403, detail="Access denied")
@@ -226,7 +226,7 @@ async def update_document(
         raise HTTPException(status_code=404, detail="Document not found")
 
     # Only document owner can update
-    if document.patient_id != current_user.id and current_user.role.value != "admin":
+    if document.patient_id != current_user.id and not current_user.is_admin_or_super():
         raise HTTPException(status_code=403, detail="Access denied")
 
     # Update fields
@@ -269,7 +269,7 @@ async def delete_document(
         raise HTTPException(status_code=404, detail="Document not found")
 
     # Only document owner can delete
-    if document.patient_id != current_user.id and current_user.role.value != "admin":
+    if document.patient_id != current_user.id and not current_user.is_admin_or_super():
         raise HTTPException(status_code=403, detail="Access denied")
 
     # Delete file from storage
@@ -361,7 +361,7 @@ async def get_patient_documents(
 ):
     """Get all documents for a patient (provider/admin only)"""
     
-    if current_user.role.value not in ["provider", "admin"]:
+    if current_user.role.value not in ["provider", "admin", "super_admin"]:
         raise HTTPException(status_code=403, detail="Access denied")
 
     if current_user.role.value == "provider":
@@ -375,7 +375,7 @@ async def get_patient_documents(
     if current_user.role.value == "provider":
         query = query.filter(PatientDocument.is_private == False)
 
-    if current_user.role.value == "admin":
+    if current_user.is_admin_or_super():
         # Admins can see all documents
         query = db.query(PatientDocument).filter(
             PatientDocument.patient_id == patient_id

@@ -573,10 +573,34 @@ def init_db():
         print(f"WARNING: Failed to seed admin user: {e}")
 
 
+def _production_seed_credentials_are_configured() -> bool:
+    required_keys = (
+        "ADMIN_EMAIL",
+        "ADMIN_PASSWORD",
+        "SUPER_ADMIN_EMAIL",
+        "SUPER_ADMIN_PASSWORD",
+    )
+    return all(os.environ.get(key) for key in required_keys)
+
+
+def _should_seed_default_admin_accounts() -> bool:
+    if settings.ENVIRONMENT != "production":
+        return True
+
+    if _production_seed_credentials_are_configured():
+        return True
+
+    print("WARNING: Skipping default admin seeding in production because explicit admin credentials are not configured")
+    return False
+
+
 def _seed_admin():
     """Create the default admin and super_admin users if they don't exist yet."""
     from app.models.user import User, UserRole
     from app.utils.auth import hash_password
+
+    if not _should_seed_default_admin_accounts():
+        return
 
     db = SessionLocal()
     try:

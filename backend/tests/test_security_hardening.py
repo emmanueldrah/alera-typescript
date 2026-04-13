@@ -33,9 +33,9 @@ from app.routes.auth import (
 )
 from app.services.email_service import EmailService
 from app.routes.consents import create_consent
-from app.routes.documents import get_document, list_documents
+from app.routes.documents import get_document, get_patient_documents, list_documents
 from app.routes.reminders_templates import create_reminder, list_reminders
-from app.routes.users import list_doctors
+from app.routes.users import get_user, list_accessible_users, list_doctors, list_users
 from app.schemas import (
     AppointmentCreate,
     EmailVerificationConfirmRequest,
@@ -232,6 +232,60 @@ def test_missing_postgres_enum_labels_detects_new_roles():
     )
 
     assert missing == ["hospital", "laboratory", "imaging", "ambulance"]
+
+
+def test_production_skips_default_admin_seeding_without_explicit_credentials(monkeypatch):
+    monkeypatch.setattr("database.settings.ENVIRONMENT", "production")
+    monkeypatch.delenv("ADMIN_EMAIL", raising=False)
+    monkeypatch.delenv("ADMIN_PASSWORD", raising=False)
+    monkeypatch.delenv("SUPER_ADMIN_EMAIL", raising=False)
+    monkeypatch.delenv("SUPER_ADMIN_PASSWORD", raising=False)
+
+    assert database._should_seed_default_admin_accounts() is False
+
+
+def test_super_admin_can_list_and_view_users(db_session):
+    super_admin = load_user(db_session, ADMIN_EMAIL)
+    super_admin.role = UserRole.SUPER_ADMIN
+    db_session.commit()
+    db_session.refresh(super_admin)
+
+    patient = seed_user(
+        db_session,
+        email="audited-patient@example.com",
+        role=UserRole.PATIENT,
+        first_name="Audited",
+        last_name="Patient",
+    )
+
+    users = run(list_users(current_user=super_admin, db=db_session, skip=0, limit=500))
+    fetched = run(get_user(user_id=patient.id, current_user=super_admin, db=db_session))
+    accessible = run(list_accessible_users(current_user=super_admin, db=db_session))
+
+    assert any(user.id == patient.id for user in users)
+    assert fetched.id == patient.id
+    assert any(user.id == patient.id for user in accessible)
+
+
+def test_super_admin_can_view_patient_document_collections(db_session):
+    super_admin = load_user(db_session, ADMIN_EMAIL)
+    super_admin.role = UserRole.SUPER_ADMIN
+    db_session.commit()
+    db_session.refresh(super_admin)
+
+    patient = seed_user(
+        db_session,
+        email="document-owner@example.com",
+        role=UserRole.PATIENT,
+        first_name="Document",
+        last_name="Owner",
+    )
+    seed_document(db_session, patient_id=patient.id, uploaded_by=patient.id, is_private=True)
+
+    collection = run(get_patient_documents(patient_id=patient.id, skip=0, limit=20, db=db_session, current_user=super_admin))
+
+    assert collection.total == 1
+    assert collection.items[0].patient_id == patient.id
 
 
 def test_verification_email_hits_sendgrid_api_when_configured(monkeypatch):

@@ -143,7 +143,7 @@ async def list_lab_tests(
     elif current_user.role == UserRole.PROVIDER:
         require_verified_workforce_member(current_user, "view lab tests")
         query = db.query(LabTest).filter(LabTest.ordered_by == current_user.id)
-    elif current_user.role == UserRole.ADMIN:
+    elif current_user.is_admin_or_super():
         query = db.query(LabTest)
     else:
         raise HTTPException(
@@ -208,7 +208,7 @@ async def update_lab_test(
             detail="Lab test not found",
         )
 
-    if current_user.role not in (UserRole.LABORATORY, UserRole.PROVIDER, UserRole.ADMIN):
+    if current_user.role not in (UserRole.LABORATORY, UserRole.PROVIDER, UserRole.ADMIN, UserRole.SUPER_ADMIN):
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
             detail="Not authorized to update lab tests",
@@ -303,7 +303,7 @@ async def delete_lab_test(
                 status_code=status.HTTP_403_FORBIDDEN,
                 detail="Not authorized to delete this lab test",
             )
-    elif current_user.role != UserRole.ADMIN:
+    elif current_user.role not in (UserRole.ADMIN, UserRole.SUPER_ADMIN):
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
             detail="Not authorized to delete lab tests",
@@ -312,13 +312,3 @@ async def delete_lab_test(
     db.delete(db_lab_test)
     db.commit()
     return None
-    if current_user.role == UserRole.LABORATORY and db_lab_test.destination_provider_id != current_user.id:
-        raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN,
-            detail="Not authorized",
-        )
-    if current_user.role == UserRole.LABORATORY and db_lab_test.destination_provider_id != current_user.id:
-        raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN,
-            detail="Not authorized to update this lab test",
-        )

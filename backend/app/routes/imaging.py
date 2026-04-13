@@ -64,7 +64,7 @@ def imaging_to_response(scan: ImagingScan) -> ImagingScanResponse:
 
 
 def _can_access_scan(current_user: User, scan: ImagingScan) -> bool:
-    if current_user.role == UserRole.ADMIN:
+    if current_user.is_admin_or_super():
         return True
     if current_user.role == UserRole.PATIENT:
         return scan.patient_id == current_user.id
@@ -106,7 +106,7 @@ async def order_imaging_scan(
 ):
     """Order a new imaging scan (provider or admin)."""
 
-    if current_user.role not in (UserRole.PROVIDER, UserRole.ADMIN):
+    if current_user.role not in (UserRole.PROVIDER, UserRole.ADMIN, UserRole.SUPER_ADMIN):
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
             detail="Only providers can order imaging scans",
@@ -189,7 +189,7 @@ async def list_imaging_scans(
     elif current_user.role == UserRole.PROVIDER:
         require_verified_workforce_member(current_user, "view imaging scans")
         query = db.query(ImagingScan).filter(ImagingScan.ordered_by == current_user.id)
-    elif current_user.role == UserRole.ADMIN:
+    elif current_user.is_admin_or_super():
         query = db.query(ImagingScan)
     else:
         raise HTTPException(
@@ -249,7 +249,7 @@ async def update_imaging_scan(
             detail="Imaging scan not found",
         )
 
-    if current_user.role not in (UserRole.IMAGING, UserRole.PROVIDER, UserRole.ADMIN):
+    if current_user.role not in (UserRole.IMAGING, UserRole.PROVIDER, UserRole.ADMIN, UserRole.SUPER_ADMIN):
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
             detail="Not authorized to update imaging scans",
@@ -335,7 +335,7 @@ async def upload_imaging_results(
     if not db_imaging_scan:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Imaging scan not found")
 
-    if current_user.role not in (UserRole.IMAGING, UserRole.ADMIN):
+    if current_user.role not in (UserRole.IMAGING, UserRole.ADMIN, UserRole.SUPER_ADMIN):
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Only imaging centers can upload imaging results")
     if current_user.role == UserRole.IMAGING:
         require_verified_workforce_member(current_user, "upload imaging results")
@@ -525,7 +525,7 @@ async def delete_imaging_scan(
                 status_code=status.HTTP_403_FORBIDDEN,
                 detail="Not authorized to delete this imaging scan",
             )
-    elif current_user.role != UserRole.ADMIN:
+    elif current_user.role not in (UserRole.ADMIN, UserRole.SUPER_ADMIN):
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
             detail="Not authorized to delete imaging scans",

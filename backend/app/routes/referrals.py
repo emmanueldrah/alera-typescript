@@ -229,7 +229,7 @@ async def list_referrals(
     elif current_user.role in (UserRole.HOSPITAL, UserRole.LABORATORY, UserRole.IMAGING, UserRole.PHARMACIST):
         require_verified_workforce_member(current_user, "view referrals")
         q = db.query(Referral)
-    elif current_user.role == UserRole.ADMIN:
+    elif current_user.is_admin_or_super():
         q = db.query(Referral)
     else:
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Not authorized")
@@ -249,7 +249,7 @@ async def get_referral(
     if not ref:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Referral not found")
 
-    if current_user.role == UserRole.ADMIN:
+    if current_user.is_admin_or_super():
         return referral_to_response(ref, db)
     if current_user.role == UserRole.PATIENT and ref.patient_id != current_user.id:
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Not authorized")
@@ -284,6 +284,7 @@ async def get_referral(
         UserRole.PROVIDER,
         UserRole.HOSPITAL,
         UserRole.ADMIN,
+        UserRole.SUPER_ADMIN,
         UserRole.LABORATORY,
         UserRole.IMAGING,
         UserRole.PHARMACIST,
@@ -304,7 +305,7 @@ async def update_referral(
     if not ref:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Referral not found")
 
-    if current_user.role == UserRole.ADMIN:
+    if current_user.is_admin_or_super():
         data = body.model_dump(exclude_unset=True)
         for field, value in data.items():
             setattr(ref, field, value)
