@@ -146,7 +146,7 @@ const PharmacyDashboard = () => {
                 <div className="flex items-center justify-between gap-2">
                   <div className="text-sm font-medium text-card-foreground truncate">{rx.patientName}</div>
                   <span className={`flex-shrink-0 text-[10px] font-semibold px-2 py-0.5 rounded-full ${
-                    rx.status === 'dispensed' ? 'bg-success/10 text-success' : rx.status === 'cancelled' ? 'bg-destructive/10 text-destructive' : 'bg-warning/10 text-warning'
+                    rx.status === 'dispensed' ? 'bg-success/10 text-success' : rx.status === 'expired' ? 'bg-destructive/10 text-destructive' : 'bg-warning/10 text-warning'
                   }`}>{rx.status}</span>
                 </div>
                 <div className="mt-1 text-xs text-muted-foreground truncate">

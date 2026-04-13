@@ -1079,6 +1079,7 @@ export const AppDataProvider: React.FC<{ children: React.ReactNode }> = ({ child
         if (!prescription) return;
         const newRefill: PrescriptionRefillRequest = {
           id: `refill-${Date.now()}`,
+          prescriptionId,
           requestDate: new Date().toISOString().split('T')[0],
           status: 'pending',
         };
@@ -1770,7 +1771,6 @@ export const AppDataProvider: React.FC<{ children: React.ReactNode }> = ({ child
               appointmentMode: appointment.appointmentMode,
               sentAt: undefined,
               acknowledgedAt: undefined,
-              createdAt: new Date().toISOString(),
             };
 
             const scope = {

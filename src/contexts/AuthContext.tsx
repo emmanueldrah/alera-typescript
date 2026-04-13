@@ -15,7 +15,8 @@ export type UserRole =
   | 'admin'
   | 'super_admin';
 
-export type SignupRole = Exclude<UserRole, 'admin'>;
+export type SignupRole = Exclude<UserRole, 'admin' | 'super_admin'>;
+export type AuthRegisterRole = 'patient' | 'provider' | 'pharmacist' | 'hospital' | 'laboratory' | 'imaging' | 'ambulance';
 
 export interface UserProfile {
   firstName: string;
@@ -199,7 +200,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     const lastName = lastNameParts.join(' ') || 'User';
 
     // Map frontend roles to backend roles
-    const roleMap: Record<SignupRole, BackendRole> = {
+    const roleMap: Record<SignupRole, AuthRegisterRole> = {
       patient: 'patient',
       doctor: 'provider',
       hospital: 'hospital',

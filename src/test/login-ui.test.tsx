@@ -29,8 +29,8 @@ describe('Login page', () => {
       data: { detail: 'Your account is pending verification' },
       statusText: 'Forbidden',
       headers: {},
-      config: {},
-    };
+      config: { headers: {} },
+    } as any;
 
     loginMock.mockRejectedValueOnce(
       new AxiosError('Request failed with status code 403', 'ERR_BAD_REQUEST', undefined, undefined, response)

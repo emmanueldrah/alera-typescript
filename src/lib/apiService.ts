@@ -257,6 +257,10 @@ export const authApi = {
     last_name: string;
     role: 'patient' | 'provider' | 'pharmacist' | 'hospital' | 'laboratory' | 'imaging' | 'ambulance';
     phone?: string;
+    address?: string;
+    city?: string;
+    state?: string;
+    zip_code?: string;
     license_number?: string;
     license_state?: string;
     specialty?: string;

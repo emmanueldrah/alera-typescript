@@ -34,10 +34,23 @@ const roleLabels: Record<string, string> = {
   ambulance: 'Ambulance Service',
 };
 
+type VerificationItem = {
+  id: number;
+  name: string;
+  email: string;
+  role: string;
+  status: VerificationQueueStatus;
+  appliedDate: string;
+  documents: string;
+  notes?: string;
+  verifiedBy?: string;
+  verificationDate?: string;
+};
+
 const VerificationsPage = () => {
   const { user } = useAuth();
   const { toast } = useToast();
-  const [verifications, setVerifications] = useState<AdminUserRow[]>([]);
+  const [verifications, setVerifications] = useState<VerificationItem[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [statusFilter, setStatusFilter] = useState('all');
   const statusTabs = ['all', 'pending', 'verified', 'rejected'] as const;

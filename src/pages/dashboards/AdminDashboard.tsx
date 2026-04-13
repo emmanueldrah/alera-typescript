@@ -33,10 +33,16 @@ interface DashboardStats {
   };
 }
 
+interface ActivityEvent {
+  type: 'appointment' | 'prescription' | 'lab_test' | 'imaging' | 'referral' | 'emergency' | string;
+  time: string;
+  description: string;
+}
+
 const AdminDashboard = () => {
   const { user } = useAuth();
   const [stats, setStats] = useState<DashboardStats | null>(null);
-  const [activity, setActivity] = useState<unknown[]>([]);
+  const [activity, setActivity] = useState<ActivityEvent[]>([]);
   const [emergencies, setEmergencies] = useState<unknown[]>([]);
   const [loadError, setLoadError] = useState('');
   const [isLoading, setIsLoading] = useState(true);

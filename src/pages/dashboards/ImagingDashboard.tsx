@@ -26,9 +26,9 @@ const ImagingDashboard = () => {
   const completed = visibleScans.filter((s) => s.status === 'completed');
   const pendingReferrals = visibleReferrals.filter((r) => r.status === 'pending');
   const todayStr = new Date().toISOString().split('T')[0];
-  const completedToday = completed.filter((s) => s.completedDate === todayStr || s.requestedDate === todayStr);
+  const completedToday = completed.filter((s) => s.completedAt === todayStr || s.date === todayStr);
 
-  const recentScans = [...visibleScans].sort((a, b) => (b.requestedDate ?? '').localeCompare(a.requestedDate ?? '')).slice(0, 5);
+  const recentScans = [...visibleScans].sort((a, b) => (b.date ?? '').localeCompare(a.date ?? '')).slice(0, 5);
 
   return (
     <div className="space-y-6">

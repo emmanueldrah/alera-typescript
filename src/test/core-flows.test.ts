@@ -32,6 +32,7 @@ describe('referral helpers', () => {
     fromDoctorId: 'doctor-1',
     fromDoctorName: 'Dr. Alice',
     toDepartment: 'City General Hospital',
+    toDepartmentId: 'hospital-dept-1',
     date: '2026-04-08',
     reason: 'Escalated care',
     status: 'pending',

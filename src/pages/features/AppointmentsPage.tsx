@@ -16,6 +16,14 @@ import { Button } from '@/components/ui/button';
 import { Textarea } from '@/components/ui/textarea';
 import type { User as AuthUser } from '@/contexts/AuthContext';
 
+type AppointmentFormData = {
+  doctorId: string;
+  date: string;
+  time: string;
+  type: string;
+  appointmentMode: 'telemedicine' | 'in-person';
+};
+
 const AppointmentsPage = () => {
   const { user } = useAuth();
   const { appointments, cancelAppointment, confirmAppointment, rescheduleAppointment, refreshAppData } = useAppData();
@@ -27,7 +35,7 @@ const AppointmentsPage = () => {
   const [doctorUsers, setDoctorUsers] = useState<AuthUser[]>([]);
   const [isLoadingDoctors, setIsLoadingDoctors] = useState(false);
   const [doctorsLoadError, setDoctorsLoadError] = useState<string | null>(null);
-  const [formData, setFormData] = useState({ doctorId: '', date: '', time: '', type: '', appointmentMode: 'telemedicine' as const });
+  const [formData, setFormData] = useState<AppointmentFormData>({ doctorId: '', date: '', time: '', type: '', appointmentMode: 'telemedicine' });
   const [cancelDialogOpen, setCancelDialogOpen] = useState<string | null>(null);
   const [rescheduleDialogOpen, setRescheduleDialogOpen] = useState<string | null>(null);
   const [rescheduleData, setRescheduleData] = useState({ date: '', time: '' });

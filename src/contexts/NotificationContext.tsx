@@ -29,6 +29,7 @@ const roleFeedLabels: Record<UserRole, string> = {
   pharmacy: 'Pharmacy activity',
   ambulance: 'Emergency activity',
   admin: 'Admin activity',
+  super_admin: 'Super Admin activity',
 };
 
 const mapBackendNotification = (notification: BackendNotification, role: UserRole): RealtimeNotification => ({

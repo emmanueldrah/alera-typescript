@@ -21,8 +21,8 @@ const LaboratoryDashboard = () => {
   const inProgress = labTests.filter((t) => t.status === 'in-progress');
   const completed = labTests.filter((t) => t.status === 'completed');
   const todayStr = new Date().toISOString().split('T')[0];
-  const completedToday = completed.filter((t) => t.requestedDate === todayStr || t.completedDate === todayStr);
-  const recentTests = [...labTests].sort((a, b) => (b.requestedDate ?? '').localeCompare(a.requestedDate ?? '')).slice(0, 5);
+  const completedToday = completed.filter((t) => t.date === todayStr);
+  const recentTests = [...labTests].sort((a, b) => (b.date ?? '').localeCompare(a.date ?? '')).slice(0, 5);
 
   return (
     <div className="space-y-6">
@@ -81,7 +81,7 @@ const LaboratoryDashboard = () => {
                 <div key={test.id} className="flex items-start justify-between rounded-xl border border-border/50 bg-secondary/40 p-3">
                   <div className="flex-1 min-w-0">
                     <div className="text-sm font-medium text-card-foreground truncate">{test.testName}</div>
-                    <div className="text-xs text-muted-foreground mt-0.5">{test.patientName} · requested {test.requestedDate}</div>
+                    <div className="text-xs text-muted-foreground mt-0.5">{test.patientName} · requested {test.date}</div>
                   </div>
                   <span className={`ml-2 flex-shrink-0 text-[10px] font-semibold px-2 py-1 rounded-full ${statusStyles['requested']}`}>Pending</span>
                 </div>

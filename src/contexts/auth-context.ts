@@ -14,6 +14,11 @@ export interface AuthContextType {
     licenseNumber?: string,
     licenseState?: string,
     specialty?: string,
+    phone?: string,
+    address?: string,
+    city?: string,
+    state?: string,
+    zipCode?: string,
   ) => Promise<void>;
   logout: () => Promise<void>;
   addUser: (name: string, email: string, password: string, role: SignupRole) => Promise<User>;

@@ -1,5 +1,5 @@
 import { useState, useCallback, useEffect, useRef } from 'react';
-import { getErrorMessage } from './errorHandler';
+import { getErrorMessage } from '@/lib/errorHandler';
 
 export interface UseApiState<T> {
   data: T | null;
