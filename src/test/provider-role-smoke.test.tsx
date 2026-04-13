@@ -237,7 +237,7 @@ describe('provider role smoke tests', () => {
     ['laboratory', 'test-requests', /test requests/i],
     ['imaging', 'scan-requests', /scan requests/i],
     ['pharmacy', 'inventory', /inventory management/i],
-  ] as const)('loads %s core page %s', (role, page, heading) => {
+  ] as const)('loads %s core page %s', async (role, page, heading) => {
     currentUser = baseUsers.find((user) => user.role === role) as MockUser;
 
     render(
@@ -246,6 +246,6 @@ describe('provider role smoke tests', () => {
       </MemoryRouter>,
     );
 
-    expect(screen.getByRole('heading', { name: heading })).toBeInTheDocument();
+    expect(await screen.findByRole('heading', { name: heading })).toBeInTheDocument();
   });
 });

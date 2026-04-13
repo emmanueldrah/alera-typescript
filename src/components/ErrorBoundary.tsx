@@ -2,6 +2,8 @@ import React, { Component, ReactNode } from 'react';
 import { AlertTriangle, RefreshCw } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 
+const isDevelopment = import.meta.env.DEV;
+
 interface Props {
   children: ReactNode;
   fallback?: ReactNode;
@@ -57,7 +59,7 @@ class ErrorBoundary extends Component<Props, State> {
                 Try Again
               </Button>
             </div>
-            {process.env.NODE_ENV === 'development' && this.state.error && (
+            {isDevelopment && this.state.error && (
               <details className="mt-6 text-left">
                 <summary className="cursor-pointer text-sm text-muted-foreground hover:text-foreground">
                   Error Details (Development)

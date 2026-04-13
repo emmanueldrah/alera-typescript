@@ -37,7 +37,7 @@ def _require_request_access(current_user: User, request_record: AmbulanceRequest
     if current_user.role in [UserRole.HOSPITAL, UserRole.PROVIDER]:
         require_verified_workforce_member(current_user, "view emergency tracking")
         return
-    if current_user.role == UserRole.ADMIN:
+    if current_user.is_admin_or_super():
         return
     raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Not authorized")
 

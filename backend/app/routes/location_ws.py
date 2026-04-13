@@ -25,7 +25,7 @@ def _can_track_request(user: User, db_request: AmbulanceRequest) -> bool:
     if user.role in [UserRole.HOSPITAL, UserRole.PROVIDER]:
         require_verified_workforce_member(user, "track emergency locations")
         return True
-    return user.role == UserRole.ADMIN
+    return user.is_admin_or_super()
 
 @router.websocket("/{request_id}")
 async def location_websocket(

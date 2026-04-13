@@ -1,47 +1,52 @@
+import { lazy, Suspense } from 'react';
 import DashboardLayout from '@/components/DashboardLayout';
+import RouteLoader from '@/components/RouteLoader';
 import { useAuth } from '@/contexts/useAuth';
 import { canAccessFeature, featureAccessMap } from '@/lib/featureAccess';
-import AppointmentsPage from '@/pages/features/AppointmentsPage';
-import PrescriptionsPage from '@/pages/features/PrescriptionsPage';
-import LabResultsPage from '@/pages/features/LabResultsPage';
-import ImagingPage from '@/pages/features/ImagingPage';
-import AmbulancePage from '@/pages/features/AmbulancePage';
-import TimelinePage from '@/pages/features/TimelinePage';
-import InventoryPage from '@/pages/features/InventoryPage';
-import VehiclesPage from '@/pages/features/VehiclesPage';
-import UsersPage from '@/pages/features/UsersPage';
-import ProfilePage from '@/pages/features/ProfilePage';
-import VerificationsPage from '@/pages/features/VerificationsPage';
-import AnalyticsPage from '@/pages/features/AnalyticsPage';
-import PatientsPage from '@/pages/features/PatientsPage';
-import DoctorsPage from '@/pages/features/DoctorsPage';
-import ReferralsPage from '@/pages/features/ReferralsPage';
 import type { ReferralKind } from '@/lib/referralUtils';
-import MessagesPage from '@/pages/features/MessagesPage';
-import HealthMetricsPage from '@/pages/features/HealthMetricsPage';
-import NotificationCenterPage from '@/pages/features/NotificationCenterPage';
-import AppointmentRemindersPage from '@/pages/features/AppointmentRemindersPage';
-import AllergyManagementPage from '@/pages/features/AllergyManagementPage';
-import PrescriptionRefillPage from '@/pages/features/PrescriptionRefillPage';
-import MedicalHistoryPage from '@/pages/features/MedicalHistoryPage';
-import PatientConsentPage from '@/pages/features/PatientConsentPage';
-import ClinicalNotesPage from '@/pages/features/ClinicalNotesPage';
-import PatientProblemListPage from '@/pages/features/PatientProblemListPage';
-import MedicationAdherencePage from '@/pages/features/MedicationAdherencePage';
-import LabResultsManagementPage from '@/pages/features/LabResultsManagementPage';
-import { SmartAppointmentRemindersPage } from '@/pages/features/SmartAppointmentRemindersPage';
-import PricingSettingsPage from '@/pages/features/PricingSettingsPage';
-import BillingPage from '@/pages/features/BillingPage';
-import AdminBillingDashboard from '@/pages/features/AdminBillingDashboard';
-import AuditLogsPage from '@/pages/features/AuditLogsPage';
-import CreateAdminPage from '@/pages/features/CreateAdminPage';
+
+const AppointmentsPage = lazy(() => import('@/pages/features/AppointmentsPage'));
+const PrescriptionsPage = lazy(() => import('@/pages/features/PrescriptionsPage'));
+const LabResultsPage = lazy(() => import('@/pages/features/LabResultsPage'));
+const ImagingPage = lazy(() => import('@/pages/features/ImagingPage'));
+const AmbulancePage = lazy(() => import('@/pages/features/AmbulancePage'));
+const TimelinePage = lazy(() => import('@/pages/features/TimelinePage'));
+const InventoryPage = lazy(() => import('@/pages/features/InventoryPage'));
+const VehiclesPage = lazy(() => import('@/pages/features/VehiclesPage'));
+const UsersPage = lazy(() => import('@/pages/features/UsersPage'));
+const ProfilePage = lazy(() => import('@/pages/features/ProfilePage'));
+const VerificationsPage = lazy(() => import('@/pages/features/VerificationsPage'));
+const AnalyticsPage = lazy(() => import('@/pages/features/AnalyticsPage'));
+const PatientsPage = lazy(() => import('@/pages/features/PatientsPage'));
+const DoctorsPage = lazy(() => import('@/pages/features/DoctorsPage'));
+const ReferralsPage = lazy(() => import('@/pages/features/ReferralsPage'));
+const MessagesPage = lazy(() => import('@/pages/features/MessagesPage'));
+const HealthMetricsPage = lazy(() => import('@/pages/features/HealthMetricsPage'));
+const NotificationCenterPage = lazy(() => import('@/pages/features/NotificationCenterPage'));
+const AppointmentRemindersPage = lazy(() => import('@/pages/features/AppointmentRemindersPage'));
+const AllergyManagementPage = lazy(() => import('@/pages/features/AllergyManagementPage'));
+const PrescriptionRefillPage = lazy(() => import('@/pages/features/PrescriptionRefillPage'));
+const MedicalHistoryPage = lazy(() => import('@/pages/features/MedicalHistoryPage'));
+const PatientConsentPage = lazy(() => import('@/pages/features/PatientConsentPage'));
+const ClinicalNotesPage = lazy(() => import('@/pages/features/ClinicalNotesPage'));
+const PatientProblemListPage = lazy(() => import('@/pages/features/PatientProblemListPage'));
+const MedicationAdherencePage = lazy(() => import('@/pages/features/MedicationAdherencePage'));
+const LabResultsManagementPage = lazy(() => import('@/pages/features/LabResultsManagementPage'));
+const SmartAppointmentRemindersPage = lazy(() =>
+  import('@/pages/features/SmartAppointmentRemindersPage').then((module) => ({ default: module.SmartAppointmentRemindersPage }))
+);
+const PricingSettingsPage = lazy(() => import('@/pages/features/PricingSettingsPage'));
+const BillingPage = lazy(() => import('@/pages/features/BillingPage'));
+const AdminBillingDashboard = lazy(() => import('@/pages/features/AdminBillingDashboard'));
+const AuditLogsPage = lazy(() => import('@/pages/features/AuditLogsPage'));
+const CreateAdminPage = lazy(() => import('@/pages/features/CreateAdminPage'));
 
 interface FeatureWrapperProps {
   page: string;
 }
 
 interface FeatureConfig {
-  component: React.ComponentType;
+  component: React.ComponentType<Record<string, unknown>>;
   /** Passed to pages that need route-specific props (e.g. referral queue). */
   props?: Record<string, unknown>;
 }
@@ -104,7 +109,9 @@ const FeatureWrapper = ({ page }: FeatureWrapperProps) => {
   }
   return (
     <DashboardLayout>
-      <Page {...(config.props ?? {})} />
+      <Suspense fallback={<RouteLoader compact label="Loading workspace..." />}>
+        <Page {...(config.props ?? {})} />
+      </Suspense>
     </DashboardLayout>
   );
 };

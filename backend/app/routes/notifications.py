@@ -77,7 +77,7 @@ async def get_notification(
     
     # Verify access
     if notification.user_id != current_user.id:
-        if current_user.role.value != "admin":
+        if not current_user.is_admin_or_super():
             raise HTTPException(
                 status_code=status.HTTP_403_FORBIDDEN,
                 detail="Not authorized"
@@ -105,7 +105,7 @@ async def mark_as_read(
         )
     
     if notification.user_id != current_user.id:
-        if current_user.role.value != "admin":
+        if not current_user.is_admin_or_super():
             raise HTTPException(
                 status_code=status.HTTP_403_FORBIDDEN,
                 detail="Not authorized"
@@ -137,7 +137,7 @@ async def archive_notification(
         )
     
     if notification.user_id != current_user.id:
-        if current_user.role.value != "admin":
+        if not current_user.is_admin_or_super():
             raise HTTPException(
                 status_code=status.HTTP_403_FORBIDDEN,
                 detail="Not authorized"
@@ -168,7 +168,7 @@ async def delete_notification(
         )
     
     if notification.user_id != current_user.id:
-        if current_user.role.value != "admin":
+        if not current_user.is_admin_or_super():
             raise HTTPException(
                 status_code=status.HTTP_403_FORBIDDEN,
                 detail="Not authorized"

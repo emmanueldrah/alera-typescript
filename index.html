@@ -42,7 +42,19 @@
   </head>
 
   <body>
-    <div id="root"></div>
+    <div id="root">
+      <div style="min-height:100vh;display:flex;align-items:center;justify-content:center;background:linear-gradient(135deg,#0f172a,#042f2e);color:#e2e8f0;font-family:Inter,system-ui,sans-serif;padding:24px;text-align:center">
+        <div>
+          <p style="margin:0 0 8px;font-size:12px;letter-spacing:.3em;text-transform:uppercase;color:#99f6e4">Alera</p>
+          <p style="margin:0;font-size:16px;font-weight:600">Loading secure healthcare workspace...</p>
+        </div>
+      </div>
+    </div>
+    <noscript>
+      <div style="padding:24px;font-family:Inter,system-ui,sans-serif">
+        ALERA requires JavaScript to load appointments, diagnostics, messaging, and dashboard workflows.
+      </div>
+    </noscript>
     <script type="module" src="/src/main.tsx"></script>
   </body>
 </html>

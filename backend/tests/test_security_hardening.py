@@ -16,6 +16,7 @@ from app.models.additional_features import DocumentType
 from app.models.ambulance import AmbulanceRequest, AmbulanceRequestStatus, EmergencyPriority
 from app.models.appointment import Appointment, AppointmentStatus, AppointmentType
 from app.models.lab_imaging import ImagingScan, ImagingScanStatus, LabTest, LabTestStatus
+from app.models.notification import Notification
 from app.models.user import User, UserRole
 from app.routes.imaging import download_imaging_asset, download_imaging_report, upload_imaging_results
 from app.routes.admin import approve_provider, deactivate_user, list_verifications
@@ -33,8 +34,9 @@ from app.routes.auth import (
     verify_email,
 )
 from app.services.email_service import EmailService
-from app.routes.consents import create_consent
+from app.routes.consents import create_consent, list_consents
 from app.routes.documents import get_document, get_patient_documents, list_documents
+from app.routes.notifications import get_notification
 from app.routes.reminders_templates import create_reminder, list_reminders
 from app.routes.users import get_user, list_accessible_users, list_doctors, list_users
 from app.schemas import (
@@ -330,6 +332,50 @@ def test_super_admin_can_view_admin_only_audit_and_appointment_resources(db_sess
     assert retention["retention_days"] == 2555
     assert any(item.id == appointment.id for item in appointments)
     assert fetched.id == appointment.id
+
+
+def test_super_admin_can_access_admin_level_consent_and_notification_views(db_session):
+    super_admin = load_user(db_session, ADMIN_EMAIL)
+    super_admin.role = UserRole.SUPER_ADMIN
+    db_session.commit()
+    db_session.refresh(super_admin)
+
+    patient = seed_user(
+        db_session,
+        email="consent-patient@example.com",
+        role=UserRole.PATIENT,
+        first_name="Consent",
+        last_name="Patient",
+    )
+    consent = run(
+        create_consent(
+            PatientConsentCreate(
+                consent_type="treatment",
+                title="Treatment Consent",
+                description="Allow treatment",
+            ),
+            patient_id=patient.id,
+            db=db_session,
+            current_user=super_admin,
+        )
+    )
+
+    notification = Notification(
+        user_id=patient.id,
+        title="Private notice",
+        message="Visible to elevated admins",
+        notification_type="system",
+    )
+    db_session.add(notification)
+    db_session.commit()
+    db_session.refresh(notification)
+
+    consents = run(list_consents(skip=0, limit=20, patient_id=patient.id, db=db_session, current_user=super_admin))
+    fetched_notification = run(get_notification(notification_id=notification.id, db=db_session, current_user=super_admin))
+
+    assert consents.total == 1
+    assert consents.items[0].id == consent.id
+    assert fetched_notification.id == notification.id
 
 
 def test_verification_email_hits_sendgrid_api_when_configured(monkeypatch):
