@@ -157,7 +157,7 @@ async def list_appointments(
     elif current_user.role.value == "provider":
         require_verified_workforce_member(current_user, "view appointments")
         q = q.filter(Appointment.provider_id == current_user.id)
-    elif current_user.role.value == "admin":
+    elif current_user.is_admin_or_super():
         pass
     else:
         raise HTTPException(
@@ -186,7 +186,7 @@ async def get_appointment(
         )
 
     if appointment.patient_id != current_user.id and appointment.provider_id != current_user.id:
-        if current_user.role.value != "admin":
+        if not current_user.is_admin_or_super():
             raise HTTPException(
                 status_code=status.HTTP_403_FORBIDDEN,
                 detail="Not authorized to view this appointment",
@@ -215,7 +215,7 @@ async def update_appointment(
         )
 
     if appointment.patient_id != current_user.id and appointment.provider_id != current_user.id:
-        if current_user.role.value != "admin":
+        if not current_user.is_admin_or_super():
             raise HTTPException(
                 status_code=status.HTTP_403_FORBIDDEN,
                 detail="Not authorized to update this appointment",
@@ -293,7 +293,7 @@ async def delete_appointment(
         )
 
     if appointment.patient_id != current_user.id and appointment.provider_id != current_user.id:
-        if current_user.role.value != "admin":
+        if not current_user.is_admin_or_super():
             raise HTTPException(
                 status_code=status.HTTP_403_FORBIDDEN,
                 detail="Not authorized to delete this appointment",

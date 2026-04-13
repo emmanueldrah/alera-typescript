@@ -203,7 +203,7 @@ async def get_data_retention_policy(
     Shows HIPAA compliance details
     """
     
-    if current_user.role.value != "admin":
+    if not current_user.is_admin_or_super():
         raise HTTPException(status_code=403, detail="Only admins can view compliance info")
 
     # Get oldest log
@@ -230,7 +230,7 @@ async def get_user_audit_history(
 ):
     """Get audit history for a specific user"""
     
-    if current_user.role.value != "admin":
+    if not current_user.is_admin_or_super():
         raise HTTPException(status_code=403, detail="Only admins can view audit history")
 
     days = max(1, min(days, 2555))
@@ -267,7 +267,7 @@ async def get_resource_changes(
     Shows all changes to a patient, appointment, prescription, etc.
     """
     
-    if current_user.role.value != "admin":
+    if not current_user.is_admin_or_super():
         raise HTTPException(status_code=403, detail="Only admins can view resource changes")
 
     skip = max(skip, 0)
@@ -295,7 +295,7 @@ async def get_audit_log(
 ):
     """Get a specific audit log entry (admin only)"""
     
-    if current_user.role.value != "admin":
+    if not current_user.is_admin_or_super():
         raise HTTPException(status_code=403, detail="Only admins can view audit logs")
 
     audit_log = db.query(AuditLog).filter(

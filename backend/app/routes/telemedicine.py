@@ -104,7 +104,7 @@ async def list_video_calls(
         calls = db.query(VideoCall).filter(
             VideoCall.provider_id == current_user.id
         ).order_by(VideoCall.initiated_at.desc()).offset(skip).limit(limit).all()
-    elif current_user.role.value == "admin":
+    elif current_user.is_admin_or_super():
         calls = db.query(VideoCall).order_by(VideoCall.initiated_at.desc()).offset(skip).limit(limit).all()
     else:
         raise HTTPException(
@@ -133,7 +133,7 @@ async def get_video_call(
     
     # Verify access
     if call.patient_id != current_user.id and call.provider_id != current_user.id:
-        if current_user.role.value != "admin":
+        if not current_user.is_admin_or_super():
             raise HTTPException(
                 status_code=status.HTTP_403_FORBIDDEN,
                 detail="Not authorized"
@@ -164,7 +164,7 @@ async def update_video_call(
     
     # Verify access
     if call.patient_id != current_user.id and call.provider_id != current_user.id:
-        if current_user.role.value != "admin":
+        if not current_user.is_admin_or_super():
             raise HTTPException(
                 status_code=status.HTTP_403_FORBIDDEN,
                 detail="Not authorized"
@@ -265,7 +265,7 @@ async def list_messages(
 ):
     """List messages for current user"""
 
-    if current_user.role.value != "patient" and current_user.role.value != "admin":
+    if current_user.role != UserRole.PATIENT and not current_user.is_admin_or_super():
         require_verified_workforce_member(current_user, "view telemedicine messages")
     
     query = db.query(Message).filter(
@@ -296,7 +296,7 @@ async def get_message(
 ):
     """Get message details"""
 
-    if current_user.role.value != "patient" and current_user.role.value != "admin":
+    if current_user.role != UserRole.PATIENT and not current_user.is_admin_or_super():
         require_verified_workforce_member(current_user, "view telemedicine messages")
     
     message = db.query(Message).filter(Message.id == message_id).first()
@@ -309,7 +309,7 @@ async def get_message(
     
     # Verify access
     if message.sender_id != current_user.id and message.recipient_id != current_user.id:
-        if current_user.role.value != "admin":
+        if not current_user.is_admin_or_super():
             raise HTTPException(
                 status_code=status.HTTP_403_FORBIDDEN,
                 detail="Not authorized"
@@ -333,7 +333,7 @@ async def update_message(
 ):
     """Update message (archive, etc.)"""
 
-    if current_user.role.value != "patient" and current_user.role.value != "admin":
+    if current_user.role != UserRole.PATIENT and not current_user.is_admin_or_super():
         require_verified_workforce_member(current_user, "update telemedicine messages")
     
     message = db.query(Message).filter(Message.id == message_id).first()
@@ -346,7 +346,7 @@ async def update_message(
     
     # Verify access
     if message.sender_id != current_user.id and message.recipient_id != current_user.id:
-        if current_user.role.value != "admin":
+        if not current_user.is_admin_or_super():
             raise HTTPException(
                 status_code=status.HTTP_403_FORBIDDEN,
                 detail="Not authorized"
@@ -370,7 +370,7 @@ async def delete_message(
 ):
     """Delete message"""
 
-    if current_user.role.value != "patient" and current_user.role.value != "admin":
+    if current_user.role != UserRole.PATIENT and not current_user.is_admin_or_super():
         require_verified_workforce_member(current_user, "delete telemedicine messages")
     
     message = db.query(Message).filter(Message.id == message_id).first()
@@ -383,7 +383,7 @@ async def delete_message(
     
     # Verify access - only sender can delete
     if message.sender_id != current_user.id:
-        if current_user.role.value != "admin":
+        if not current_user.is_admin_or_super():
             raise HTTPException(
                 status_code=status.HTTP_403_FORBIDDEN,
                 detail="Not authorized"

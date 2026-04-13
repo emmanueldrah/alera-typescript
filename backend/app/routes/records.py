@@ -291,7 +291,7 @@ def _panel_scope(db: Session, current_user: User) -> set[int]:
 
 
 def _apply_role_scope(query, db: Session, current_user: User, record_type: str):
-    if current_user.role == UserRole.ADMIN:
+    if current_user.is_admin_or_super():
         return query
 
     if current_user.role in (
@@ -337,7 +337,7 @@ def _apply_role_scope(query, db: Session, current_user: User, record_type: str):
 
 
 def _authorizes_patient_scope(current_user: User, patient_id: int | None, db: Session, record_type: str) -> bool:
-    if current_user.role == UserRole.ADMIN:
+    if current_user.is_admin_or_super():
         return True
     if current_user.role == UserRole.PATIENT:
         return patient_id == current_user.id
@@ -510,22 +510,22 @@ async def create_record(
             if body.patient_id is None or body.patient_id not in provider_panel_patient_ids(db, current_user.id):
                 raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Not authorized for this patient")
             body.provider_id = current_user.id
-        elif current_user.role != UserRole.ADMIN:
+        elif not current_user.is_admin_or_super():
             raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Not authorized")
 
     elif body.record_type == "provider_pricing":
         if current_user.role == UserRole.PROVIDER:
             body.provider_id = current_user.id
-        elif current_user.role != UserRole.ADMIN:
+        elif not current_user.is_admin_or_super():
             raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Not authorized")
 
     elif body.record_type in PHARMACY_TYPES:
-        if current_user.role not in (UserRole.PHARMACIST, UserRole.ADMIN):
+        if current_user.role not in (UserRole.PHARMACIST, UserRole.ADMIN, UserRole.SUPER_ADMIN):
             raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Not authorized")
         if current_user.role == UserRole.PHARMACIST:
             body.provider_id = current_user.id
     elif body.record_type in AMBULANCE_TYPES:
-        if current_user.role not in (UserRole.AMBULANCE, UserRole.HOSPITAL, UserRole.ADMIN):
+        if current_user.role not in (UserRole.AMBULANCE, UserRole.HOSPITAL, UserRole.ADMIN, UserRole.SUPER_ADMIN):
             raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Not authorized")
         if current_user.role in (UserRole.AMBULANCE, UserRole.HOSPITAL):
             body.provider_id = current_user.id
@@ -604,7 +604,7 @@ async def update_record(
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Record not found")
 
     _require_allowed_type(record.record_type)
-    if current_user.role == UserRole.ADMIN:
+    if current_user.is_admin_or_super():
         pass
     elif current_user.role == UserRole.PATIENT:
         if record.patient_id != current_user.id:
@@ -673,7 +673,7 @@ async def delete_record(
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Record not found")
 
     _require_allowed_type(record.record_type)
-    if current_user.role == UserRole.ADMIN:
+    if current_user.is_admin_or_super():
         pass
     elif current_user.role == UserRole.PATIENT:
         if record.patient_id != current_user.id:

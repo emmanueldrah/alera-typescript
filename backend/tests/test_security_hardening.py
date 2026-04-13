@@ -20,7 +20,8 @@ from app.models.user import User, UserRole
 from app.routes.imaging import download_imaging_asset, download_imaging_report, upload_imaging_results
 from app.routes.admin import approve_provider, deactivate_user, list_verifications
 from app.routes.admin import change_user_role
-from app.routes.appointments import create_appointment
+from app.routes.appointments import create_appointment, get_appointment, list_appointments
+from app.routes.audit import get_data_retention_policy
 from app.routes.auth import (
     change_password,
     login,
@@ -286,6 +287,49 @@ def test_super_admin_can_view_patient_document_collections(db_session):
 
     assert collection.total == 1
     assert collection.items[0].patient_id == patient.id
+
+
+def test_super_admin_can_view_admin_only_audit_and_appointment_resources(db_session):
+    super_admin = load_user(db_session, ADMIN_EMAIL)
+    super_admin.role = UserRole.SUPER_ADMIN
+    db_session.commit()
+    db_session.refresh(super_admin)
+
+    patient = seed_user(
+        db_session,
+        email="appt-patient@example.com",
+        role=UserRole.PATIENT,
+        first_name="Appt",
+        last_name="Patient",
+    )
+    provider = seed_user(
+        db_session,
+        email="appt-provider@example.com",
+        role=UserRole.PROVIDER,
+        first_name="Appt",
+        last_name="Provider",
+    )
+    appointment = Appointment(
+        patient_id=patient.id,
+        provider_id=provider.id,
+        title="Follow-up",
+        description="Routine follow-up",
+        appointment_type=AppointmentType.TELEHEALTH,
+        status=AppointmentStatus.SCHEDULED,
+        scheduled_time=utcnow() + timedelta(days=1),
+        duration_minutes=30,
+    )
+    db_session.add(appointment)
+    db_session.commit()
+    db_session.refresh(appointment)
+
+    retention = run(get_data_retention_policy(db=db_session, current_user=super_admin))
+    appointments = run(list_appointments(current_user=super_admin, db=db_session, skip=0, limit=20))
+    fetched = run(get_appointment(appointment_id=appointment.id, current_user=super_admin, db=db_session))
+
+    assert retention["retention_days"] == 2555
+    assert any(item.id == appointment.id for item in appointments)
+    assert fetched.id == appointment.id
 
 
 def test_verification_email_hits_sendgrid_api_when_configured(monkeypatch):
