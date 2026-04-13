@@ -4,8 +4,9 @@ import { buildSocketUrl, resolveSocketBaseUrl } from '@/lib/socketUrl';
 
 describe('socket URL helpers', () => {
   it('builds a same-origin websocket URL from the default api base', () => {
-    expect(resolveSocketBaseUrl()).toBe('ws://localhost/api');
-    expect(buildSocketUrl('/ws/location/42')).toBe('ws://localhost/api/ws/location/42');
+    const expectedBase = `ws://${window.location.host}/api`;
+    expect(resolveSocketBaseUrl('/api')).toBe(expectedBase);
+    expect(buildSocketUrl('/ws/location/42', '/api')).toBe(`${expectedBase}/ws/location/42`);
   });
 
   it('converts configured https api URLs into secure websocket URLs', () => {

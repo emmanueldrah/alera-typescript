@@ -1,12 +1,18 @@
 import React from 'react';
-import { render, screen, waitFor } from '@testing-library/react';
+import { act, render, screen } from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { useLiveLocation } from '@/hooks/useLiveLocation';
 
-const getRequestTracking = vi.fn();
-const updateMine = vi.fn();
-const disableMine = vi.fn();
+const {
+  getRequestTracking,
+  updateMine,
+  disableMine,
+} = vi.hoisted(() => ({
+  getRequestTracking: vi.fn(),
+  updateMine: vi.fn(),
+  disableMine: vi.fn(),
+}));
 
 vi.mock('@/lib/apiService', () => ({
   liveLocationApi: {
@@ -80,26 +86,28 @@ describe('useLiveLocation', () => {
   it('falls back to polling when the realtime socket cannot connect', async () => {
     render(<HookHarness />);
 
-    await waitFor(() => {
-      expect(getRequestTracking).toHaveBeenCalledTimes(1);
+    await act(async () => {
+      await Promise.resolve();
     });
+    expect(getRequestTracking).toHaveBeenCalledTimes(1);
 
     const socket = FakeWebSocket.instances[0];
     expect(socket).toBeDefined();
 
-    socket.onerror?.(new Event('error'));
-    socket.onclose?.({ code: 1006 } as CloseEvent);
-
-    await waitFor(() => {
-      expect(screen.getByTestId('mode')).toHaveTextContent('polling');
+    await act(async () => {
+      socket.onerror?.(new Event('error'));
+      socket.onclose?.({ code: 1006 } as CloseEvent);
+      await Promise.resolve();
     });
 
+    expect(screen.getByTestId('mode')).toHaveTextContent('polling');
     expect(screen.getByTestId('error')).toHaveTextContent('Tracking will keep refreshing automatically.');
 
-    vi.advanceTimersByTime(5000);
-
-    await waitFor(() => {
-      expect(getRequestTracking).toHaveBeenCalledTimes(2);
+    await act(async () => {
+      vi.advanceTimersByTime(5000);
+      await Promise.resolve();
     });
+
+    expect(getRequestTracking).toHaveBeenCalledTimes(2);
   });
 });
