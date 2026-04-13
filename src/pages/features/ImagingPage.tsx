@@ -2,6 +2,7 @@ import { startTransition, useDeferredValue, useMemo, useState } from 'react';
 import { motion } from 'framer-motion';
 import { Calendar, CheckCircle2, Clock3, Download, FileImage, FileText, Inbox, Plus, ScanLine, Search, Trash2, Upload, X } from 'lucide-react';
 import { useSearchParams } from 'react-router-dom';
+import { toast } from '@/components/ui/use-toast';
 import { useAuth } from '@/contexts/useAuth';
 import { useAppData } from '@/contexts/useAppData';
 import { useNotifications } from '@/contexts/useNotifications';
@@ -145,7 +146,14 @@ const ImagingPage = () => {
       uploadForm.reportFile ||
       uploadForm.imageFiles.length > 0;
 
-    if (!hasPayload) return;
+    if (!hasPayload) {
+      toast({
+        title: 'Upload details required',
+        description: 'Add findings, an impression, or files before publishing the imaging result.',
+        variant: 'destructive',
+      });
+      return;
+    }
 
     setUploadingId(scan.id);
     try {
@@ -177,8 +185,17 @@ const ImagingPage = () => {
         },
       });
       resetUploadForm();
+      toast({
+        title: 'Imaging result published',
+        description: 'The report and files are now available in the imaging workflow.',
+      });
     } catch (error) {
       console.error('Failed to upload imaging results:', error);
+      toast({
+        title: 'Upload failed',
+        description: 'We could not publish this imaging result right now.',
+        variant: 'destructive',
+      });
     } finally {
       setUploadingId(null);
     }
@@ -206,10 +223,24 @@ const ImagingPage = () => {
   };
 
   const handleOrder = async () => {
-    if (!orderForm.patientId || !orderForm.centerId || !orderForm.scanType) return;
+    if (!orderForm.patientId || !orderForm.centerId || !orderForm.scanType) {
+      toast({
+        title: 'Complete the scan order',
+        description: 'Select a patient, imaging center, and scan type before ordering.',
+        variant: 'destructive',
+      });
+      return;
+    }
     const patient = patientOptions.find((option) => option.id === orderForm.patientId);
     const center = imagingCenterOptions.find((option) => option.id === orderForm.centerId);
-    if (!patient || !center) return;
+    if (!patient || !center) {
+      toast({
+        title: 'Order could not be created',
+        description: 'The selected patient or imaging center is unavailable.',
+        variant: 'destructive',
+      });
+      return;
+    }
 
     const scan: ImagingScan = {
       id: `img-${Date.now()}`,
@@ -245,11 +276,19 @@ const ImagingPage = () => {
     });
     setShowOrder(false);
     setOrderForm({ patientId: '', centerId: '', scanType: '', bodyPart: '', clinicalIndication: '' });
+    toast({
+      title: 'Imaging ordered',
+      description: `${orderForm.scanType} was sent to ${center.name}.`,
+    });
   };
 
   const handleStatusChange = (id: string, status: ImagingScan['status']) => {
     const target = imagingScans.find((scan) => scan.id === id);
     updateImagingScan(id, (scan) => ({ ...scan, status }));
+    toast({
+      title: 'Study updated',
+      description: `The imaging study is now ${status.replace('-', ' ')}.`,
+    });
     if (showUpload === id && status !== 'completed') {
       resetUploadForm();
     }
@@ -277,8 +316,17 @@ const ImagingPage = () => {
         setScheduleDrafts((current) => ({ ...current, [scan.id]: '' }));
       });
       notifyQueueUpdate(scan, 'Imaging Study Scheduled', `${scan.scanType}${scan.bodyPart ? ` (${scan.bodyPart})` : ''} for ${scan.patientName} was scheduled for ${formatDateTime(new Date(scheduleValue).toISOString())}.`);
+      toast({
+        title: 'Study scheduled',
+        description: `${scan.patientName} is booked for ${formatDateTime(new Date(scheduleValue).toISOString())}.`,
+      });
     } catch (error) {
       console.error('Failed to schedule imaging scan:', error);
+      toast({
+        title: 'Scheduling failed',
+        description: 'We could not save the imaging appointment time.',
+        variant: 'destructive',
+      });
     } finally {
       setSchedulingId(null);
     }
@@ -289,8 +337,17 @@ const ImagingPage = () => {
     try {
       await api.imaging.deleteImagingScan(id);
       await refreshAppData();
+      toast({
+        title: 'Imaging study deleted',
+        description: 'The study was removed from the worklist.',
+      });
     } catch (error) {
       console.error('Failed to delete imaging scan:', error);
+      toast({
+        title: 'Delete failed',
+        description: 'We could not remove this imaging study.',
+        variant: 'destructive',
+      });
     } finally {
       setDeleteId(null);
     }

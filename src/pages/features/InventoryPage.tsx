@@ -1,8 +1,9 @@
 import { useState, useMemo } from 'react';
 import { motion } from 'framer-motion';
-import { Package, Search, AlertTriangle, Check, TrendingDown, DollarSign, Calendar, Inbox, Pill, Zap, Plus, Trash2, X } from 'lucide-react';
+import { Package, Search, AlertTriangle, Check, Download, TrendingDown, DollarSign, Calendar, Inbox, Pill, Zap, Plus, Trash2, X } from 'lucide-react';
 import { useAuth } from '@/contexts/useAuth';
 import { useAppData } from '@/contexts/useAppData';
+import { toast } from '@/components/ui/use-toast';
 import type { InventoryItem } from '@/data/mockData';
 
 const InventoryPage = () => {
@@ -11,6 +12,7 @@ const InventoryPage = () => {
   const [search, setSearch] = useState('');
   const [categoryFilter, setCategoryFilter] = useState('all');
   const [statusFilter, setStatusFilter] = useState('all');
+  const [sortBy, setSortBy] = useState<'name' | 'stock' | 'value' | 'expiry'>('name');
   const [showCreate, setShowCreate] = useState(false);
   const [newItem, setNewItem] = useState({
     name: '',
@@ -47,13 +49,23 @@ const InventoryPage = () => {
 
   // Filter inventory
   const filtered = useMemo(() => {
-    return inventoryItems.filter(item => {
+    const rows = inventoryItems.filter(item => {
       const matchesSearch = item.name.toLowerCase().includes(search.toLowerCase());
       const matchesCategory = categoryFilter === 'all' || item.category === categoryFilter;
       const matchesStatus = statusFilter === 'all' || item.status === statusFilter;
       return matchesSearch && matchesCategory && matchesStatus;
     });
-  }, [inventoryItems, search, categoryFilter, statusFilter]);
+    return [...rows].sort((left, right) => {
+      if (sortBy === 'stock') return right.stock - left.stock;
+      if (sortBy === 'value') return (right.stock * right.price) - (left.stock * left.price);
+      if (sortBy === 'expiry') {
+        const leftTime = left.expiryDate ? new Date(left.expiryDate).getTime() : Number.MAX_SAFE_INTEGER;
+        const rightTime = right.expiryDate ? new Date(right.expiryDate).getTime() : Number.MAX_SAFE_INTEGER;
+        return leftTime - rightTime;
+      }
+      return left.name.localeCompare(right.name);
+    });
+  }, [inventoryItems, search, categoryFilter, statusFilter, sortBy]);
 
   // Inventory stats
   const stats = useMemo(() => {
@@ -74,10 +86,21 @@ const InventoryPage = () => {
       lastRestocked: newStock > item.stock ? new Date().toISOString() : item.lastRestocked,
       status,
     }));
+    toast({
+      title: 'Inventory updated',
+      description: `${item.name} stock is now ${newStock} ${item.unit}.`,
+    });
   };
 
   const handleCreateItem = () => {
-    if (!newItem.name.trim() || newItem.price <= 0 || newItem.stock < 0 || newItem.reorderLevel < 0) return;
+    if (!newItem.name.trim() || newItem.price <= 0 || newItem.stock < 0 || newItem.reorderLevel < 0) {
+      toast({
+        title: 'Invalid inventory item',
+        description: 'Add a name, valid stock, reorder level, and price before saving.',
+        variant: 'destructive',
+      });
+      return;
+    }
     const status: InventoryItem['status'] =
       newItem.stock === 0 ? 'out-of-stock' : newItem.stock < newItem.reorderLevel ? 'low-stock' : 'in-stock';
 
@@ -105,6 +128,50 @@ const InventoryPage = () => {
       supplier: '',
     });
     setShowCreate(false);
+    toast({
+      title: 'Inventory item created',
+      description: `${newItem.name.trim()} was added to inventory.`,
+    });
+  };
+
+  const handleExportCsv = () => {
+    if (filtered.length === 0) {
+      toast({
+        title: 'Nothing to export',
+        description: 'There are no inventory rows in the current view.',
+        variant: 'destructive',
+      });
+      return;
+    }
+
+    const rows = filtered.map((item) => [
+      item.name,
+      item.category,
+      item.stock,
+      item.unit,
+      item.reorderLevel,
+      item.price.toFixed(2),
+      (item.stock * item.price).toFixed(2),
+      item.status,
+      item.expiryDate ?? '',
+      item.supplier ?? '',
+    ]);
+    const csv = [
+      ['Name', 'Category', 'Stock', 'Unit', 'Reorder Level', 'Unit Price', 'Total Value', 'Status', 'Expiry Date', 'Supplier'].join(','),
+      ...rows.map((row) => row.map((value) => `"${String(value).replace(/"/g, '""')}"`).join(',')),
+    ].join('\n');
+
+    const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    link.href = url;
+    link.download = `inventory-${new Date().toISOString().slice(0, 10)}.csv`;
+    link.click();
+    URL.revokeObjectURL(url);
+    toast({
+      title: 'Inventory exported',
+      description: 'The current inventory view was downloaded as CSV.',
+    });
   };
 
   const categoryIcons = { medication: <Pill className="w-4 h-4" />, supply: <Package className="w-4 h-4" />, equipment: <Zap className="w-4 h-4" /> };
@@ -133,6 +200,10 @@ const InventoryPage = () => {
         <button onClick={() => setShowCreate((value) => !value)} className="flex items-center gap-2 px-4 py-2.5 rounded-xl bg-gradient-primary text-primary-foreground text-sm font-semibold hover:opacity-90 transition">
           {showCreate ? <X className="w-4 h-4" /> : <Plus className="w-4 h-4" />}
           {showCreate ? 'Close' : 'Add Drug'}
+        </button>
+        <button onClick={handleExportCsv} className="ml-2 flex items-center gap-2 rounded-xl border border-input px-4 py-2.5 text-sm font-semibold text-foreground hover:bg-muted/50 transition">
+          <Download className="h-4 w-4" />
+          Export CSV
         </button>
       </div>
 
@@ -280,6 +351,16 @@ const InventoryPage = () => {
           <option value="in-stock">In Stock</option>
           <option value="low-stock">Low Stock</option>
           <option value="out-of-stock">Out of Stock</option>
+        </select>
+        <select
+          value={sortBy}
+          onChange={e => setSortBy(e.target.value as 'name' | 'stock' | 'value' | 'expiry')}
+          className="h-11 px-4 rounded-xl border border-input bg-background text-foreground focus:outline-none focus:ring-2 focus:ring-primary/30"
+        >
+          <option value="name">Sort: Name</option>
+          <option value="stock">Sort: Stock</option>
+          <option value="value">Sort: Inventory value</option>
+          <option value="expiry">Sort: Expiry date</option>
         </select>
       </div>
 

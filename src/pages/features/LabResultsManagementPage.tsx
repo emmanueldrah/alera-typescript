@@ -1,6 +1,7 @@
 import React, { useMemo, useState } from 'react';
 import { motion } from 'framer-motion';
 import { AlertCircle, Upload, FileText, CheckCircle, Clock, Download, Eye, Search, Trash2 } from 'lucide-react';
+import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from '@/components/ui/alert-dialog';
 import { Button } from '@/components/ui/button';
 import { toast } from '@/components/ui/use-toast';
 import { useAuth } from '@/contexts/useAuth';
@@ -12,6 +13,7 @@ const LabResultsManagementPage: React.FC = () => {
   const { labTests, updateLabTest } = useAppData();
   const [selectedTest, setSelectedTest] = useState<LabTest | null>(null);
   const [uploadingTestId, setUploadingTestId] = useState<string | null>(null);
+  const [pendingDeleteTestId, setPendingDeleteTestId] = useState<string | null>(null);
   const [filterStatus, setFilterStatus] = useState<'all' | 'requested' | 'in-progress' | 'completed'>('all');
   const [searchQuery, setSearchQuery] = useState('');
 
@@ -103,22 +105,21 @@ const LabResultsManagementPage: React.FC = () => {
   };
 
   const handleDeleteDocument = (testId: string) => {
-    if (confirm('Delete this document? This cannot be undone.')) {
-      updateLabTest(testId, (test) => ({
-        ...test,
+    updateLabTest(testId, (test) => ({
+      ...test,
+      documentUrl: undefined,
+    }));
+    setPendingDeleteTestId(null);
+    if (activeSelectedTest?.id === testId) {
+      setSelectedTest((current) => current ? {
+        ...current,
         documentUrl: undefined,
-      }));
-      if (activeSelectedTest?.id === testId) {
-        setSelectedTest((current) => current ? {
-          ...current,
-          documentUrl: undefined,
-        } : current);
-      }
-      toast({
-        title: 'Document deleted',
-        description: 'The lab result attachment was removed.',
-      });
+      } : current);
     }
+    toast({
+      title: 'Document deleted',
+      description: 'The lab result attachment was removed.',
+    });
   };
 
   const getStatusBadge = (status: LabTest['status']) => {
@@ -192,6 +193,23 @@ const LabResultsManagementPage: React.FC = () => {
           <div className="text-2xl font-bold text-blue-700 mt-1">{stats.withDocuments}</div>
         </motion.div>
       </div>
+
+      <AlertDialog open={Boolean(pendingDeleteTestId)} onOpenChange={(open) => { if (!open) setPendingDeleteTestId(null); }}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Delete attached document?</AlertDialogTitle>
+            <AlertDialogDescription>
+              This removes the uploaded lab document from the selected test result.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancel</AlertDialogCancel>
+            <AlertDialogAction className="bg-destructive text-destructive-foreground hover:bg-destructive/90" onClick={() => pendingDeleteTestId ? handleDeleteDocument(pendingDeleteTestId) : undefined}>
+              Delete document
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
 
       {/* Filters */}
       <div className="flex gap-2 overflow-x-auto pb-2">
@@ -295,7 +313,7 @@ const LabResultsManagementPage: React.FC = () => {
                     <Button
                       variant="destructive"
                       size="sm"
-                      onClick={() => handleDeleteDocument(activeSelectedTest.id)}
+                      onClick={() => setPendingDeleteTestId(activeSelectedTest.id)}
                       className="gap-2"
                     >
                       <Trash2 className="w-4 h-4" />

@@ -1,6 +1,7 @@
 import React, { useMemo, useState } from 'react';
 import { motion } from 'framer-motion';
 import { Plus, Edit2, Trash2, DollarSign, AlertCircle, Check, Search } from 'lucide-react';
+import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from '@/components/ui/alert-dialog';
 import { Button } from '@/components/ui/button';
 import { toast } from '@/components/ui/use-toast';
 import { useAuth } from '@/contexts/useAuth';
@@ -12,6 +13,7 @@ const PricingSettingsPage: React.FC = () => {
   const { providerPricing, setProviderPricing, deleteProviderPricing } = useAppData();
   const [showForm, setShowForm] = useState(false);
   const [editingId, setEditingId] = useState<string | null>(null);
+  const [pendingDeleteId, setPendingDeleteId] = useState<string | null>(null);
   const [successMsg, setSuccessMsg] = useState<string>('');
   const [searchQuery, setSearchQuery] = useState('');
   const [serviceTypeFilter, setServiceTypeFilter] = useState<'all' | ProviderPricing['serviceType']>('all');
@@ -119,15 +121,14 @@ const PricingSettingsPage: React.FC = () => {
   };
 
   const handleDelete = (id: string) => {
-    if (confirm('Delete this pricing? This cannot be undone.')) {
-      deleteProviderPricing(id);
-      setSuccessMsg('Price deleted successfully!');
-      toast({
-        title: 'Pricing removed',
-        description: 'The service price has been deleted.',
-      });
-      setTimeout(() => setSuccessMsg(''), 3000);
-    }
+    deleteProviderPricing(id);
+    setPendingDeleteId(null);
+    setSuccessMsg('Price deleted successfully!');
+    toast({
+      title: 'Pricing removed',
+      description: 'The service price has been deleted.',
+    });
+    setTimeout(() => setSuccessMsg(''), 3000);
   };
 
   const totalServices = myPricing.length;
@@ -173,6 +174,23 @@ const PricingSettingsPage: React.FC = () => {
           <p className="text-emerald-800 font-medium">{successMsg}</p>
         </motion.div>
       )}
+
+      <AlertDialog open={Boolean(pendingDeleteId)} onOpenChange={(open) => { if (!open) setPendingDeleteId(null); }}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Delete pricing entry?</AlertDialogTitle>
+            <AlertDialogDescription>
+              This service price will be removed immediately and can’t be restored automatically.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancel</AlertDialogCancel>
+            <AlertDialogAction className="bg-destructive text-destructive-foreground hover:bg-destructive/90" onClick={() => pendingDeleteId ? handleDelete(pendingDeleteId) : undefined}>
+              Delete pricing
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
 
       {/* Stats */}
       <div className="grid grid-cols-2 md:grid-cols-3 gap-3">
@@ -368,7 +386,7 @@ const PricingSettingsPage: React.FC = () => {
                   <Button
                     variant="ghost"
                     size="sm"
-                    onClick={() => handleDelete(pricing.id)}
+                    onClick={() => setPendingDeleteId(pricing.id)}
                     className="text-destructive"
                   >
                     <Trash2 className="w-4 h-4" />

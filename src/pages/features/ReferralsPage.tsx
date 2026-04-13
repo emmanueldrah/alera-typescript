@@ -1,11 +1,12 @@
 import { useState, useMemo, useEffect } from 'react';
 import { motion } from 'framer-motion';
-import { FileText, CheckCircle, Clock, Inbox, Plus, Send, X } from 'lucide-react';
+import { FileText, CheckCircle, Clock, Inbox, Plus, Search, Send, X } from 'lucide-react';
 import { useAuth } from '@/contexts/useAuth';
 import type { UserRole } from '@/contexts/AuthContext';
 import { useAppData } from '@/contexts/useAppData';
 import { useNotifications } from '@/contexts/useNotifications';
 import { Button } from '@/components/ui/button';
+import { toast } from '@/components/ui/use-toast';
 import type { ReferralType } from '@/data/mockData';
 import { getDoctorPatients } from '@/lib/patientDirectory';
 import {
@@ -46,6 +47,7 @@ const ReferralsPage = ({ referralKind = 'hospital' }: ReferralsPageProps) => {
   const { referrals, appointments, addReferral, updateReferral, refreshAppData } = useAppData();
   const { addNotification } = useNotifications();
   const [statusFilter, setStatusFilter] = useState('all');
+  const [searchQuery, setSearchQuery] = useState('');
   const [showForm, setShowForm] = useState(false);
   const [formError, setFormError] = useState<string | null>(null);
   const [formData, setFormData] = useState({ patientId: '', destinationProviderId: '', toDepartment: '', reason: '', notes: '' });
@@ -87,9 +89,17 @@ const ReferralsPage = ({ referralKind = 'hospital' }: ReferralsPageProps) => {
   }, [referralKind]);
 
   const filtered = useMemo(() => {
-    if (statusFilter === 'all') return userReferrals;
-    return userReferrals.filter((r) => r.status === statusFilter);
-  }, [userReferrals, statusFilter]);
+    const normalizedQuery = searchQuery.trim().toLowerCase();
+    return userReferrals.filter((r) => {
+      const matchesStatus = statusFilter === 'all' || r.status === statusFilter;
+      const matchesSearch = !normalizedQuery
+        || r.patientName.toLowerCase().includes(normalizedQuery)
+        || r.fromDoctorName.toLowerCase().includes(normalizedQuery)
+        || r.toDepartment.toLowerCase().includes(normalizedQuery)
+        || r.reason.toLowerCase().includes(normalizedQuery);
+      return matchesStatus && matchesSearch;
+    });
+  }, [searchQuery, statusFilter, userReferrals]);
 
   useEffect(() => {
     const interval = window.setInterval(() => {
@@ -131,6 +141,10 @@ const ReferralsPage = ({ referralKind = 'hospital' }: ReferralsPageProps) => {
         actionUrl: dashboardPathForReferralType(referral.referralType),
         actionLabel: 'View referral',
       });
+      toast({
+        title: 'Referral accepted',
+        description: `${referral.patientName} is now being handled by ${referral.toDepartment}.`,
+      });
     }
   };
 
@@ -153,6 +167,10 @@ const ReferralsPage = ({ referralKind = 'hospital' }: ReferralsPageProps) => {
         targetRoles: doctorEmail ? undefined : ['doctor'],
         actionUrl: dashboardPathForReferralType(referral.referralType),
         actionLabel: 'View referral',
+      });
+      toast({
+        title: 'Referral completed',
+        description: `${referral.patientName}'s referral has been marked complete.`,
       });
     }
   };
@@ -177,11 +195,22 @@ const ReferralsPage = ({ referralKind = 'hospital' }: ReferralsPageProps) => {
         actionUrl: dashboardPathForReferralType(referral.referralType),
         actionLabel: 'View referrals',
       });
+      toast({
+        title: 'Referral cancelled',
+        description: `${referral.patientName}'s referral has been cancelled.`,
+      });
     }
   };
 
   const handleCreateReferral = async () => {
-    if (effectiveRole !== 'doctor' || !formData.patientId || !formData.destinationProviderId || !formData.toDepartment || !formData.reason.trim()) return;
+    if (effectiveRole !== 'doctor' || !formData.patientId || !formData.destinationProviderId || !formData.toDepartment || !formData.reason.trim()) {
+      toast({
+        title: 'Complete the referral form',
+        description: 'Patient, destination, and referral reason are all required.',
+        variant: 'destructive',
+      });
+      return;
+    }
 
     if (!isReferralDestinationValid(referralKind, formData.toDepartment)) {
       setFormError(REFERRAL_DESTINATION_ERROR);
@@ -228,6 +257,10 @@ const ReferralsPage = ({ referralKind = 'hospital' }: ReferralsPageProps) => {
       setFormError(null);
       setFormData({ patientId: '', destinationProviderId: '', toDepartment: '', reason: '', notes: '' });
       setShowForm(false);
+      toast({
+        title: 'Referral submitted',
+        description: `${patient.name} was referred to ${destinationProvider.name}.`,
+      });
     } catch (error) {
       setFormError('Unable to submit referral. Please try again.');
       console.error('handleCreateReferral failed:', error);
@@ -378,6 +411,16 @@ const ReferralsPage = ({ referralKind = 'hospital' }: ReferralsPageProps) => {
         </motion.div>
       </div>
 
+      <div className="relative max-w-xl">
+        <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+        <input
+          value={searchQuery}
+          onChange={(event) => setSearchQuery(event.target.value)}
+          placeholder="Search referrals by patient, doctor, destination, or reason..."
+          className="h-11 w-full rounded-xl border border-input bg-background pl-10 pr-4 text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-primary/30"
+        />
+      </div>
+
       <div className="flex gap-2 flex-wrap">
         {['all', 'pending', 'accepted', 'completed', 'cancelled'].map((status) => (
           <button
@@ -398,7 +441,7 @@ const ReferralsPage = ({ referralKind = 'hospital' }: ReferralsPageProps) => {
       {filtered.length === 0 ? (
         <div className="flex flex-col items-center justify-center py-12 text-muted-foreground bg-card rounded-2xl border border-border">
           <Inbox className="w-10 h-10 mb-3" />
-          <p className="text-sm">{userReferrals.length === 0 ? 'No referrals' : 'No referrals match your filter'}</p>
+          <p className="text-sm">{userReferrals.length === 0 ? 'No referrals' : 'No referrals match your current search or filter'}</p>
         </div>
       ) : (
         <div className="space-y-2">
