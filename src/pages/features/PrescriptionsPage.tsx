@@ -1,7 +1,8 @@
 import { useMemo, useState } from 'react';
 import { motion } from 'framer-motion';
-import { Pill, Plus, X, Inbox, AlertCircle, Trash2 } from 'lucide-react';
+import { Pill, Plus, Search, X, Inbox, AlertCircle, Trash2 } from 'lucide-react';
 import { useSearchParams } from 'react-router-dom';
+import { toast } from '@/components/ui/use-toast';
 import { useAuth } from '@/contexts/useAuth';
 import { useAppData } from '@/contexts/useAppData';
 import { useNotifications } from '@/contexts/useNotifications';
@@ -27,6 +28,8 @@ const PrescriptionsPage = () => {
   const [submitting, setSubmitting] = useState(false);
   const [dispenseId, setDispenseId] = useState<string | null>(null);
   const [deleteId, setDeleteId] = useState<string | null>(null);
+  const [searchQuery, setSearchQuery] = useState('');
+  const [statusFilter, setStatusFilter] = useState<'all' | 'active' | 'dispensed' | 'expired'>('all');
   const focusId = searchParams.get('focus');
   const effectiveRole = normalizeUserRole(user?.role) ?? user?.role;
 
@@ -38,9 +41,23 @@ const PrescriptionsPage = () => {
     () => getVisiblePrescriptions(prescriptions, user),
     [prescriptions, user],
   );
+  const filteredPrescriptions = useMemo(() => {
+    const needle = searchQuery.trim().toLowerCase();
+    return visiblePrescriptions.filter((prescription) => {
+      const matchesStatus = statusFilter === 'all' || prescription.status === statusFilter;
+      const matchesSearch = !needle
+        || prescription.patientName.toLowerCase().includes(needle)
+        || prescription.doctorName.toLowerCase().includes(needle)
+        || prescription.medications.some((medication) => medication.name.toLowerCase().includes(needle));
+      return matchesStatus && matchesSearch;
+    });
+  }, [searchQuery, statusFilter, visiblePrescriptions]);
 
   const submitPrescription = async (meta: { notifyDuplicate: boolean; notifyInteractions: number }) => {
-    if (!formData.patientId || !formData.pharmacyId || !formData.medName || !user?.id) return;
+    if (!formData.patientId || !formData.pharmacyId || !formData.medName || !user?.id) {
+      setCreateError('Patient, pharmacy, and medication are required.');
+      return;
+    }
     const patient = patientOptions.find((option) => option.id === formData.patientId);
     const pharmacy = pharmacyOptions.find((option) => option.id === formData.pharmacyId);
     if (!patient || !pharmacy) return;
@@ -109,6 +126,10 @@ const PrescriptionsPage = () => {
       setInteractionWarnings([]);
       setOverrideReason('');
       setDuplicateWarning(null);
+      toast({
+        title: 'Prescription issued',
+        description: `${formData.medName} was prescribed successfully.`,
+      });
     } catch (err) {
       setCreateError(handleApiError(err));
     } finally {
@@ -167,6 +188,10 @@ const PrescriptionsPage = () => {
             patient: `/dashboard/prescriptions?focus=${target.id}`,
           },
         });
+        toast({
+          title: 'Prescription dispensed',
+          description: `${target.medications[0]?.name ?? 'Medication'} was marked as dispensed.`,
+        });
       }
     } catch (err) {
       setCreateError(handleApiError(err));
@@ -180,6 +205,10 @@ const PrescriptionsPage = () => {
     try {
       await api.prescriptions.deletePrescription(id);
       await refreshAppData();
+      toast({
+        title: 'Prescription deleted',
+        description: 'The prescription was removed.',
+      });
     } catch (err) {
       setCreateError(handleApiError(err));
     } finally {
@@ -214,6 +243,28 @@ const PrescriptionsPage = () => {
       {createError && (
         <div className="text-sm text-destructive bg-destructive/10 border border-destructive/20 rounded-xl p-4">{createError}</div>
       )}
+
+      <div className="grid gap-3 md:grid-cols-[minmax(0,1fr)_220px]">
+        <div className="relative">
+          <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+          <input
+            value={searchQuery}
+            onChange={(event) => setSearchQuery(event.target.value)}
+            placeholder="Search prescriptions by patient, doctor, or medication..."
+            className="h-11 w-full rounded-xl border border-input bg-background pl-10 pr-4 text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-primary/30"
+          />
+        </div>
+        <select
+          value={statusFilter}
+          onChange={(event) => setStatusFilter(event.target.value as 'all' | 'active' | 'dispensed' | 'expired')}
+          className="h-11 rounded-xl border border-input bg-background px-4 text-foreground focus:outline-none focus:ring-2 focus:ring-primary/30"
+        >
+          <option value="all">All statuses</option>
+          <option value="active">Active</option>
+          <option value="dispensed">Dispensed</option>
+          <option value="expired">Expired</option>
+        </select>
+      </div>
 
       {showForm && (
         <motion.div initial={{ opacity: 0, y: -10 }} animate={{ opacity: 1, y: 0 }} className="bg-card rounded-2xl border border-border p-6">
@@ -375,14 +426,14 @@ const PrescriptionsPage = () => {
         </motion.div>
       )}
 
-      {visiblePrescriptions.length === 0 ? (
+      {filteredPrescriptions.length === 0 ? (
         <div className="flex flex-col items-center justify-center py-12 text-muted-foreground">
           <Inbox className="w-10 h-10 mb-3" />
-          <p className="text-sm">No prescriptions yet</p>
+          <p className="text-sm">{visiblePrescriptions.length === 0 ? 'No prescriptions yet' : 'No prescriptions match your current search or filter'}</p>
         </div>
       ) : (
         <div className="space-y-3">
-          {visiblePrescriptions.map((prescription, index) => (
+          {filteredPrescriptions.map((prescription, index) => (
             <motion.div
               key={prescription.id}
               initial={{ opacity: 0, y: 10 }}
