@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 
 import { liveLocationApi } from '@/lib/apiService';
+import { buildSocketUrl } from '@/lib/socketUrl';
 
 export interface LocationData {
   lat: number;
@@ -19,15 +20,10 @@ type UseLiveLocationOptions = {
   myRole?: string;
 };
 
-const buildWebSocketUrl = (requestId: string) => {
-  const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
-  const host = window.location.host;
-  const apiBase = import.meta.env.VITE_API_URL || '';
-  const wsBase = apiBase.replace(/^http/, 'ws');
-  return wsBase
-    ? `${wsBase}/ws/location/${requestId}`
-    : `${protocol}//${host}/api/ws/location/${requestId}`;
-};
+type LiveLocationTransportMode = 'idle' | 'connecting' | 'socket' | 'polling';
+
+const SNAPSHOT_POLL_INTERVAL_MS = 5000;
+const SOCKET_RECONNECT_DELAY_MS = 5000;
 
 export const useLiveLocation = ({
   requestId,
@@ -40,9 +36,11 @@ export const useLiveLocation = ({
   const [ambulanceLocation, setAmbulanceLocation] = useState<LocationData | null>(null);
   const [isConnected, setIsConnected] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [transportMode, setTransportMode] = useState<LiveLocationTransportMode>('idle');
   const socketRef = useRef<WebSocket | null>(null);
   const watchIdRef = useRef<number | null>(null);
   const reconnectTimerRef = useRef<number | null>(null);
+  const snapshotPollTimerRef = useRef<number | null>(null);
   const isMounted = useRef(true);
 
   const setRoleLocation = useCallback((payload: LocationData) => {
@@ -67,15 +65,21 @@ export const useLiveLocation = ({
   }, []);
 
   const connect = useCallback(() => {
-    if (!requestId || socketRef.current?.readyState === WebSocket.OPEN) {
+    if (!requestId || socketRef.current?.readyState === WebSocket.OPEN || socketRef.current?.readyState === WebSocket.CONNECTING) {
       return;
     }
 
-    const socket = new WebSocket(buildWebSocketUrl(requestId));
+    setTransportMode((currentMode) => currentMode === 'socket' ? currentMode : 'connecting');
+    const socket = new WebSocket(buildSocketUrl(`/ws/location/${requestId}`));
 
     socket.onopen = () => {
       setIsConnected(true);
       setError(null);
+      setTransportMode('socket');
+      if (snapshotPollTimerRef.current !== null) {
+        window.clearInterval(snapshotPollTimerRef.current);
+        snapshotPollTimerRef.current = null;
+      }
     };
 
     socket.onmessage = (event) => {
@@ -91,17 +95,20 @@ export const useLiveLocation = ({
 
     socket.onclose = (event) => {
       setIsConnected(false);
+      socketRef.current = null;
+      setTransportMode(enabled ? 'polling' : 'idle');
       if (event.code !== 1000 && enabled) {
         reconnectTimerRef.current = window.setTimeout(() => {
           if (isMounted.current) {
             connect();
           }
-        }, 3000);
+        }, SOCKET_RECONNECT_DELAY_MS);
       }
     };
 
     socket.onerror = () => {
-      setError('Live tracking connection failed');
+      setError('Realtime connection is unavailable. Tracking will keep refreshing automatically.');
+      setTransportMode('polling');
     };
 
     socketRef.current = socket;
@@ -186,6 +193,26 @@ export const useLiveLocation = ({
     }
   }, [requestId]);
 
+  const startSnapshotPolling = useCallback((runImmediately: boolean = false) => {
+    if (!requestId) {
+      return;
+    }
+
+    if (snapshotPollTimerRef.current !== null) {
+      window.clearInterval(snapshotPollTimerRef.current);
+    }
+
+    if (runImmediately) {
+      void refreshSnapshot();
+    }
+
+    snapshotPollTimerRef.current = window.setInterval(() => {
+      void refreshSnapshot();
+    }, SNAPSHOT_POLL_INTERVAL_MS);
+
+    setTransportMode((currentMode) => currentMode === 'socket' ? currentMode : 'polling');
+  }, [refreshSnapshot, requestId]);
+
   useEffect(() => {
     isMounted.current = true;
     return () => {
@@ -195,10 +222,11 @@ export const useLiveLocation = ({
 
   useEffect(() => {
     if (!enabled || !requestId) {
+      setTransportMode('idle');
       return undefined;
     }
 
-    void refreshSnapshot();
+    startSnapshotPolling(true);
     connect();
     if (shouldShare) {
       startTracking();
@@ -209,13 +237,17 @@ export const useLiveLocation = ({
         window.clearTimeout(reconnectTimerRef.current);
         reconnectTimerRef.current = null;
       }
+      if (snapshotPollTimerRef.current !== null) {
+        window.clearInterval(snapshotPollTimerRef.current);
+        snapshotPollTimerRef.current = null;
+      }
       void stopTracking();
       if (socketRef.current) {
         socketRef.current.close(1000);
         socketRef.current = null;
       }
     };
-  }, [connect, enabled, refreshSnapshot, requestId, shouldShare, startTracking, stopTracking]);
+  }, [connect, enabled, requestId, shouldShare, startSnapshotPolling, startTracking, stopTracking]);
 
   const peerLocation = useMemo(() => {
     const normalizedRole = myRole === 'provider' ? 'doctor' : myRole;
@@ -229,6 +261,7 @@ export const useLiveLocation = ({
     ambulanceLocation,
     isConnected,
     error,
+    transportMode,
     reconnect: connect,
   };
 };

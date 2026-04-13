@@ -143,12 +143,19 @@ const AmbulancePage = () => {
     patientLocation,
     isConnected,
     error: wsError,
+    transportMode,
   } = useLiveLocation({
     requestId: trackingRequest?.id,
     enabled: Boolean(trackingRequest),
     shouldShare: shouldShareLiveLocation,
     myRole: user?.role,
   });
+
+  const liveTrackingStatus = transportMode === 'socket'
+    ? { label: 'Live feed connected', classes: 'bg-success/10 text-success' }
+    : transportMode === 'polling'
+      ? { label: 'Auto-refresh active', classes: 'bg-primary/10 text-primary' }
+      : { label: 'Connecting...', classes: 'bg-warning/10 text-warning' };
 
   const captureLocation = async () => {
     if (!navigator.geolocation) {
@@ -438,8 +445,8 @@ const AmbulancePage = () => {
                 </div>
               </div>
               <div className="flex items-center gap-2">
-                <span className={`rounded-full px-3 py-1 text-xs font-medium ${isConnected ? 'bg-success/10 text-success' : 'bg-warning/10 text-warning'}`}>
-                  {isConnected ? 'Live feed connected' : 'Connecting...'}
+                <span className={`rounded-full px-3 py-1 text-xs font-medium ${liveTrackingStatus.classes}`}>
+                  {liveTrackingStatus.label}
                 </span>
                 <button onClick={() => setTrackingRequestId(null)} className="text-sm text-muted-foreground hover:text-foreground">
                   Close
@@ -481,7 +488,7 @@ const AmbulancePage = () => {
                 Patient and ambulance markers update continuously while sharing stays enabled.
               </div>
               {wsError && (
-                <div className="mt-2 text-xs text-destructive">{wsError}</div>
+                <div className={`mt-2 text-xs ${transportMode === 'polling' ? 'text-muted-foreground' : 'text-destructive'}`}>{wsError}</div>
               )}
             </div>
           </div>

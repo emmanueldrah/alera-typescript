@@ -27,6 +27,7 @@ from app.utils.auth import (
 from app.utils.cookies import set_auth_cookies, clear_auth_cookies, set_csrf_token, clear_csrf_token
 from app.utils.csrf import generate_csrf_token
 from app.utils.dependencies import get_current_user
+from app.utils.rate_limit import enforce_rate_limit
 from app.services.email_service import EmailService
 from app.utils.time import utcnow
 from config import settings
@@ -81,8 +82,10 @@ async def register(
     user_data: UserCreate,
     db: Session = Depends(get_db),
     response: Response = None,
+    request: Request = None,
 ):
     """Register a new user"""
+    enforce_rate_limit(request=request, scope="auth:register", limit=5, window_seconds=10 * 60)
 
     # Check if user already exists
     existing_user = db.query(User).filter(
@@ -187,8 +190,10 @@ async def login(
     credentials: LoginRequest,
     db: Session = Depends(get_db),
     response: Response = None,
+    request: Request = None,
 ):
     """Authenticate user and return access token"""
+    enforce_rate_limit(request=request, scope="auth:login", limit=10, window_seconds=60)
 
     # Find user by email
     user = db.query(User).filter(User.email == credentials.email).first()
@@ -241,12 +246,14 @@ async def login(
 
 @router.post("/request-password-reset")
 async def request_password_reset(
-    request: PasswordResetRequest,
+    payload: PasswordResetRequest,
     db: Session = Depends(get_db),
+    request: Request = None,
 ):
     """Send a password reset email if the account exists."""
+    enforce_rate_limit(request=request, scope="auth:password-reset-request", limit=5, window_seconds=60 * 60)
 
-    user = db.query(User).filter(User.email == request.email).first()
+    user = db.query(User).filter(User.email == payload.email).first()
     if not user or not user.is_active:
         return {"message": "If an account with that email exists, a reset link has been sent."}
 
@@ -271,18 +278,20 @@ async def request_password_reset(
 
 @router.post("/reset-password")
 async def reset_password(
-    request: PasswordResetConfirmRequest,
+    payload: PasswordResetConfirmRequest,
     db: Session = Depends(get_db),
+    request: Request = None,
 ):
     """Reset a password using a recovery token."""
+    enforce_rate_limit(request=request, scope="auth:password-reset-confirm", limit=10, window_seconds=60 * 60)
 
-    if request.new_password != request.confirm_password:
+    if payload.new_password != payload.confirm_password:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail="New passwords do not match",
         )
 
-    token_hash = hash_token(request.token)
+    token_hash = hash_token(payload.token)
     user = db.query(User).filter(User.password_reset_token_hash == token_hash).first()
     if (
         not user
@@ -295,7 +304,7 @@ async def reset_password(
             detail="Invalid or expired password reset token",
         )
 
-    user.hashed_password = hash_password(request.new_password)
+    user.hashed_password = hash_password(payload.new_password)
     user.password_reset_token_hash = None
     user.password_reset_expires_at = None
     user.session_version = int(user.session_version or 0) + 1
@@ -322,12 +331,14 @@ async def reset_password(
 
 @router.post("/verify-email")
 async def verify_email(
-    request: EmailVerificationConfirmRequest,
+    payload: EmailVerificationConfirmRequest,
     db: Session = Depends(get_db),
+    request: Request = None,
 ):
     """Verify a user's email address using a link token."""
+    enforce_rate_limit(request=request, scope="auth:verify-email", limit=10, window_seconds=60 * 60)
 
-    token_hash = hash_token(request.token)
+    token_hash = hash_token(payload.token)
     user = db.query(User).filter(User.email_verification_token_hash == token_hash).first()
     if (
         not user
@@ -365,8 +376,10 @@ async def verify_email(
 async def resend_email_verification(
     current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db),
+    request: Request = None,
 ):
     """Resend the current user's verification email."""
+    enforce_rate_limit(request=request, scope="auth:resend-verification", limit=5, window_seconds=60 * 60)
 
     if current_user.role in (UserRole.ADMIN, UserRole.SUPER_ADMIN) or current_user.email_verified:
         return {"message": "Email is already verified"}
@@ -402,6 +415,7 @@ async def resend_email_verification(
 @router.post("/refresh")
 async def refresh(request: Request, response: Response, db: Session = Depends(get_db)):
     """Refresh access token using refresh token from cookie"""
+    enforce_rate_limit(request=request, scope="auth:refresh", limit=30, window_seconds=60)
 
     from app.utils.auth import decode_token
 
