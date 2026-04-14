@@ -24,16 +24,31 @@ class PostDICOMService:
         scan: ImagingScan,
         report_file: UploadFile | None = None,
         image_files: list[UploadFile] | None = None,
+        findings: str | None = None,
+        impression: str | None = None,
+        status: str | None = None,
     ) -> dict[str, str] | None:
         if not api_url:
             raise HTTPException(status_code=400, detail="PostDICOM API URL is required")
 
+        def _display_name(user):
+            if not user:
+                return None
+            name = f"{user.first_name or ''} {user.last_name or ''}".strip()
+            return name or None
+
         data = {
             "patient_id": str(scan.patient_id),
+            "patient_name": _display_name(getattr(scan, 'patient', None)) or str(scan.patient_id),
+            "doctor_id": str(scan.ordered_by),
+            "doctor_name": _display_name(getattr(scan, 'doctor', None)) or str(scan.ordered_by),
             "scan_id": str(scan.id),
             "scan_type": scan.scan_type,
             "body_part": scan.body_part or "",
             "clinical_indication": scan.clinical_indication or "",
+            "findings": findings or "",
+            "impression": impression or "",
+            "status": status or "",
             "source_system": "alera",
             "source_record_id": f"imaging:{scan.id}",
             "uploaded_at": utcnow().isoformat(),

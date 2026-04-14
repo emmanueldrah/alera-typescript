@@ -600,7 +600,7 @@ const ImagingPage = () => {
                         </div>
                       ) : null}
 
-                      {(reportDownloadUrl || (scan.imageFiles && scan.imageFiles.length > 0)) ? (
+                      {(reportDownloadUrl || (scan.imageFiles && scan.imageFiles.length > 0) || scan.postdicomStudyUrl) ? (
                         <div className="flex flex-wrap gap-2">
                           {reportDownloadUrl ? (
                             <a
@@ -635,6 +635,17 @@ const ImagingPage = () => {
                               className="inline-flex items-center gap-2 px-3 py-2 rounded-lg bg-secondary text-secondary-foreground text-xs font-medium hover:bg-muted transition"
                             >
                               <Download className="w-3 h-3" /> Open study image
+                            </a>
+                          ) : null}
+                          {scan.postdicomStudyUrl ? (
+                            <a
+                              href={scan.postdicomStudyUrl}
+                              target="_blank"
+                              rel="noreferrer"
+                              className="inline-flex items-center gap-2 px-3 py-2 rounded-lg bg-primary/10 text-primary text-xs font-medium hover:bg-primary/20 transition"
+                            >
+                              <FileImage className="w-3 h-3" />
+                              View in PostDICOM
                             </a>
                           ) : null}
                         </div>
@@ -740,7 +751,12 @@ const ImagingPage = () => {
 
                 {showUpload === scan.id && (
                   <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="mt-4 p-4 rounded-xl bg-secondary/50 space-y-4">
-                    <div className="grid gap-4 md:grid-cols-2">
+                    {user?.role === 'imaging' && (
+                  <div className="rounded-xl border border-primary/30 bg-primary/5 p-3 text-sm text-primary-foreground">
+                    Imaging uploads are sent directly to PostDICOM only. If you haven’t configured your PostDICOM endpoint yet, save it in your profile before submitting.
+                  </div>
+                )}
+                <div className="grid gap-4 md:grid-cols-2">
                       <div className="md:col-span-2">
                         <label className="text-sm font-medium text-card-foreground mb-1.5 block">Findings</label>
                         <textarea
@@ -796,10 +812,13 @@ const ImagingPage = () => {
                     <div className="flex gap-2">
                       <button
                         onClick={() => void handleUpload(scan)}
-                        disabled={uploadingId === scan.id}
+                        disabled={
+                          uploadingId === scan.id ||
+                          (user?.role === 'imaging' && !user?.postdicomApiUrl)
+                        }
                         className="px-4 py-2 rounded-lg bg-gradient-primary text-primary-foreground text-sm font-medium hover:opacity-90 transition disabled:opacity-50"
                       >
-                        {uploadingId === scan.id ? 'Submitting...' : 'Submit Results'}
+                        {uploadingId === scan.id ? 'Submitting...' : user?.role === 'imaging' ? 'Submit to PostDICOM' : 'Submit Results'}
                       </button>
                       <button
                         onClick={resetUploadForm}

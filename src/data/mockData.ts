@@ -301,6 +301,8 @@ export interface ImagingScan {
   impression?: string;
   reportUrl?: string;
   imageUrl?: string;
+  postdicomStudyId?: string;
+  postdicomStudyUrl?: string;
   reportFile?: {
     fileId: string;
     filename: string;

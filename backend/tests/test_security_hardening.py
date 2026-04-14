@@ -857,7 +857,7 @@ def test_password_reset_flow_revokes_sessions_and_allows_new_login(db_session, m
     assert new_login["access_token"]
 
 
-def test_imaging_center_can_upload_report_and_multiple_scan_files(db_session):
+def test_imaging_center_can_upload_report_and_multiple_scan_files(db_session, monkeypatch):
     patient = seed_user(
         db_session,
         email="patient-imaging@example.com",
@@ -879,6 +879,20 @@ def test_imaging_center_can_upload_report_and_multiple_scan_files(db_session):
         first_name="Scan",
         last_name="Center",
     )
+    center.postdicom_api_url = "https://postdicom.test/api/upload"
+    db_session.commit()
+
+    async def fake_upload_imaging_results(api_url, api_key, scan, report_file, image_files, findings, impression, status):
+        return {
+            "study_id": f"study-{scan.id}",
+            "study_url": f"https://postdicom.test/study/{scan.id}",
+        }
+
+    monkeypatch.setattr(
+        "app.services.postdicom_service.PostDICOMService.upload_imaging_results",
+        fake_upload_imaging_results,
+    )
+
     scan = seed_imaging_scan(db_session, patient_id=patient.id, ordered_by=provider.id, center_id=center.id)
 
     response = run(
@@ -899,12 +913,12 @@ def test_imaging_center_can_upload_report_and_multiple_scan_files(db_session):
 
     db_session.refresh(scan)
     assert response.status == "completed"
-    assert response.report_file is not None
-    assert response.report_file.filename == "report.pdf"
-    assert len(response.image_files) == 2
-    assert response.image_files[0].filename == "study-1.dcm"
-    assert scan.report_url == f"/api/imaging/{scan.id}/report"
-    assert scan.image_url == f"/api/imaging/{scan.id}/images/{response.image_files[0].file_id}"
+    assert response.report_file is None
+    assert len(response.image_files) == 0
+    assert scan.report_url is None
+    assert scan.image_url is None
+    assert scan.postdicom_study_id == f"study-{scan.id}"
+    assert scan.postdicom_study_url == f"https://postdicom.test/study/{scan.id}"
     assert scan.completed_at is not None
 
 
@@ -956,6 +970,48 @@ def test_other_imaging_center_cannot_upload_results_for_foreign_scan(db_session)
     assert exc_info.value.status_code == 403
 
 
+def test_imaging_center_cannot_upload_without_postdicom_endpoint(db_session):
+    patient = seed_user(
+        db_session,
+        email="patient-no-endpoint@example.com",
+        role=UserRole.PATIENT,
+        first_name="Pat",
+        last_name="NoEndpoint",
+    )
+    provider = seed_user(
+        db_session,
+        email="doctor-no-endpoint@example.com",
+        role=UserRole.PROVIDER,
+        first_name="Doc",
+        last_name="NoEndpoint",
+    )
+    center = seed_user(
+        db_session,
+        email="center-no-endpoint@example.com",
+        role=UserRole.IMAGING,
+        first_name="Scan",
+        last_name="NoEndpoint",
+    )
+    scan = seed_imaging_scan(db_session, patient_id=patient.id, ordered_by=provider.id, center_id=center.id)
+
+    with pytest.raises(HTTPException) as exc_info:
+        run(
+            upload_imaging_results(
+                scan.id,
+                findings="No endpoint provided",
+                impression="No endpoint provided",
+                status_value="completed",
+                report_file=None,
+                image_files=[],
+                current_user=center,
+                db=db_session,
+            )
+        )
+
+    assert exc_info.value.status_code == 400
+    assert "PostDICOM endpoint is required" in str(exc_info.value.detail)
+
+
 def test_imaging_download_endpoints_require_authorized_user(db_session):
     patient = seed_user(
         db_session,
@@ -978,6 +1034,13 @@ def test_imaging_download_endpoints_require_authorized_user(db_session):
         first_name="Scan",
         last_name="Download",
     )
+    admin = seed_user(
+        db_session,
+        email="admin-download@example.com",
+        role=UserRole.ADMIN,
+        first_name="Admin",
+        last_name="Download",
+    )
     outsider = seed_user(
         db_session,
         email="patient-outsider@example.com",
@@ -994,7 +1057,7 @@ def test_imaging_download_endpoints_require_authorized_user(db_session):
             status_value="completed",
             report_file=UploadFile(filename="report.pdf", file=BytesIO(b"%PDF-1.4 ok"), headers={"content-type": "application/pdf"}),
             image_files=[UploadFile(filename="study.dcm", file=BytesIO(b"DICM"), headers={"content-type": "application/dicom"})],
-            current_user=center,
+            current_user=admin,
             db=db_session,
         )
     )

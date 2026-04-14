@@ -209,6 +209,8 @@ export interface ImagingScanApiResponse {
   image_url?: string | null;
   report_file?: ImagingFileAsset | null;
   image_files?: ImagingFileAsset[];
+  postdicom_study_id?: string | null;
+  postdicom_study_url?: string | null;
   scheduled_at?: string | null;
   ordered_at: string;
   completed_at?: string | null;

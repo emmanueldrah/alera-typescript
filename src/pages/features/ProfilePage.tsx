@@ -398,7 +398,7 @@ const ProfilePage = () => {
                   className="w-full h-10 px-4 rounded-lg border border-input bg-card text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-primary/30"
                 />
                 <p className="text-xs text-muted-foreground mt-2">
-                  Enter the PostDICOM upload URL for imaging center file transfers. This will be used for image/result uploads.
+                  Enter the PostDICOM upload URL for imaging center transfers. Imaging uploads are sent directly to PostDICOM only, and no local files are stored for imaging center results.
                 </p>
               </div>
             )}

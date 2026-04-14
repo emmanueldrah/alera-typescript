@@ -334,7 +334,7 @@ async def upload_imaging_results(
 ):
     """Upload imaging artifacts and written results for an imaging study."""
 
-    db_imaging_scan = db.query(ImagingScan).filter(ImagingScan.id == scan_id).first()
+    db_imaging_scan = _load_scan_with_users(db, scan_id)
     if not db_imaging_scan:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Imaging scan not found")
 
@@ -344,6 +344,8 @@ async def upload_imaging_results(
         require_verified_workforce_member(current_user, "upload imaging results")
         if db_imaging_scan.destination_provider_id != current_user.id:
             raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Not authorized to upload results for this imaging scan")
+        if not current_user.postdicom_api_url:
+            raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="PostDICOM endpoint is required for imaging center uploads")
 
     normalized_images = [file for file in (image_files or []) if file and file.filename]
     if not report_file and not normalized_images and not findings and not impression:
@@ -353,43 +355,55 @@ async def upload_imaging_results(
         )
 
     subfolder = _storage_subfolder(db_imaging_scan)
+    use_postdicom = current_user.role == UserRole.IMAGING
 
-    if current_user.role == UserRole.IMAGING and current_user.postdicom_api_url:
+    if use_postdicom:
         postdicom_result = await PostDICOMService.upload_imaging_results(
             current_user.postdicom_api_url,
             current_user.postdicom_api_key,
             db_imaging_scan,
             report_file,
             normalized_images,
+            findings,
+            impression,
+            status_value,
         )
         if isinstance(postdicom_result, dict):
             db_imaging_scan.postdicom_study_id = postdicom_result.get("study_id") or postdicom_result.get("id")
             db_imaging_scan.postdicom_study_url = postdicom_result.get("study_url") or postdicom_result.get("url")
+        db_imaging_scan.report_file_id = None
+        db_imaging_scan.report_filename = None
+        db_imaging_scan.report_mime_type = None
+        db_imaging_scan.report_file_size = None
+        db_imaging_scan.report_url = None
+        db_imaging_scan.image_files = []
+        db_imaging_scan.image_url = None
 
-    if report_file and report_file.filename:
-        report_info = await FileStorageService.save_file(report_file, subfolder=subfolder, prefix="report")
-        db_imaging_scan.report_file_id = report_info["file_id"]
-        db_imaging_scan.report_filename = report_info["filename"]
-        db_imaging_scan.report_mime_type = report_info["mime_type"]
-        db_imaging_scan.report_file_size = report_info["file_size"]
-        db_imaging_scan.report_url = _report_download_url(scan_id)
+    if not use_postdicom:
+        if report_file and report_file.filename:
+            report_info = await FileStorageService.save_file(report_file, subfolder=subfolder, prefix="report")
+            db_imaging_scan.report_file_id = report_info["file_id"]
+            db_imaging_scan.report_filename = report_info["filename"]
+            db_imaging_scan.report_mime_type = report_info["mime_type"]
+            db_imaging_scan.report_file_size = report_info["file_size"]
+            db_imaging_scan.report_url = _report_download_url(scan_id)
 
-    if normalized_images:
-        saved_images: list[dict] = []
-        for image_file in normalized_images:
-            image_info = await FileStorageService.save_file(image_file, subfolder=subfolder, prefix="image")
-            saved_images.append(
-                {
-                    "file_id": image_info["file_id"],
-                    "filename": image_info["filename"],
-                    "mime_type": image_info["mime_type"],
-                    "file_size": image_info["file_size"],
-                    "upload_time": image_info["upload_time"],
-                    "download_url": _image_download_url(scan_id, image_info["file_id"]),
-                }
-            )
-        db_imaging_scan.image_files = saved_images
-        db_imaging_scan.image_url = saved_images[0]["download_url"]
+        if normalized_images:
+            saved_images: list[dict] = []
+            for image_file in normalized_images:
+                image_info = await FileStorageService.save_file(image_file, subfolder=subfolder, prefix="image")
+                saved_images.append(
+                    {
+                        "file_id": image_info["file_id"],
+                        "filename": image_info["filename"],
+                        "mime_type": image_info["mime_type"],
+                        "file_size": image_info["file_size"],
+                        "upload_time": image_info["upload_time"],
+                        "download_url": _image_download_url(scan_id, image_info["file_id"]),
+                    }
+                )
+            db_imaging_scan.image_files = saved_images
+            db_imaging_scan.image_url = saved_images[0]["download_url"]
 
     if findings is not None:
         db_imaging_scan.findings = findings

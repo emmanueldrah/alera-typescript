@@ -386,6 +386,8 @@ const mapBackendImagingScan = (scan: BackendImagingScan): ImagingScan => ({
     uploadTime: file.upload_time || undefined,
     downloadUrl: file.download_url || undefined,
   })),
+  postdicomStudyId: scan.postdicom_study_id || undefined,
+  postdicomStudyUrl: scan.postdicom_study_url || undefined,
   scheduledAt: scan.scheduled_at || undefined,
   completedAt: scan.completed_at || undefined,
 });

@@ -384,6 +384,8 @@ class ImagingScanResponse(ImagingScanBase):
     image_url: Optional[str] = None
     report_file: Optional[ImagingFileAsset] = None
     image_files: List[ImagingFileAsset] = Field(default_factory=list)
+    postdicom_study_id: Optional[str] = None
+    postdicom_study_url: Optional[str] = None
     scheduled_at: Optional[datetime] = None
     ordered_at: datetime
     completed_at: Optional[datetime] = None
