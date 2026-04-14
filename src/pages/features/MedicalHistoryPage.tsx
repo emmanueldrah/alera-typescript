@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import { motion } from 'framer-motion';
 import {
   Activity,
@@ -418,7 +418,7 @@ const MedicalHistoryPage = () => {
     ? unifiedPermissions.find((permission) => permission.organization_id === currentOrganization.id && permission.status === 'granted')
     : null;
 
-  const refreshUnifiedRecord = async () => {
+  const refreshUnifiedRecord = useCallback(async () => {
     if (!focusedPatientId) return;
     const [history, unified] = await Promise.all([
       recordsApi.getSynchronizedHistory(focusedPatientId),
@@ -426,7 +426,7 @@ const MedicalHistoryPage = () => {
     ]);
     setSyncedHistory(history);
     setUnifiedRecord(unified);
-  };
+  }, [focusedPatientId]);
 
   useEffect(() => {
     if (!focusedPatientId) return;
@@ -436,7 +436,7 @@ const MedicalHistoryPage = () => {
     }, 15000);
 
     return () => window.clearInterval(interval);
-  }, [focusedPatientId]);
+  }, [refreshUnifiedRecord, focusedPatientId]);
 
   const handleRequestAccess = async () => {
     if (!focusedPatientId || !currentOrganization) return;

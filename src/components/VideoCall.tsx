@@ -176,7 +176,7 @@ const VideoCall = ({
     } finally {
       consumeCallSignal(signal.id);
     }
-  }, [callSignals, consumeCallSignal, createOffer, currentCall?.direction, ensurePeerConnection, onEnd, sendCallSignal, teardownPeer]);
+  }, [consumeCallSignal, createOffer, currentCall?.direction, ensurePeerConnection, onEnd, sendCallSignal, teardownPeer]);
 
   useEffect(() => {
     setCallState(isIncoming ? 'ringing' : 'connecting');

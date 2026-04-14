@@ -1,4 +1,4 @@
-import { useState, useMemo, useEffect } from 'react';
+import { useCallback, useState, useMemo, useEffect } from 'react';
 import { motion } from 'framer-motion';
 import { 
   ShieldCheck, CheckCircle, XCircle, Heart, FlaskConical, 
@@ -55,7 +55,7 @@ const VerificationsPage = () => {
   const [statusFilter, setStatusFilter] = useState('all');
   const statusTabs = ['all', 'pending', 'verified', 'rejected'] as const;
 
-  const fetchVerifications = async () => {
+  const fetchVerifications = useCallback(async () => {
     setIsLoading(true);
     try {
       const data = await api.admin.listVerifications();
@@ -80,11 +80,11 @@ const VerificationsPage = () => {
     } finally {
       setIsLoading(false);
     }
-  };
+  }, [toast]);
 
   useEffect(() => {
     fetchVerifications();
-  }, []);
+  }, [fetchVerifications]);
 
   const filtered = useMemo(() => {
     if (statusFilter === 'all') return verifications;

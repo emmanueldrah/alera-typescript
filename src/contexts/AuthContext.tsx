@@ -180,7 +180,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     }
     setUser(mapBackendUser(response.user));
     void loadAccessibleUsers();
-  }, []);
+  }, [loadAccessibleUsers]);
 
   const signup = useCallback(async (
     name: string,
@@ -348,7 +348,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
       return null;
     }
-  }, [loadAccessibleUsers]);
+  }, [loadAccessibleUsers, lastRefreshAttempt]);
 
   const deleteAccount = useCallback(async (password: string) => {
     if (!user) throw new Error('No user logged in');

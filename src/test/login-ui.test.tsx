@@ -1,4 +1,4 @@
-import { AxiosError } from 'axios';
+import { AxiosError, type AxiosResponse } from 'axios';
 import { render, screen, fireEvent } from '@testing-library/react';
 import { MemoryRouter } from 'react-router-dom';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
@@ -24,13 +24,13 @@ describe('Login page', () => {
   });
 
   it('surfaces backend authorization detail in the login error message', async () => {
-    const response = {
+    const response: AxiosResponse<{ detail: string }> = {
       status: 403,
       data: { detail: 'Your account is pending verification' },
       statusText: 'Forbidden',
       headers: {},
       config: { headers: {} },
-    } as any;
+    } as unknown as AxiosResponse<{ detail: string }>;
 
     loginMock.mockRejectedValueOnce(
       new AxiosError('Request failed with status code 403', 'ERR_BAD_REQUEST', undefined, undefined, response)

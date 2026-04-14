@@ -1871,7 +1871,7 @@ export const AppDataProvider: React.FC<{ children: React.ReactNode }> = ({ child
         }
       })();
     },
-  }), [data, user, loadAPIData, refreshAppData, upsertStructuredRecord, updateStructuredRecord, persistBillingRecord]);
+  }), [data, user, loadAPIData, refreshAppData, upsertStructuredRecord, updateStructuredRecord, persistBillingRecord, isLoadingAPI]);
 
   return (
     <AppDataContext.Provider value={contextValue}>
