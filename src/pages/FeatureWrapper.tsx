@@ -56,12 +56,12 @@ interface FeatureConfig {
 const pageMap: Record<string, FeatureConfig> = {
   appointments: { component: AppointmentsPage },
   prescriptions: { component: PrescriptionsPage },
-  'lab-results': { component: LabResultsPage },
+  'lab-results': { component: LabResultsPage, props: { page: 'lab-results' } },
   'lab-referrals': { component: ReferralsPage, props: { referralKind: 'laboratory' as ReferralKind } },
-  'test-requests': { component: LabResultsPage },
-  imaging: { component: ImagingPage },
-  'imaging-referrals': { component: ImagingPage },
-  'scan-requests': { component: ImagingPage },
+  'test-requests': { component: LabResultsPage, props: { page: 'test-requests' } },
+  imaging: { component: ImagingPage, props: { page: 'imaging' } },
+  'imaging-referrals': { component: ImagingPage, props: { page: 'imaging-referrals' } },
+  'scan-requests': { component: ImagingPage, props: { page: 'scan-requests' } },
   ambulance: { component: AmbulancePage },
   requests: { component: AmbulancePage },
   timeline: { component: TimelinePage },
@@ -75,7 +75,7 @@ const pageMap: Record<string, FeatureConfig> = {
   doctors: { component: DoctorsPage },
   referrals: { component: ReferralsPage, props: { referralKind: 'hospital' as ReferralKind } },
   'pharmacy-referrals': { component: ReferralsPage, props: { referralKind: 'pharmacy' as ReferralKind } },
-  results: { component: LabResultsPage },
+  results: { component: LabResultsPage, props: { page: 'results' } },
   messages: { component: MessagesPage },
   'health-metrics': { component: HealthMetricsPage },
   notifications: { component: NotificationCenterPage },
@@ -100,6 +100,10 @@ const FeatureWrapper = ({ page }: FeatureWrapperProps) => {
   const { user } = useAuth();
   const config = pageMap[page];
   const Page = page === 'results' && user?.role === 'imaging' ? ImagingPage : config?.component;
+  const pageProps = {
+    ...(config?.props ?? {}),
+    ...(page === 'results' && user?.role === 'imaging' ? { page: 'results' } : {}),
+  };
 
   if (!config) return (
     <DashboardLayout>
@@ -140,7 +144,7 @@ const FeatureWrapper = ({ page }: FeatureWrapperProps) => {
   return (
     <DashboardLayout>
       <Suspense fallback={<RouteLoader compact label="Loading workspace..." />}>
-        <Page {...(config.props ?? {})} />
+        <Page {...pageProps} />
       </Suspense>
     </DashboardLayout>
   );

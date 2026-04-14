@@ -43,7 +43,30 @@ const toDateInputValue = (value?: string) => {
   return local.toISOString().slice(0, 16);
 };
 
-const ImagingPage = () => {
+interface ImagingPageProps {
+  page?: string;
+}
+
+const pageDisplayMap: Record<string, { title: string; subtitle: string }> = {
+  imaging: {
+    title: 'Imaging Results',
+    subtitle: 'View your imaging results and downloadable reports',
+  },
+  'imaging-referrals': {
+    title: 'Imaging Referrals',
+    subtitle: 'Order medical imaging and track active studies',
+  },
+  'scan-requests': {
+    title: 'Scan Requests',
+    subtitle: 'Schedule studies, process scans, and publish reports',
+  },
+  results: {
+    title: 'Imaging Results',
+    subtitle: 'Review completed imaging studies and linked PostDICOM records',
+  },
+};
+
+const ImagingPage = ({ page }: ImagingPageProps) => {
   const { user, getUsers } = useAuth();
   const { appointments, imagingScans, addImagingScan, updateImagingScan, refreshAppData } = useAppData();
   const { addNotification } = useNotifications();
@@ -72,7 +95,7 @@ const ImagingPage = () => {
   });
   const focusId = searchParams.get('focus');
   const effectiveRole = normalizeUserRole(user?.role) ?? user?.role;
-  const currentPage = user?.role === 'imaging' ? 'scan-requests' : effectiveRole === 'doctor' ? 'imaging-referrals' : 'imaging';
+  const currentPage = page ?? (user?.role === 'imaging' ? 'scan-requests' : effectiveRole === 'doctor' ? 'imaging-referrals' : 'imaging');
   const users = getUsers();
   const deferredSearchTerm = useDeferredValue(searchTerm);
   const patientOptions = useMemo(() => getDoctorPatients(users, appointments, user?.id), [appointments, user?.id, users]);
@@ -355,15 +378,20 @@ const ImagingPage = () => {
 
   const card = (i: number) => ({ initial: { opacity: 0, y: 15 }, animate: { opacity: 1, y: 0 }, transition: { delay: i * 0.05 } });
 
+  const pageDisplay = pageDisplayMap[currentPage] ?? {
+    title: user?.role === 'imaging' ? 'Scan Requests' : effectiveRole === 'doctor' ? 'Imaging Referrals' : 'Imaging Results',
+    subtitle: user?.role === 'imaging' ? 'Schedule studies, process scans, and publish reports' : effectiveRole === 'doctor' ? 'Order medical imaging and track active studies' : 'View your imaging results and downloadable reports',
+  };
+
   return (
     <div className="space-y-6">
       <div className="flex items-center justify-between">
         <div>
           <h1 className="text-2xl font-display font-bold text-foreground">
-            {user?.role === 'imaging' ? 'Scan Requests' : effectiveRole === 'doctor' ? 'Imaging Referrals' : 'Imaging Results'}
+            {pageDisplay.title}
           </h1>
           <p className="text-muted-foreground mt-1">
-            {user?.role === 'imaging' ? 'Schedule studies, process scans, and publish reports' : effectiveRole === 'doctor' ? 'Order medical imaging and track active studies' : 'View your imaging results and downloadable reports'}
+            {pageDisplay.subtitle}
           </p>
         </div>
         {effectiveRole === 'doctor' && (

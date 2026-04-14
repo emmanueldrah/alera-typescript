@@ -13,7 +13,30 @@ import { getReferralDestinationProviders } from '@/lib/referralUtils';
 import { normalizeUserRole } from '@/lib/roleUtils';
 import { api } from '@/lib/apiService';
 
-const LabResultsPage = () => {
+interface LabResultsPageProps {
+  page?: string;
+}
+
+const labPageDisplayMap: Record<string, { title: string; subtitle: string }> = {
+  'lab-results': {
+    title: 'Lab Results',
+    subtitle: 'View your test results',
+  },
+  'lab-referrals': {
+    title: 'Lab Referrals',
+    subtitle: 'Order lab tests and manage care team requests',
+  },
+  'test-requests': {
+    title: 'Test Requests',
+    subtitle: 'Process and upload lab results for ordered tests',
+  },
+  results: {
+    title: 'Results',
+    subtitle: 'Review completed lab results and share updates with care team',
+  },
+};
+
+const LabResultsPage = ({ page }: LabResultsPageProps) => {
   const { user, getUsers } = useAuth();
   const { appointments, labTests, addLabTest, updateLabTest, refreshAppData } = useAppData();
   const { addNotification } = useNotifications();
@@ -27,7 +50,7 @@ const LabResultsPage = () => {
   const [statusFilter, setStatusFilter] = useState<'all' | LabTest['status']>('all');
   const focusId = searchParams.get('focus');
   const effectiveRole = normalizeUserRole(user?.role) ?? user?.role;
-  const currentPage = user?.role === 'laboratory' ? 'test-requests' : effectiveRole === 'doctor' ? 'lab-referrals' : 'lab-results';
+  const currentPage = page ?? (user?.role === 'laboratory' ? 'test-requests' : effectiveRole === 'doctor' ? 'lab-referrals' : 'lab-results');
   const users = getUsers();
   const patientOptions = useMemo(() => getDoctorPatients(users, appointments, user?.id), [appointments, user?.id, users]);
   const labOptions = useMemo(() => getReferralDestinationProviders(users, 'laboratory'), [users]);
@@ -147,10 +170,15 @@ const LabResultsPage = () => {
     }
   };
 
+  const pageDisplay = labPageDisplayMap[currentPage] ?? {
+    title: user?.role === 'laboratory' ? 'Test Requests' : effectiveRole === 'doctor' ? 'Lab Referrals' : 'Lab Results',
+    subtitle: user?.role === 'laboratory' ? 'Process and upload results' : effectiveRole === 'doctor' ? 'Order lab tests' : 'View your test results',
+  };
+
   return (
     <div className="space-y-6">
       <div className="flex items-center justify-between">
-        <div><h1 className="text-2xl font-display font-bold text-foreground">{user?.role === 'laboratory' ? 'Test Requests' : effectiveRole === 'doctor' ? 'Lab Referrals' : 'Lab Results'}</h1><p className="text-muted-foreground mt-1">{user?.role === 'laboratory' ? 'Process and upload results' : effectiveRole === 'doctor' ? 'Order lab tests' : 'View your test results'}</p></div>
+        <div><h1 className="text-2xl font-display font-bold text-foreground">{pageDisplay.title}</h1><p className="text-muted-foreground mt-1">{pageDisplay.subtitle}</p></div>
         {effectiveRole === 'doctor' && <button onClick={() => setShowOrder(true)} className="flex items-center gap-2 px-4 py-2.5 rounded-xl bg-gradient-primary text-primary-foreground text-sm font-semibold hover:opacity-90 transition"><Plus className="w-4 h-4" /> Order Test</button>}
       </div>
       <div className="grid gap-3 md:grid-cols-[minmax(0,1fr)_220px]">
