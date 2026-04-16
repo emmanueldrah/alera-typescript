@@ -6,7 +6,7 @@ export interface ApiUser {
   full_name?: string;
   first_name?: string;
   last_name?: string;
-  role: 'patient' | 'provider' | 'pharmacist' | 'admin' | 'super_admin' | 'hospital' | 'laboratory' | 'imaging' | 'ambulance';
+  role: 'patient' | 'provider' | 'pharmacist' | 'admin' | 'super_admin' | 'hospital' | 'laboratory' | 'imaging' | 'ambulance' | 'cardiologist' | 'endocrinologist' | 'physiotherapist';
   is_active?: boolean;
   is_verified?: boolean;
   email_verified?: boolean;
@@ -257,7 +257,7 @@ export const authApi = {
     username: string;
     first_name: string;
     last_name: string;
-    role: 'patient' | 'provider' | 'pharmacist' | 'hospital' | 'laboratory' | 'imaging' | 'ambulance';
+    role: 'patient' | 'provider' | 'pharmacist' | 'hospital' | 'laboratory' | 'imaging' | 'ambulance' | 'cardiologist' | 'endocrinologist' | 'physiotherapist';
     phone?: string;
     address?: string;
     city?: string;

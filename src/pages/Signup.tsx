@@ -2,14 +2,17 @@ import { useState } from 'react';
 import { useNavigate, Link } from 'react-router-dom';
 import { useAuth } from '@/contexts/useAuth';
 import { motion } from 'framer-motion';
-import { Heart, User, Building2, FlaskConical, ScanLine, Pill, Ambulance, ArrowRight, Eye, EyeOff } from 'lucide-react';
+import { Heart, User, Building2, FlaskConical, ScanLine, Pill, Ambulance, ArrowRight, Eye, EyeOff, Activity } from 'lucide-react';
 import { handleApiError } from '@/lib/errorHandler';
 
-type SignupRole = 'patient' | 'doctor' | 'hospital' | 'laboratory' | 'imaging' | 'pharmacy' | 'ambulance';
+type SignupRole = 'patient' | 'doctor' | 'hospital' | 'laboratory' | 'imaging' | 'pharmacy' | 'ambulance' | 'cardiologist' | 'endocrinologist' | 'physiotherapist';
 
 const roles: { value: SignupRole; label: string; icon: React.ReactNode; desc: string }[] = [
   { value: 'patient', label: 'Patient', icon: <User className="w-5 h-5" />, desc: 'Book appointments & view records' },
   { value: 'doctor', label: 'Doctor', icon: <Heart className="w-5 h-5" />, desc: 'Manage patients & consultations' },
+  { value: 'cardiologist', label: 'Cardiologist', icon: <Activity className="w-5 h-5" />, desc: 'Manage heart health & trends' },
+  { value: 'endocrinologist', label: 'Endocrinologist', icon: <Activity className="w-5 h-5" />, desc: 'Manage glucose & diabetes' },
+  { value: 'physiotherapist', label: 'Physiotherapist', icon: <Activity className="w-5 h-5" />, desc: 'Manage rehabilitation plans' },
   { value: 'hospital', label: 'Hospital', icon: <Building2 className="w-5 h-5" />, desc: 'Manage patients & referrals' },
   { value: 'laboratory', label: 'Laboratory', icon: <FlaskConical className="w-5 h-5" />, desc: 'Process tests & upload results' },
   { value: 'imaging', label: 'Imaging Center', icon: <ScanLine className="w-5 h-5" />, desc: 'Process scans & upload results' },

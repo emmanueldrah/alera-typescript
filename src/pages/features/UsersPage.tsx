@@ -1,6 +1,6 @@
 import { useState, useEffect, useMemo, useCallback } from 'react';
 import { motion } from 'framer-motion';
-import { Users, Search, Heart, FlaskConical, ScanLine, Pill, Ambulance, Building2, ShieldCheck, Ban, CheckCircle, Inbox, Plus, Loader, Mail, Calendar } from 'lucide-react';
+import { Users, Search, Heart, FlaskConical, ScanLine, Pill, Ambulance, Building2, ShieldCheck, Ban, CheckCircle, Inbox, Plus, Loader, Mail, Calendar, Activity, Trash2 } from 'lucide-react';
 import type { UserRole } from '@/contexts/AuthContext';
 import { useAuth } from '@/contexts/useAuth';
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from '@/components/ui/alert-dialog';
@@ -36,6 +36,9 @@ const roleIcons: Record<string, React.ReactNode> = {
   imaging: <ScanLine className="w-4 h-4" />,
   pharmacy: <Pill className="w-4 h-4" />,
   ambulance: <Ambulance className="w-4 h-4" />,
+  cardiologist: <Activity className="w-4 h-4" />,
+  endocrinologist: <Activity className="w-4 h-4" />,
+  physiotherapist: <Activity className="w-4 h-4" />,
   admin: <ShieldCheck className="w-4 h-4" />,
   super_admin: <ShieldCheck className="w-4 h-4 text-destructive" />,
 };
@@ -48,6 +51,9 @@ const roleLabels: Record<string, string> = {
   imaging: 'Imaging Center',
   pharmacy: 'Pharmacy',
   ambulance: 'Ambulance',
+  cardiologist: 'Cardiologist',
+  endocrinologist: 'Endocrinologist',
+  physiotherapist: 'Physiotherapist',
   admin: 'Admin',
   super_admin: 'Super Admin',
 };
@@ -58,7 +64,7 @@ const statusStyles: Record<ProfessionalVerificationStatus, string> = {
   suspended: 'bg-destructive/10 text-destructive',
 };
 
-const nonElevatedRoles: UserRole[] = ['patient', 'doctor', 'hospital', 'laboratory', 'imaging', 'pharmacy', 'ambulance'];
+const nonElevatedRoles: UserRole[] = ['patient', 'doctor', 'hospital', 'laboratory', 'imaging', 'pharmacy', 'ambulance', 'cardiologist', 'endocrinologist', 'physiotherapist'];
 const elevatedRoles: UserRole[] = ['admin', 'super_admin'];
 const allUserRoles: UserRole[] = [...nonElevatedRoles, ...elevatedRoles];
 
@@ -70,6 +76,9 @@ const backendRoleMap: Record<UserRole, ApiUser['role']> = {
   imaging: 'imaging',
   pharmacy: 'pharmacist',
   ambulance: 'ambulance',
+  cardiologist: 'cardiologist',
+  endocrinologist: 'endocrinologist',
+  physiotherapist: 'physiotherapist',
   admin: 'admin',
   super_admin: 'super_admin',
 };
@@ -151,7 +160,7 @@ const UsersPage = () => {
 
   const usersByRole = useMemo(() => {
     return Object.fromEntries(
-      (['patient', 'doctor', 'hospital', 'laboratory', 'imaging', 'pharmacy', 'ambulance', 'admin', 'super_admin'] as UserRole[]).map(role => [
+      (['patient', 'doctor', 'hospital', 'laboratory', 'imaging', 'pharmacy', 'ambulance', 'cardiologist', 'endocrinologist', 'physiotherapist', 'admin', 'super_admin'] as UserRole[]).map(role => [
         role,
         users.filter(u => u.role === role).length,
       ]),
@@ -361,6 +370,9 @@ const UsersPage = () => {
                       <SelectItem value="imaging">Imaging Center</SelectItem>
                       <SelectItem value="pharmacy">Pharmacy</SelectItem>
                       <SelectItem value="ambulance">Ambulance</SelectItem>
+                      <SelectItem value="cardiologist">Cardiologist</SelectItem>
+                      <SelectItem value="endocrinologist">Endocrinologist</SelectItem>
+                      <SelectItem value="physiotherapist">Physiotherapist</SelectItem>
                       {isSuperAdmin && <SelectItem value="admin">Admin</SelectItem>}
                       {isSuperAdmin && <SelectItem value="super_admin">Super Admin</SelectItem>}
                     </SelectContent>
@@ -440,7 +452,7 @@ const UsersPage = () => {
       </AlertDialog>
 
       <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-9 gap-3">
-        {(['patient', 'doctor', 'hospital', 'laboratory', 'imaging', 'pharmacy', 'ambulance', 'admin', 'super_admin'] as UserRole[]).map((role, i) => (
+        {(['patient', 'doctor', 'hospital', 'laboratory', 'imaging', 'pharmacy', 'ambulance', 'cardiologist', 'endocrinologist', 'physiotherapist', 'admin', 'super_admin'] as UserRole[]).map((role, i) => (
           <motion.button
             key={role}
             {...card(i)}
@@ -605,7 +617,7 @@ const UsersPage = () => {
                             <Loader className="w-3 h-3 animate-spin" />
                           ) : (
                             <>
-                              <Ban className="w-3 h-3" />
+                              <Trash2 className="w-3 h-3" />
                               Delete
                             </>
                           )}

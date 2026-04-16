@@ -13,6 +13,9 @@ class UserRole(str, Enum):
     LABORATORY = "laboratory"
     IMAGING = "imaging"
     AMBULANCE = "ambulance"
+    CARDIOLOGIST = "cardiologist"
+    ENDOCRINOLOGIST = "endocrinologist"
+    PHYSIOTHERAPIST = "physiotherapist"
 
 
 # User Schemas

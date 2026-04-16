@@ -3,6 +3,7 @@ import { Ambulance, AlertTriangle, CheckCircle, ArrowRight, Truck, Inbox, Radio,
 import { Link } from 'react-router-dom';
 import { useAuth } from '@/contexts/useAuth';
 import { useAppData } from '@/contexts/useAppData';
+import { AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from 'recharts';
 
 const card = (i: number) => ({ initial: { opacity: 0, y: 15 }, animate: { opacity: 1, y: 0 }, transition: { delay: i * 0.08 } });
 
@@ -41,6 +42,15 @@ const AmbulanceDashboard = () => {
   const todayStr = new Date().toISOString().split('T')[0];
   const completedToday = ambulanceRequests.filter((r) => r.status === 'completed' && r.date === todayStr);
 
+  // Derive last 7 days chart data
+  const last7Days = Array.from({ length: 7 }, (_, i) => {
+    const d = new Date();
+    d.setDate(d.getDate() - (6 - i));
+    const dateStr = d.toISOString().split('T')[0];
+    const count = ambulanceRequests.filter(r => r.date === dateStr).length;
+    return { name: d.toLocaleDateString('en-US', { weekday: 'short' }), requests: count };
+  });
+
   return (
     <div className="space-y-6">
       <div className="flex items-center justify-between">
@@ -61,25 +71,67 @@ const AmbulanceDashboard = () => {
         </Link>
       </div>
 
-      {/* Stats */}
-      <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
-        {[
-          { icon: AlertTriangle, label: 'Active Requests', value: activeRequests.length, color: 'text-destructive', bg: 'bg-destructive/10', ring: 'ring-destructive/20' },
-          { icon: Truck, label: 'Available Units', value: availableUnits.length, color: 'text-success', bg: 'bg-success/10', ring: 'ring-success/20' },
-          { icon: Ambulance, label: 'Dispatched', value: dispatchedUnits.length, color: 'text-warning', bg: 'bg-warning/10', ring: 'ring-warning/20' },
-          { icon: CheckCircle, label: 'Completed Today', value: completedToday.length, color: 'text-info', bg: 'bg-info/10', ring: 'ring-info/20' },
-        ].map((s, i) => {
-          const Icon = s.icon;
-          return (
-            <motion.div key={i} {...card(i)} className="p-5 rounded-2xl bg-card border border-border hover:shadow-sm transition-shadow">
-              <div className={`w-10 h-10 rounded-xl ${s.bg} ${s.color} ring-1 ${s.ring} flex items-center justify-center mb-3`}>
-                <Icon className="w-5 h-5" />
-              </div>
-              <div className="text-2xl font-display font-bold text-card-foreground">{s.value}</div>
-              <div className="text-sm text-muted-foreground mt-0.5">{s.label}</div>
-            </motion.div>
-          );
-        })}
+      {/* Main Charts & Stats */}
+      <div className="grid lg:grid-cols-3 gap-6">
+        <motion.div {...card(0)} className="lg:col-span-2 bg-card rounded-2xl border border-border p-6">
+          <div className="flex items-center justify-between mb-6">
+            <h2 className="text-base font-display font-semibold text-card-foreground">Request Volume (7 Days)</h2>
+            <div className="flex items-center gap-2 text-xs text-muted-foreground">
+              <span className="h-2 w-2 rounded-full bg-destructive" />
+              Emergency Dispatches
+            </div>
+          </div>
+          <div className="h-[240px] w-full">
+            <ResponsiveContainer width="100%" height="100%">
+              <AreaChart data={last7Days}>
+                <defs>
+                  <linearGradient id="colorRequests" x1="0" y1="0" x2="0" y2="1">
+                    <stop offset="5%" stopColor="hsl(var(--destructive))" stopOpacity={0.15}/>
+                    <stop offset="95%" stopColor="hsl(var(--destructive))" stopOpacity={0}/>
+                  </linearGradient>
+                </defs>
+                <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="hsl(var(--border))" />
+                <XAxis dataKey="name" axisLine={false} tickLine={false} tick={{ fontSize: 12, fill: 'hsl(var(--muted-foreground))' }} dy={10} />
+                <YAxis hide />
+                <Tooltip 
+                  contentStyle={{ backgroundColor: 'hsl(var(--card))', borderRadius: '12px', border: '1px solid hsl(var(--border))' }}
+                  itemStyle={{ fontSize: '12px', color: 'hsl(var(--destructive))' }}
+                />
+                <Area 
+                  type="monotone" 
+                  dataKey="requests" 
+                  stroke="hsl(var(--destructive))" 
+                  strokeWidth={2}
+                  fillOpacity={1} 
+                  fill="url(#colorRequests)" 
+                  animationDuration={1500}
+                />
+              </AreaChart>
+            </ResponsiveContainer>
+          </div>
+        </motion.div>
+
+        <div className="space-y-4">
+          {[
+            { icon: AlertTriangle, label: 'Active Requests', value: activeRequests.length, color: 'text-destructive', bg: 'bg-destructive/10', ring: 'ring-destructive/20' },
+            { icon: Truck, label: 'Available Units', value: availableUnits.length, color: 'text-success', bg: 'bg-success/10', ring: 'ring-success/20' },
+            { icon: Ambulance, label: 'Dispatched', value: dispatchedUnits.length, color: 'text-warning', bg: 'bg-warning/10', ring: 'ring-warning/20' },
+            { icon: CheckCircle, label: 'Completed Today', value: completedToday.length, color: 'text-info', bg: 'bg-info/10', ring: 'ring-info/20' },
+          ].map((s, i) => {
+            const Icon = s.icon;
+            return (
+              <motion.div key={i} {...card(i + 1)} className="p-4 rounded-2xl bg-card border border-border flex items-center gap-4 hover:shadow-sm transition-shadow">
+                <div className={`w-12 h-12 rounded-xl ${s.bg} ${s.color} ring-1 ${s.ring} flex items-center justify-center`}>
+                  <Icon className="w-6 h-6" />
+                </div>
+                <div>
+                  <div className="text-xl font-display font-bold text-card-foreground">{s.value}</div>
+                  <div className="text-xs text-muted-foreground">{s.label}</div>
+                </div>
+              </motion.div>
+            );
+          })}
+        </div>
       </div>
 
       <div className="grid lg:grid-cols-2 gap-6">

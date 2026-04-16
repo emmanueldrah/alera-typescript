@@ -12,11 +12,14 @@ export type UserRole =
   | 'imaging'
   | 'pharmacy'
   | 'ambulance'
+  | 'cardiologist'
+  | 'endocrinologist'
+  | 'physiotherapist'
   | 'admin'
   | 'super_admin';
 
 export type SignupRole = Exclude<UserRole, 'admin' | 'super_admin'>;
-export type AuthRegisterRole = 'patient' | 'provider' | 'pharmacist' | 'hospital' | 'laboratory' | 'imaging' | 'ambulance';
+export type AuthRegisterRole = 'patient' | 'provider' | 'pharmacist' | 'hospital' | 'laboratory' | 'imaging' | 'ambulance' | 'cardiologist' | 'endocrinologist' | 'physiotherapist';
 
 export interface UserProfile {
   firstName: string;
@@ -75,6 +78,12 @@ const mapBackendUser = (data: ApiUser): User => {
         return 'imaging';
       case 'ambulance':
         return 'ambulance';
+      case 'cardiologist':
+        return 'cardiologist';
+      case 'endocrinologist':
+        return 'endocrinologist';
+      case 'physiotherapist':
+        return 'physiotherapist';
       case 'admin':
         return 'admin';
       case 'super_admin':
@@ -208,6 +217,9 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       imaging: 'imaging',
       pharmacy: 'pharmacist',
       ambulance: 'ambulance',
+      cardiologist: 'cardiologist',
+      endocrinologist: 'endocrinologist',
+      physiotherapist: 'physiotherapist',
     };
     const backendRole = roleMap[role] || 'patient';
 

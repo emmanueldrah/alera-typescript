@@ -12,7 +12,7 @@ const defaultAvailability: Doctor['availableHours'] = [
 export const getBookableDoctors = (
   users: User[],
 ): Doctor[] => {
-  const registeredDoctors = users.filter((candidate) => candidate.role === 'doctor' && candidate.isVerified !== false && candidate.isActive !== false);
+  const registeredDoctors = users.filter((candidate) => ['doctor', 'cardiologist', 'endocrinologist', 'physiotherapist'].includes(candidate.role) && candidate.isVerified !== false && candidate.isActive !== false);
   if (registeredDoctors.length === 0) return [];
 
   return registeredDoctors.map((doctor, index) => ({
