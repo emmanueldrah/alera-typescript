@@ -77,9 +77,9 @@ const STATS = [
 
 const Home = () => {
   return (
-    <div className="min-h-screen bg-slate-50 selection:bg-sky-100 selection:text-sky-900 font-body">
+    <div className="min-h-screen bg-slate-50 selection:bg-sky-100 selection:text-sky-900 font-body overflow-x-hidden">
       {/* ──────────── HERO ──────────── */}
-      <section className="relative isolate overflow-hidden pt-14 text-slate-900">
+      <section className="relative isolate pt-14 text-slate-900">
         <div className="absolute inset-x-0 -top-40 -z-10 transform-gpu overflow-hidden blur-3xl sm:-top-80">
           <div
             className="relative left-[calc(50%-11rem)] aspect-[1155/678] w-[36.125rem] -translate-x-1/2 rotate-[30deg] bg-gradient-to-tr from-sky-200 to-emerald-200 opacity-30 sm:left-[calc(50%-30rem)] sm:w-[72.1875rem]"
@@ -110,8 +110,8 @@ const Home = () => {
                 Alera connects patients, doctors, pharmacies, laboratories, and ambulances on a single, secure infrastructure. Eliminate data silos and elevate patient care.
               </motion.p>
               
-              <motion.div variants={fadeUp} className="mt-10 flex items-center justify-center gap-x-6">
-                <Button asChild size="lg" className="h-14 rounded-full px-8 text-base shadow-glow transition-all hover:scale-105 bg-gradient-primary border-0 text-white">
+              <motion.div variants={fadeUp} className="mt-10 flex flex-col sm:flex-row items-center justify-center gap-4 sm:gap-x-6">
+                <Button asChild size="lg" className="h-14 w-full sm:w-auto rounded-full px-8 text-base shadow-glow transition-all hover:scale-105 bg-gradient-primary border-0 text-white">
                   <Link to="/signup">
                     Get Started Free <ArrowRight className="ml-2 h-5 w-5" />
                   </Link>
@@ -202,6 +202,66 @@ const Home = () => {
                   </div>
                </div>
             </motion.div>
+         </div>
+      </section>
+
+      {/* ──────────── MOTIVE & INTEGRATION ──────────── */}
+      <section className="relative py-24 sm:py-32 overflow-hidden bg-slate-900 mt-24 sm:mt-32">
+         <div className="absolute inset-0 -z-10">
+            <div className="absolute top-0 right-0 -translate-y-12 translate-x-1/3 blur-[100px] opacity-30">
+               <div className="aspect-square w-[40rem] rounded-full bg-gradient-to-br from-sky-400 to-emerald-400" />
+            </div>
+            <div className="absolute bottom-0 left-0 translate-y-1/3 -translate-x-1/3 blur-[100px] opacity-20">
+               <div className="aspect-square w-[30rem] rounded-full bg-gradient-to-tr from-violet-400 to-sky-400" />
+            </div>
+         </div>
+         <div className="mx-auto max-w-7xl px-6 lg:px-8 relative">
+            <div className="grid lg:grid-cols-2 gap-16 lg:gap-12 items-center">
+               <motion.div 
+                  initial={{ opacity: 0, x: -30 }} whileInView={{ opacity: 1, x: 0 }} viewport={{ once: true }} transition={{ duration: 0.6 }}
+                  className="max-w-2xl"
+               >
+                  <h2 className="text-sm font-semibold leading-7 text-sky-400 tracking-wider uppercase flex items-center gap-2">
+                     <span className="h-px w-8 bg-sky-400"></span> Our Motive
+                  </h2>
+                  <p className="mt-4 text-3xl font-bold tracking-tight text-white sm:text-5xl font-display leading-[1.1]">
+                     Ending Healthcare Fragmentation.
+                  </p>
+                  <p className="mt-6 text-lg leading-8 text-slate-300">
+                     For too long, healthcare delivery has been fundamentally disconnected. Patients carry physical paper records, doctors spend hours chasing down lab results, and pharmacies dispense medications without full clinical context.
+                  </p>
+                  <p className="mt-4 text-lg leading-8 text-slate-300">
+                     <strong className="text-white font-semibold">Alera was built to solve this.</strong> We act as the central nervous system for healthcare. When a doctor requests a scan, the imaging center receives it instantly. When a prescription is written, the pharmacy is automatically notified. 
+                  </p>
+                  <div className="mt-8 flex items-center gap-4 text-sm font-medium text-white">
+                     <div className="flex -space-x-2">
+                        <div className="h-8 w-8 rounded-full bg-emerald-500 ring-2 ring-slate-900 flex items-center justify-center"><ShieldCheck className="h-4 w-4" /></div>
+                        <div className="h-8 w-8 rounded-full bg-sky-500 ring-2 ring-slate-900 flex items-center justify-center"><HeartPulse className="h-4 w-4" /></div>
+                        <div className="h-8 w-8 rounded-full bg-violet-500 ring-2 ring-slate-900 flex items-center justify-center"><Zap className="h-4 w-4" /></div>
+                     </div>
+                     Seamless Integration
+                  </div>
+               </motion.div>
+               <motion.div 
+                  initial={{ opacity: 0, x: 30 }} whileInView={{ opacity: 1, x: 0 }} viewport={{ once: true }} transition={{ duration: 0.6, delay: 0.2 }}
+                  className="grid grid-cols-1 sm:grid-cols-2 gap-4 sm:gap-6"
+               >
+                  {[
+                     { title: "Unified Profiles", desc: "One complete patient history accessible securely from any registered facility.", icon: Users },
+                     { title: "Instant Routing", desc: "Lab referrals and pharmacy requests flow automatically to the right provider.", icon: Zap },
+                     { title: "Closed Loop", desc: "Updates are synced back to the referring doctor the moment a test is done.", icon: Activity },
+                     { title: "Secure Hand-offs", desc: "Ambulance dispatchers and ERs share live data before the patient arrives.", icon: Ambulance },
+                  ].map((item, idx) => (
+                     <div key={idx} className="bg-white/[0.03] border border-white/10 rounded-3xl p-6 backdrop-blur-md transition-all hover:bg-white/[0.06]">
+                        <div className="h-12 w-12 bg-white/10 text-sky-300 rounded-xl flex items-center justify-center mb-5">
+                           <item.icon className="h-6 w-6" />
+                        </div>
+                        <h3 className="text-white font-semibold text-lg mb-2 font-display">{item.title}</h3>
+                        <p className="text-slate-400 text-sm leading-relaxed">{item.desc}</p>
+                     </div>
+                  ))}
+               </motion.div>
+            </div>
          </div>
       </section>
 
@@ -298,8 +358,8 @@ const Home = () => {
             <p className="mx-auto mt-6 max-w-xl text-lg leading-8 text-slate-600">
                Join thousands of patients and providers experiencing the future of healthcare communication and delivery.
             </p>
-            <div className="mt-10 flex items-center justify-center gap-x-6">
-               <Button asChild size="lg" className="h-14 rounded-full px-8 shadow-md transition-transform hover:scale-105 bg-slate-900 border-0 text-white hover:bg-slate-800">
+            <div className="mt-10 flex flex-col sm:flex-row items-center justify-center gap-4 sm:gap-x-6">
+               <Button asChild size="lg" className="h-14 w-full sm:w-auto rounded-full px-8 shadow-md transition-transform hover:scale-105 bg-slate-900 border-0 text-white hover:bg-slate-800">
                   <Link to="/signup">Start Standard Free</Link>
                </Button>
                <Link to="/who-we-serve" className="text-sm font-semibold leading-6 text-slate-900 hover:text-sky-600 transition-colors group flex items-center">
