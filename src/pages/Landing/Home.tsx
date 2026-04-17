@@ -5,258 +5,310 @@ import {
   ArrowRight, BadgeCheck, LockKeyhole, Zap,
   Ambulance, FlaskConical, ScanLine, Pill, Building2,
   Stethoscope, Users, Video, ShieldCheck, MessageSquareText,
-  CalendarDays, HeartPulse, ChevronRight,
+  CalendarDays, HeartPulse, ChevronRight, Activity, MapPin
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Card } from '@/components/ui/card';
 
-const sectionReveal: Variants = {
-  hidden: { opacity: 0, y: 24 },
-  visible: { opacity: 1, y: 0, transition: { duration: 0.55, ease: 'easeOut' } },
+const fadeUp: Variants = {
+  hidden: { opacity: 0, y: 30 },
+  visible: { opacity: 1, y: 0, transition: { duration: 0.6, ease: [0.22, 1, 0.36, 1] } },
 };
-const groupReveal: Variants = {
+const staggerContainer: Variants = {
   hidden: { opacity: 0 },
-  visible: { opacity: 1, transition: { staggerChildren: 0.09, delayChildren: 0.08 } },
+  visible: { opacity: 1, transition: { staggerChildren: 0.1, delayChildren: 0.1 } },
 };
 
 const ecosystemRoles = [
-  { icon: Stethoscope, label: 'Doctors', color: 'text-sky-700', bg: 'bg-sky-50 ring-sky-100' },
-  { icon: Building2, label: 'Hospitals', color: 'text-indigo-700', bg: 'bg-indigo-50 ring-indigo-100' },
-  { icon: Pill, label: 'Pharmacies', color: 'text-emerald-700', bg: 'bg-emerald-50 ring-emerald-100' },
-  { icon: FlaskConical, label: 'Laboratories', color: 'text-violet-700', bg: 'bg-violet-50 ring-violet-100' },
-  { icon: ScanLine, label: 'Imaging', color: 'text-cyan-700', bg: 'bg-cyan-50 ring-cyan-100' },
-  { icon: Ambulance, label: 'Ambulance', color: 'text-rose-700', bg: 'bg-rose-50 ring-rose-100' },
-  { icon: Users, label: 'Patients', color: 'text-teal-700', bg: 'bg-teal-50 ring-teal-100' },
-  { icon: BadgeCheck, label: 'Admins', color: 'text-slate-700', bg: 'bg-slate-50 ring-slate-100' },
+  { icon: Stethoscope, label: 'Doctors', color: 'text-sky-600', bg: 'bg-sky-50', hover: 'hover:bg-sky-100 hover:ring-sky-200' },
+  { icon: Building2, label: 'Hospitals', color: 'text-indigo-600', bg: 'bg-indigo-50', hover: 'hover:bg-indigo-100 hover:ring-indigo-200' },
+  { icon: Pill, label: 'Pharmacies', color: 'text-emerald-600', bg: 'bg-emerald-50', hover: 'hover:bg-emerald-100 hover:ring-emerald-200' },
+  { icon: FlaskConical, label: 'Labs', color: 'text-violet-600', bg: 'bg-violet-50', hover: 'hover:bg-violet-100 hover:ring-violet-200' },
+  { icon: ScanLine, label: 'Imaging', color: 'text-cyan-600', bg: 'bg-cyan-50', hover: 'hover:bg-cyan-100 hover:ring-cyan-200' },
+  { icon: Ambulance, label: 'Ambulance', color: 'text-rose-600', bg: 'bg-rose-50', hover: 'hover:bg-rose-100 hover:ring-rose-200' },
+  { icon: Users, label: 'Patients', color: 'text-teal-600', bg: 'bg-teal-50', hover: 'hover:bg-teal-100 hover:ring-teal-200' },
+  { icon: BadgeCheck, label: 'Admins', color: 'text-slate-600', bg: 'bg-slate-50', hover: 'hover:bg-slate-100 hover:ring-slate-200' },
 ];
 
 const liveEvents = [
-  { text: 'Prescription sent to PharmaCare Dispensary', color: 'bg-sky-500/15 text-sky-100', dot: 'bg-sky-400' },
-  { text: 'Lab result ready — CBC Panel for Patient #2041', color: 'bg-emerald-500/15 text-emerald-100', dot: 'bg-emerald-400' },
-  { text: 'MRI scan scheduled at Radiology Center', color: 'bg-violet-500/15 text-violet-100', dot: 'bg-violet-400' },
-  { text: 'Ambulance dispatched — Victoria Island', color: 'bg-rose-500/15 text-rose-100', dot: 'bg-rose-400' },
-  { text: 'Dr. Ama confirmed telemedicine session', color: 'bg-sky-500/15 text-sky-100', dot: 'bg-sky-400' },
-  { text: 'Imaging report delivered to referring doctor', color: 'bg-cyan-500/15 text-cyan-100', dot: 'bg-cyan-400' },
-];
-
-const highlights = [
-  { icon: ShieldCheck, title: 'Lab & Imaging Connected', desc: 'Results flow directly to your doctor', color: 'text-emerald-600' },
-  { icon: MessageSquareText, title: 'Real-Time Chat', desc: 'Message any provider in your care team', color: 'text-sky-600' },
-  { icon: CalendarDays, title: 'Smart Scheduling', desc: 'Appointments confirmed with auto-reminders', color: 'text-violet-600' },
+  { text: 'Prescription verified by PharmaCare', icon: Pill, color: 'bg-emerald-500/10 text-emerald-600', iconBg: 'bg-emerald-100' },
+  { text: 'Lab result ready: Complete Blood Count', icon: FlaskConical, color: 'bg-violet-500/10 text-violet-600', iconBg: 'bg-violet-100' },
+  { text: 'Dispatcher en route to Victoria Island', icon: Ambulance, color: 'bg-rose-500/10 text-rose-600', iconBg: 'bg-rose-100' },
+  { text: 'Telemedicine call started with Dr. Ama', icon: Video, color: 'bg-sky-500/10 text-sky-600', iconBg: 'bg-sky-100' },
+  { text: 'New MRI scan uploaded by Radiology', icon: ScanLine, color: 'bg-cyan-500/10 text-cyan-600', iconBg: 'bg-cyan-100' },
 ];
 
 const LiveActivityTicker = () => {
   const [current, setCurrent] = useState(0);
   useEffect(() => {
-    const timer = setInterval(() => setCurrent((prev) => (prev + 1) % liveEvents.length), 2800);
+    const timer = setInterval(() => setCurrent((prev) => (prev + 1) % liveEvents.length), 3500);
     return () => clearInterval(timer);
   }, []);
   const event = liveEvents[current];
+  const Icon = event.icon;
   return (
-    <div className="mt-3 overflow-hidden" style={{ minHeight: 36 }}>
+    <div className="mt-4 overflow-hidden rounded-xl border border-slate-100 bg-white" style={{ minHeight: 48 }}>
       <AnimatePresence mode="wait">
         <motion.div
           key={current}
-          initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -8 }}
-          transition={{ duration: 0.35 }}
-          className={`flex items-center gap-2 rounded-xl px-3 py-2 text-xs ${event.color}`}
+          initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -10 }}
+          transition={{ duration: 0.4 }}
+          className="flex flex-1 items-center gap-3 px-3 py-2.5 shadow-sm"
         >
-          <span className={`h-1.5 w-1.5 flex-shrink-0 rounded-full ${event.dot} animate-pulse`} />
-          {event.text}
+          <div className={`flex h-8 w-8 shrink-0 items-center justify-center rounded-full ${event.iconBg} ${event.color}`}>
+             <Icon className="h-4 w-4" />
+          </div>
+          <span className="text-xs font-medium text-slate-700 truncate">{event.text}</span>
+          <span className="relative ml-auto flex h-2 w-2 shrink-0">
+             <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-emerald-400 opacity-75"></span>
+             <span className="relative inline-flex h-2 w-2 rounded-full bg-emerald-500"></span>
+          </span>
         </motion.div>
       </AnimatePresence>
     </div>
   );
 };
 
+const STATS = [
+  { label: 'Platform Uptime', value: '99.9%', icon: Activity },
+  { label: 'Ecosystem Roles', value: '8 Connected', icon: Users },
+  { label: 'Data Security', value: 'AES-256', icon: LockKeyhole },
+]
+
 const Home = () => {
   return (
-    <>
+    <div className="min-h-screen bg-slate-50 selection:bg-sky-100 selection:text-sky-900 font-body">
       {/* ──────────── HERO ──────────── */}
-      <section className="relative isolate overflow-hidden">
-        <div className="absolute inset-0 -z-10">
-          <div className="absolute -left-24 top-24 h-72 w-72 rounded-full bg-sky-200/40 blur-3xl" />
-          <div className="absolute right-0 top-10 h-80 w-80 rounded-full bg-emerald-200/35 blur-3xl" />
-          <div className="absolute bottom-0 left-1/2 h-64 w-64 -translate-x-1/2 rounded-full bg-cyan-100/40 blur-3xl" />
+      <section className="relative isolate overflow-hidden pt-14 text-slate-900">
+        <div className="absolute inset-x-0 -top-40 -z-10 transform-gpu overflow-hidden blur-3xl sm:-top-80">
+          <div
+            className="relative left-[calc(50%-11rem)] aspect-[1155/678] w-[36.125rem] -translate-x-1/2 rotate-[30deg] bg-gradient-to-tr from-sky-200 to-emerald-200 opacity-30 sm:left-[calc(50%-30rem)] sm:w-[72.1875rem]"
+            style={{
+              clipPath:
+                'polygon(74.1% 44.1%, 100% 61.6%, 97.5% 26.9%, 85.5% 0.1%, 80.7% 2%, 72.5% 32.5%, 60.2% 62.4%, 52.4% 68.1%, 47.5% 58.3%, 45.2% 34.5%, 27.5% 76.7%, 0.1% 64.9%, 17.9% 100%, 27.6% 76.8%, 76.1% 97.7%, 74.1% 44.1%)',
+            }}
+          />
         </div>
 
-        <div className="mx-auto grid max-w-7xl gap-14 px-4 pb-20 pt-16 sm:px-6 md:pt-20 lg:grid-cols-[1.02fr_0.98fr] lg:gap-10 lg:px-8 lg:pb-24 lg:pt-24">
-          <motion.div variants={groupReveal} initial="hidden" animate="visible" className="max-w-2xl">
-            <motion.div variants={sectionReveal} className="inline-flex items-center gap-2 rounded-full border border-emerald-200 bg-emerald-50 px-4 py-2 text-sm font-medium text-emerald-800 shadow-sm">
-              <span className="h-2 w-2 animate-pulse rounded-full bg-emerald-500" />
-              One platform. The entire healthcare journey.
-            </motion.div>
-
-            <motion.h1 variants={sectionReveal} className="mt-6 text-4xl font-semibold tracking-tight text-slate-950 sm:text-5xl md:text-6xl">
-              Healthcare Unified,{' '}
-              <span className="bg-[linear-gradient(135deg,_#0ea5e9,_#14b8a6)] bg-clip-text text-transparent">
-                Delivered Securely.
-              </span>
-            </motion.h1>
-
-            <motion.p variants={sectionReveal} className="mt-6 max-w-xl text-lg leading-8 text-slate-600">
-              Alera connects patients with doctors, hospitals, pharmacies, laboratories, imaging centers, and ambulance services — all on one secure, integrated platform. From first consultation to prescription delivery, everything works together.
-            </motion.p>
-
-            <motion.div variants={sectionReveal} className="mt-8 flex flex-col gap-3 sm:flex-row">
-              <Button asChild size="lg" className="h-12 rounded-full bg-sky-600 px-6 text-white shadow-lg shadow-sky-600/20 transition-transform hover:-translate-y-0.5 hover:bg-sky-500">
-                <Link to="/signup">Join the Ecosystem <ArrowRight className="h-4 w-4" /></Link>
-              </Button>
-              <Button asChild size="lg" variant="outline" className="h-12 rounded-full border-slate-200 bg-white/80 px-6 text-slate-700 shadow-sm transition-transform hover:-translate-y-0.5 hover:bg-slate-50">
-                <Link to="/why-alera">Why Alera?</Link>
-              </Button>
-            </motion.div>
-
-            <motion.p variants={sectionReveal} className="mt-4 text-sm text-slate-500">
-              Available to patients, providers, and healthcare organizations.
-            </motion.p>
-
-            {/* Stats */}
-            <motion.div variants={sectionReveal} className="mt-10 grid gap-4 sm:grid-cols-3">
-              {[
-                { label: 'Healthcare roles', value: '8 types', icon: Users },
-                { label: 'Data encryption', value: 'End-to-end', icon: LockKeyhole },
-                { label: 'Platform uptime', value: 'Always-on', icon: Zap },
-              ].map((item) => {
-                const Icon = item.icon;
-                return (
-                  <div key={item.label} className="rounded-3xl border border-white/80 bg-white/85 p-4 shadow-[0_18px_45px_-35px_rgba(15,23,42,0.35)] backdrop-blur-sm">
-                    <div className="flex items-center gap-3">
-                      <div className="flex h-10 w-10 items-center justify-center rounded-2xl bg-sky-50 text-sky-700">
-                        <Icon className="h-5 w-5" />
-                      </div>
-                      <div>
-                        <p className="text-xs font-medium uppercase tracking-[0.22em] text-slate-500">{item.label}</p>
-                        <p className="text-lg font-semibold text-slate-950">{item.value}</p>
-                      </div>
-                    </div>
-                  </div>
-                );
-              })}
-            </motion.div>
-          </motion.div>
-
-          {/* Live dashboard preview card */}
-          <motion.div variants={sectionReveal} initial="hidden" animate="visible" className="relative">
-            <Card className="relative overflow-hidden rounded-[2rem] border-white/80 bg-white/85 p-5 shadow-[0_40px_100px_-45px_rgba(15,23,42,0.5)] backdrop-blur-sm sm:p-6">
-              <div className="absolute inset-0 bg-[linear-gradient(135deg,_rgba(14,165,233,0.12)_0%,_rgba(20,184,166,0.08)_48%,_rgba(255,255,255,0)_100%)]" />
-              <div className="relative">
-                <div className="flex items-center justify-between gap-4">
-                  <div>
-                    <p className="text-sm font-semibold text-slate-950">Alera Ecosystem</p>
-                    <p className="text-sm text-slate-500">All stakeholders, one connected platform</p>
-                  </div>
-                  <div className="inline-flex items-center gap-2 rounded-full bg-emerald-50 px-3 py-1 text-xs font-semibold text-emerald-700 ring-1 ring-emerald-100">
-                    <span className="h-2 w-2 animate-pulse rounded-full bg-emerald-500" />
-                    Live
-                  </div>
+        <div className="mx-auto max-w-7xl px-6 lg:px-8">
+          <div className="mx-auto max-w-2xl py-24 sm:py-32 lg:py-40 text-center">
+            <motion.div variants={staggerContainer} initial="hidden" animate="visible" className="flex flex-col items-center">
+              
+              <motion.div variants={fadeUp} className="mb-8 flex justify-center">
+                <div className="relative rounded-full px-4 py-1.5 text-sm leading-6 text-slate-600 ring-1 ring-slate-900/10 hover:ring-slate-900/20 backdrop-blur-sm bg-white/50 transition-all cursor-default">
+                  <span className="font-semibold text-sky-600">Alera 2.0</span> <span className="mx-2 text-slate-300">|</span> 
+                  The Connected Healthcare Standard
                 </div>
-
-                <div className="mt-5 grid grid-cols-4 gap-3">
-                  {ecosystemRoles.map(({ icon: Icon, label, color, bg }) => (
-                    <div key={label} className={`flex flex-col items-center gap-2 rounded-2xl p-3 ring-1 ${bg}`}>
-                      <div className={`flex h-9 w-9 items-center justify-center rounded-xl ${color}`}>
-                        <Icon className="h-4 w-4" />
-                      </div>
-                      <p className={`text-[10px] font-semibold ${color}`}>{label}</p>
-                    </div>
-                  ))}
-                </div>
-
-                <div className="mt-5 grid gap-3 lg:grid-cols-2">
-                  <div className="rounded-2xl bg-slate-950 p-4 text-white">
-                    <div className="flex items-center gap-3">
-                      <div className="flex h-10 w-10 items-center justify-center rounded-2xl bg-sky-500/15 text-sky-200">
-                        <Video className="h-5 w-5" />
-                      </div>
-                      <div>
-                        <p className="text-sm font-semibold">Video Consultation</p>
-                        <p className="text-xs text-slate-300">Dr. Ama Mensah — Family Medicine</p>
-                      </div>
-                    </div>
-                    <div className="mt-3 space-y-2 text-xs text-slate-300">
-                      <div className="rounded-xl bg-white/5 px-3 py-2">Reviewed lab results from Central Lab</div>
-                      <LiveActivityTicker />
-                    </div>
-                  </div>
-
-                  <div className="space-y-3">
-                    {highlights.map((h) => {
-                      const Icon = h.icon;
-                      return (
-                        <div key={h.title} className="rounded-2xl border border-slate-200 bg-white p-3 shadow-sm">
-                          <div className="flex items-center gap-2">
-                            <Icon className={`h-4 w-4 ${h.color}`} />
-                            <p className="text-xs font-semibold text-slate-950">{h.title}</p>
-                          </div>
-                          <p className="mt-1 text-xs text-slate-500">{h.desc}</p>
-                        </div>
-                      );
-                    })}
-                  </div>
-                </div>
-              </div>
-            </Card>
-            <div className="pointer-events-none absolute -right-2 top-8 hidden h-24 w-24 rounded-full border border-sky-200/70 bg-sky-100/40 lg:block" />
-            <div className="pointer-events-none absolute -bottom-3 left-10 hidden h-20 w-20 rounded-full border border-emerald-200/70 bg-emerald-100/40 lg:block" />
-          </motion.div>
-        </div>
-      </section>
-
-      {/* ──────────── QUICK LINKS STRIP ──────────── */}
-      <section className="px-4 pb-16 pt-4 sm:px-6 lg:px-8">
-        <div className="mx-auto max-w-7xl">
-          <motion.div
-            variants={groupReveal} initial="hidden" whileInView="visible" viewport={{ once: true, margin: '-60px' }}
-            className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4"
-          >
-            {[
-              { label: 'Why Alera?', desc: 'Compare fragmented vs unified', href: '/why-alera', color: 'text-sky-700 bg-sky-50 ring-sky-100' },
-              { label: 'All Features', desc: 'Every feature across all roles', href: '/features', color: 'text-emerald-700 bg-emerald-50 ring-emerald-100' },
-              { label: 'Who We Serve', desc: 'Built for your exact role', href: '/who-we-serve', color: 'text-violet-700 bg-violet-50 ring-violet-100' },
-              { label: 'Trust & Security', desc: 'HIPAA · encryption · audit trail', href: '/trust', color: 'text-rose-700 bg-rose-50 ring-rose-100' },
-            ].map((item) => (
-              <motion.div key={item.label} variants={sectionReveal}>
-                <Link to={item.href} className="flex items-center justify-between rounded-[1.5rem] border border-slate-200 bg-white/90 p-5 shadow-[0_10px_35px_-30px_rgba(15,23,42,0.35)] transition-all duration-300 hover:-translate-y-1 hover:border-sky-200 hover:shadow-[0_16px_45px_-30px_rgba(14,165,233,0.2)] group">
-                  <div>
-                    <p className="text-sm font-semibold text-slate-950">{item.label}</p>
-                    <p className="mt-1 text-xs text-slate-500">{item.desc}</p>
-                  </div>
-                  <ChevronRight className="h-4 w-4 text-slate-400 transition-transform group-hover:translate-x-0.5 group-hover:text-sky-500" />
+              </motion.div>
+              
+              <motion.h1 variants={fadeUp} className="text-4xl font-bold tracking-tight text-slate-900 sm:text-6xl font-display">
+                Modern Healthcare, <br/>
+                <span className="text-gradient font-extrabold pb-2 inline-block">Perfectly Synchronized.</span>
+              </motion.h1>
+              
+              <motion.p variants={fadeUp} className="mt-6 text-lg leading-8 text-slate-600 max-w-xl text-center">
+                Alera connects patients, doctors, pharmacies, laboratories, and ambulances on a single, secure infrastructure. Eliminate data silos and elevate patient care.
+              </motion.p>
+              
+              <motion.div variants={fadeUp} className="mt-10 flex items-center justify-center gap-x-6">
+                <Button asChild size="lg" className="h-14 rounded-full px-8 text-base shadow-glow transition-all hover:scale-105 bg-gradient-primary border-0 text-white">
+                  <Link to="/signup">
+                    Get Started Free <ArrowRight className="ml-2 h-5 w-5" />
+                  </Link>
+                </Button>
+                <Link to="/why-alera" className="text-base font-semibold leading-6 text-slate-900 transition-colors hover:text-sky-600 flex items-center group">
+                  See how it works <ChevronRight className="ml-1 h-4 w-4 transition-transform group-hover:translate-x-1" />
                 </Link>
               </motion.div>
-            ))}
-          </motion.div>
+            </motion.div>
+          </div>
         </div>
       </section>
 
-      {/* ──────────── FINAL CTA BANNER ──────────── */}
-      <section className="px-4 pb-20 pt-4 sm:px-6 lg:px-8">
-        <div className="mx-auto max-w-7xl">
-          <Card className="overflow-hidden rounded-[2rem] border-slate-200 bg-slate-950 text-white shadow-[0_30px_80px_-50px_rgba(15,23,42,0.75)]">
-            <div className="grid gap-8 px-6 py-8 md:px-8 md:py-10 lg:grid-cols-[1.1fr_0.9fr] lg:items-center">
-              <div>
-                <p className="text-sm font-semibold uppercase tracking-[0.26em] text-sky-200">Ready when you are</p>
-                <h2 className="mt-3 text-3xl font-semibold tracking-tight md:text-4xl">
-                  Whether you're a patient, a provider, or a healthcare organization.
-                </h2>
-                <p className="mt-4 max-w-xl text-base leading-7 text-slate-300 md:text-lg">
-                  Alera is built for every role in the healthcare journey. Sign up, pick your role, and connect instantly with the rest of the ecosystem.
-                </p>
-              </div>
-              <div className="flex flex-col gap-3 sm:flex-row lg:justify-end">
-                <Button asChild size="lg" className="h-12 rounded-full bg-white px-6 text-slate-950 shadow-none transition-transform hover:-translate-y-0.5 hover:bg-slate-100">
-                  <Link to="/signup">Create Your Account</Link>
-                </Button>
-                <Button asChild size="lg" variant="outline" className="h-12 rounded-full border-white/20 bg-white/5 px-6 text-white hover:bg-white/10 hover:text-white">
-                  <Link to="/why-alera">Why Alera?</Link>
-                </Button>
-              </div>
-            </div>
-          </Card>
-        </div>
+      {/* ──────────── PLATFORM PREVIEW ──────────── */}
+      <section className="relative -mt-16 sm:-mt-24 pb-24">
+         <div className="mx-auto max-w-7xl px-6 lg:px-8">
+            <motion.div 
+               initial={{ opacity: 0, y: 40 }}
+               whileInView={{ opacity: 1, y: 0 }}
+               viewport={{ once: true, margin: "-100px" }}
+               transition={{ duration: 0.8, ease: "easeOut" }}
+               className="relative rounded-[2.5rem] bg-white ring-1 ring-slate-900/5 shadow-2xl shadow-slate-200/50 overflow-hidden"
+            >
+               <div className="absolute top-0 inset-x-0 h-px bg-gradient-to-r from-transparent via-sky-500/20 to-transparent"></div>
+               
+               <div className="grid lg:grid-cols-[1fr_400px] divide-y lg:divide-y-0 lg:divide-x divide-slate-100">
+                  <div className="p-8 sm:p-12 lg:p-16">
+                     <div className="flex items-center gap-4 mb-8">
+                        <div className="h-12 w-12 rounded-2xl bg-gradient-primary flex items-center justify-center shadow-lg shadow-sky-500/20 text-white">
+                           <HeartPulse className="h-6 w-6" />
+                        </div>
+                        <div>
+                           <h3 className="text-xl font-bold font-display text-slate-900">Ecosystem Network</h3>
+                           <p className="text-sm text-slate-500">Real-time data flow across all providers</p>
+                        </div>
+                     </div>
+
+                     <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
+                        {ecosystemRoles.map((role, i) => {
+                           const Icon = role.icon;
+                           return (
+                              <motion.div 
+                                 key={role.label} 
+                                 initial={{ opacity: 0, scale: 0.9 }}
+                                 whileInView={{ opacity: 1, scale: 1 }}
+                                 viewport={{ once: true }}
+                                 transition={{ delay: i * 0.05 + 0.2 }}
+                                 className={`group flex flex-col items-center justify-center gap-3 p-4 rounded-3xl border border-slate-100 transition-all duration-300 cursor-pointer hover:shadow-md ${role.bg} ${role.hover}`}
+                              >
+                                 <div className={`p-3 rounded-2xl bg-white shadow-sm ring-1 ring-slate-900/5 ${role.color}`}>
+                                    <Icon className="h-5 w-5" />
+                                 </div>
+                                 <span className="font-semibold text-slate-700 text-sm">{role.label}</span>
+                              </motion.div>
+                           )
+                        })}
+                     </div>
+                  </div>
+
+                  <div className="bg-slate-50/50 p-8 sm:p-12 flex flex-col justify-center">
+                     <div className="mb-6 flex justify-between items-center">
+                        <h4 className="font-semibold text-slate-900 flex items-center gap-2 text-sm">
+                           <Activity className="h-4 w-4 text-emerald-500" /> Live Activity Feed
+                        </h4>
+                        <span className="text-[10px] font-bold uppercase tracking-wider text-slate-400">System Log</span>
+                     </div>
+                     
+                     <LiveActivityTicker />
+                     
+                     <div className="mt-8 space-y-4">
+                        <div className="p-4 rounded-2xl bg-white border border-slate-100 shadow-sm relative overflow-hidden group">
+                           <div className="absolute inset-y-0 left-0 w-1 bg-sky-500 rounded-l-2xl"></div>
+                           <div className="flex gap-4">
+                              <div className="h-10 w-10 shrink-0 rounded-full bg-slate-100 flex items-center justify-center">
+                                 <Stethoscope className="h-5 w-5 text-slate-500" />
+                              </div>
+                              <div>
+                                 <p className="text-sm font-semibold text-slate-900">Dr. Sarah Jenkins</p>
+                                 <p className="text-xs text-slate-500 mt-0.5">Cardiologist • City Hospital</p>
+                                 <div className="mt-3 inline-flex items-center rounded-full bg-emerald-50 px-2 py-0.5 text-[10px] font-medium text-emerald-700 ring-1 ring-inset ring-emerald-600/20">
+                                    <span className="mr-1.5 h-1.5 w-1.5 rounded-full bg-emerald-500 animate-pulse"></span>
+                                    Available for Telemedicine
+                                 </div>
+                              </div>
+                           </div>
+                        </div>
+                     </div>
+                  </div>
+               </div>
+            </motion.div>
+         </div>
       </section>
-    </>
+
+      {/* ──────────── FEATURES / HIGHLIGHTS ──────────── */}
+      <section className="py-24 sm:py-32 bg-white">
+         <div className="mx-auto max-w-7xl px-6 lg:px-8">
+            <div className="mx-auto max-w-2xl lg:text-center mb-16">
+               <h2 className="text-base font-semibold leading-7 text-sky-600">Faster, Smarter, Better</h2>
+               <p className="mt-2 text-3xl font-bold tracking-tight text-slate-900 sm:text-4xl font-display">
+                  Everything you need to deliver world-class care
+               </p>
+               <p className="mt-6 text-lg leading-8 text-slate-600">
+                  Say goodbye to lost paper records and fragmented communications. Alera brings the entire patient journey into one cohesive hub.
+               </p>
+            </div>
+
+            <div className="mx-auto mt-16 max-w-2xl sm:mt-20 lg:mt-24 lg:max-w-none">
+               <dl className="grid max-w-xl grid-cols-1 gap-x-8 gap-y-16 lg:max-w-none lg:grid-cols-3">
+                  {[
+                     {
+                        title: 'Interoperable Records',
+                        description: 'Patient records update instantly when a pharmacy dispenses medication or a lab upload results. Single source of truth.',
+                        icon: ShieldCheck,
+                        color: 'bg-emerald-50 text-emerald-600 border-emerald-100'
+                     },
+                     {
+                        title: 'Secure Communications',
+                        description: 'Built-in chat and video conferencing. Discuss complex cases with specialists without leaving the platform.',
+                        icon: MessageSquareText,
+                        color: 'bg-sky-50 text-sky-600 border-sky-100'
+                     },
+                     {
+                        title: 'Intelligent Workflows',
+                        description: 'Automated referrals, smart appointment reminders, and one-click ambulance dispatch reduce administrative burden.',
+                        icon: Zap,
+                        color: 'bg-violet-50 text-violet-600 border-violet-100'
+                     }
+                  ].map((feature, idx) => (
+                     <div key={feature.title} className="flex flex-col items-start transition-transform hover:-translate-y-1">
+                        <div className={`rounded-2xl p-4 border ${feature.color} shadow-sm mb-5`}>
+                           <feature.icon className="h-6 w-6" aria-hidden="true" />
+                        </div>
+                        <dt className="text-xl font-semibold leading-7 text-slate-900 font-display">
+                           {feature.title}
+                        </dt>
+                        <dd className="mt-3 flex flex-auto flex-col text-base leading-7 text-slate-600">
+                           <p className="flex-auto">{feature.description}</p>
+                        </dd>
+                     </div>
+                  ))}
+               </dl>
+            </div>
+         </div>
+      </section>
+
+      {/* ──────────── STATS ──────────── */}
+      <section className="bg-slate-900 py-16 sm:py-24 relative overflow-hidden">
+         <div className="absolute inset-0 bg-gradient-hero mix-blend-multiply opacity-50"></div>
+         <div className="relative mx-auto max-w-7xl px-6 lg:px-8">
+            <div className="mx-auto max-w-2xl lg:max-w-none">
+               <div className="text-center">
+                  <h2 className="text-3xl font-bold tracking-tight text-white sm:text-4xl font-display">Trusted by modern care providers</h2>
+               </div>
+               <dl className="mt-16 grid grid-cols-1 gap-0.5 overflow-hidden rounded-2xl text-center sm:grid-cols-3 lg:grid-cols-3 ring-1 ring-white/10">
+                  {STATS.map((stat) => (
+                     <div key={stat.label} className="flex flex-col bg-white/5 p-8 backdrop-blur-md transition-colors hover:bg-white/10">
+                        <dt className="text-sm font-semibold leading-6 text-slate-300 flex items-center justify-center gap-2">
+                           <stat.icon className="h-4 w-4" /> {stat.label}
+                        </dt>
+                        <dd className="order-first text-4xl font-bold tracking-tight text-white mb-2 font-display">{stat.value}</dd>
+                     </div>
+                  ))}
+               </dl>
+            </div>
+         </div>
+      </section>
+
+      {/* ──────────── FINAL CTA ──────────── */}
+      <section className="relative isolate px-6 py-24 sm:py-32 lg:px-8 bg-white overflow-hidden">
+         <div className="absolute inset-x-0 top-1/2 -z-10 -translate-y-1/2 transform-gpu overflow-hidden opacity-30 blur-3xl">
+            <div
+               className="ml-[max(50%,38rem)] aspect-[1313/771] w-[82.0625rem] bg-gradient-to-tr from-sky-200 to-emerald-200"
+               style={{
+                  clipPath:
+                  'polygon(74.1% 44.1%, 100% 61.6%, 97.5% 26.9%, 85.5% 0.1%, 80.7% 2%, 72.5% 32.5%, 60.2% 62.4%, 52.4% 68.1%, 47.5% 58.3%, 45.2% 34.5%, 27.5% 76.7%, 0.1% 64.9%, 17.9% 100%, 27.6% 76.8%, 76.1% 97.7%, 74.1% 44.1%)',
+               }}
+            />
+         </div>
+
+         <div className="mx-auto max-w-2xl text-center">
+            <h2 className="text-3xl font-bold tracking-tight text-slate-900 sm:text-4xl font-display">
+               Ready to streamline your workflow?
+            </h2>
+            <p className="mx-auto mt-6 max-w-xl text-lg leading-8 text-slate-600">
+               Join thousands of patients and providers experiencing the future of healthcare communication and delivery.
+            </p>
+            <div className="mt-10 flex items-center justify-center gap-x-6">
+               <Button asChild size="lg" className="h-14 rounded-full px-8 shadow-md transition-transform hover:scale-105 bg-slate-900 border-0 text-white hover:bg-slate-800">
+                  <Link to="/signup">Start Standard Free</Link>
+               </Button>
+               <Link to="/who-we-serve" className="text-sm font-semibold leading-6 text-slate-900 hover:text-sky-600 transition-colors group flex items-center">
+                  View pricing <ChevronRight className="ml-1 h-4 w-4 transition-transform group-hover:translate-x-1" />
+               </Link>
+            </div>
+         </div>
+      </section>
+    </div>
   );
 };
 
