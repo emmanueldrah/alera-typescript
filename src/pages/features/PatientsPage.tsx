@@ -1,6 +1,14 @@
-import { useState, useMemo } from 'react';
+import { useMemo, useState } from 'react';
 import { motion } from 'framer-motion';
-import { Users, Search, Calendar, Phone, MapPin, Inbox, Activity } from 'lucide-react';
+import {
+  Activity,
+  Calendar,
+  ChevronRight,
+  Inbox,
+  MessageSquare,
+  Search,
+  Users,
+} from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '@/contexts/useAuth';
 import { useAppData } from '@/contexts/useAppData';
@@ -12,129 +20,197 @@ const PatientsPage = () => {
   const navigate = useNavigate();
   const [search, setSearch] = useState('');
 
-  // Get unique patients for this doctor
   const patientsList = useMemo(
     () => getAccessiblePatients(getUsers(), appointments, prescriptions, labTests, user),
     [appointments, getUsers, labTests, prescriptions, user],
   );
 
-  // Filter by search
-  const filtered = useMemo(() => {
-    return patientsList.filter(p => p.name.toLowerCase().includes(search.toLowerCase()));
+  const filteredPatients = useMemo(() => {
+    const normalizedQuery = search.trim().toLowerCase();
+    if (!normalizedQuery) return patientsList;
+    return patientsList.filter((patient) => patient.name.toLowerCase().includes(normalizedQuery));
   }, [patientsList, search]);
 
-  const card = (i: number) => ({ initial: { opacity: 0, y: 15 }, animate: { opacity: 1, y: 0 }, transition: { delay: i * 0.05 } });
   const canMessagePatient = user?.role === 'doctor';
-  const canViewHistory = user?.role === 'doctor' || user?.role === 'hospital' || user?.role === 'admin' || user?.role === 'super_admin';
+  const canViewHistory =
+    user?.role === 'doctor' || user?.role === 'hospital' || user?.role === 'admin' || user?.role === 'super_admin';
 
   if (user?.role !== 'doctor' && user?.role !== 'admin' && user?.role !== 'hospital') {
     return (
       <div className="space-y-6">
         <h1 className="text-2xl font-display font-bold text-foreground">Patients</h1>
         <div className="flex flex-col items-center justify-center py-12 text-muted-foreground">
-          <Users className="w-10 h-10 mb-3" />
+          <Users className="mb-3 h-10 w-10" />
           <p className="text-sm">You don't have access to patient management</p>
         </div>
       </div>
     );
   }
 
+  const totalAppointments = filteredPatients.reduce((sum, patient) => sum + patient.appointmentCount, 0);
+  const totalPrescriptions = filteredPatients.reduce((sum, patient) => sum + patient.prescriptionCount, 0);
+  const totalLabTests = filteredPatients.reduce((sum, patient) => sum + patient.labTestCount, 0);
+
   return (
     <div className="space-y-6">
-      <div>
-        <h1 className="text-2xl font-display font-bold text-foreground">{user?.role === 'doctor' ? 'My Patients' : 'Patients'}</h1>
-        <p className="text-muted-foreground mt-1">View and manage patient relationships</p>
-      </div>
+      <motion.div
+        initial={{ opacity: 0, y: 16 }}
+        animate={{ opacity: 1, y: 0 }}
+        className="overflow-hidden rounded-[2rem] border border-slate-200 bg-[radial-gradient(circle_at_top_left,_rgba(14,165,233,0.14),_transparent_28%),linear-gradient(145deg,_#ffffff_0%,_#f8fbff_60%,_#f4fbfa_100%)] p-8 shadow-sm"
+      >
+        <div className="grid gap-8 xl:grid-cols-[1.15fr_0.85fr]">
+          <div>
+            <div className="inline-flex items-center gap-2 rounded-full border border-sky-200 bg-white/80 px-4 py-1.5 text-sm font-medium text-sky-700">
+              <Users className="h-4 w-4" />
+              Patient relationship workspace
+            </div>
+            <h1 className="mt-5 text-3xl font-bold tracking-tight text-slate-950">
+              {user?.role === 'doctor' ? 'My Patients' : 'Patients'}
+            </h1>
+            <p className="mt-3 max-w-2xl text-sm leading-6 text-slate-600 sm:text-base">
+              Review the people currently connected to your workflow, jump into their history, and pick up the next conversation without digging through separate modules.
+            </p>
 
-      {/* Search */}
-      <motion.div initial={{ opacity: 0, y: -10 }} animate={{ opacity: 1, y: 0 }} className="relative">
-        <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-muted-foreground" />
-        <input
-          value={search}
-          onChange={(e) => setSearch(e.target.value)}
-          placeholder="Search patients by name..."
-          className="w-full h-11 pl-10 pr-4 rounded-xl border border-input bg-background text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-primary/30"
-        />
+            <div className="mt-8 grid gap-3 sm:grid-cols-3">
+              {[
+                { label: 'Visible patients', value: filteredPatients.length, helper: 'Current filtered list', tone: 'bg-sky-50 text-sky-700' },
+                { label: 'Appointments', value: totalAppointments, helper: 'Linked care visits', tone: 'bg-emerald-50 text-emerald-700' },
+                { label: 'Diagnostics', value: totalLabTests + totalPrescriptions, helper: 'Labs and prescriptions', tone: 'bg-amber-50 text-amber-700' },
+              ].map((item) => (
+                <div key={item.label} className="rounded-2xl border border-white/80 bg-white/85 p-4 shadow-sm">
+                  <div className={`inline-flex rounded-2xl px-3 py-2 text-xs font-semibold uppercase tracking-[0.18em] ${item.tone}`}>
+                    {item.label}
+                  </div>
+                  <div className="mt-4 text-3xl font-bold tracking-tight text-slate-950">{item.value}</div>
+                  <div className="mt-1 text-xs text-slate-500">{item.helper}</div>
+                </div>
+              ))}
+            </div>
+          </div>
+
+          <div className="rounded-[1.75rem] border border-slate-200 bg-slate-950 p-6 text-white shadow-xl shadow-slate-950/10">
+            <p className="text-xs font-semibold uppercase tracking-[0.24em] text-slate-400">Search</p>
+            <h2 className="mt-3 text-xl font-semibold">Find the right patient faster</h2>
+            <div className="relative mt-6">
+              <Search className="pointer-events-none absolute left-4 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
+              <input
+                value={search}
+                onChange={(e) => setSearch(e.target.value)}
+                placeholder="Search patients by name..."
+                className="h-12 w-full rounded-2xl border border-white/10 bg-white/5 pl-11 pr-4 text-white placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-white/20"
+              />
+            </div>
+            <div className="mt-6 space-y-3">
+              <div className="rounded-2xl border border-white/10 bg-white/5 p-4">
+                <p className="text-sm font-medium text-white">Care continuity</p>
+                <p className="mt-1 text-sm leading-6 text-slate-300">
+                  Open a patient history or message thread directly from the list so you can move from review to action in one step.
+                </p>
+              </div>
+              <div className="rounded-2xl border border-white/10 bg-white/5 p-4">
+                <p className="text-sm font-medium text-white">Patient panel size</p>
+                <p className="mt-1 text-sm leading-6 text-slate-300">
+                  {patientsList.length} patient{patientsList.length === 1 ? '' : 's'} currently available to your role.
+                </p>
+              </div>
+            </div>
+          </div>
+        </div>
       </motion.div>
 
-      {/* Patients List */}
-      {filtered.length === 0 ? (
-        <div className="flex flex-col items-center justify-center py-12 text-muted-foreground">
-          <Inbox className="w-10 h-10 mb-3" />
+      {filteredPatients.length === 0 ? (
+        <div className="flex flex-col items-center justify-center rounded-[1.75rem] border border-border bg-card py-14 text-muted-foreground shadow-sm">
+          <Inbox className="mb-3 h-10 w-10" />
           <p className="text-sm">{patientsList.length === 0 ? 'No patients yet' : 'No patients match your search'}</p>
         </div>
       ) : (
-        <div className="space-y-3">
-          {filtered.map((patient, index) => {
-            return (
-              <motion.div
-                key={patient.id}
-                {...card(index)}
-                className="bg-card rounded-2xl border border-border p-5 hover:border-primary/30 hover:shadow-lg transition-all"
-              >
-                <div className="flex items-start justify-between">
-                  <div className="flex items-start gap-4 flex-1">
-                    {/* Avatar */}
-                    <div className="w-12 h-12 rounded-xl bg-primary/10 text-primary flex items-center justify-center shrink-0">
-                      <Users className="w-6 h-6" />
-                    </div>
-
-                    {/* Info */}
-                    <div className="flex-1">
-                      <div className="flex items-center gap-3">
-                        <h3 className="text-base font-semibold text-foreground">{patient.name}</h3>
-                        {patient.hasActive && <span className="px-2 py-1 rounded-md bg-primary/10 text-primary text-xs font-medium">Active</span>}
-                      </div>
-
-                      {/* Stats */}
-                      <div className="flex items-center gap-4 mt-2 text-xs text-muted-foreground">
-                        <div className="flex items-center gap-1">
-                          <Calendar className="w-3 h-3" />
-                          {patient.appointmentCount} appointments
-                        </div>
-                        <div className="flex items-center gap-1">
-                          <Activity className="w-3 h-3" />
-                          {patient.prescriptionCount} prescriptions
-                        </div>
-                        <div className="flex items-center gap-1">
-                          <Activity className="w-3 h-3" />
-                          {patient.labTestCount} lab tests
-                        </div>
-                      </div>
-
-                      {patient.lastVisit && (
-                        <p className="text-xs text-muted-foreground mt-2">
-                          Last visit: {new Date(patient.lastVisit).toLocaleDateString()}
-                        </p>
-                      )}
-                    </div>
+        <div className="grid gap-4">
+          {filteredPatients.map((patient, index) => (
+            <motion.div
+              key={patient.id}
+              initial={{ opacity: 0, y: 12 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ delay: index * 0.04 }}
+              className="rounded-[1.75rem] border border-border bg-card p-5 shadow-sm transition hover:border-primary/20 hover:shadow-md"
+            >
+              <div className="grid gap-5 xl:grid-cols-[1fr_auto] xl:items-center">
+                <div className="flex items-start gap-4">
+                  <div className="flex h-14 w-14 items-center justify-center rounded-2xl bg-primary/10 text-primary">
+                    <Users className="h-6 w-6" />
                   </div>
+                  <div className="min-w-0 flex-1">
+                    <div className="flex flex-wrap items-center gap-3">
+                      <h3 className="text-lg font-semibold text-slate-950">{patient.name}</h3>
+                      {patient.hasActive ? (
+                        <span className="rounded-full bg-emerald-50 px-3 py-1 text-[11px] font-semibold uppercase tracking-[0.16em] text-emerald-700">
+                          Active
+                        </span>
+                      ) : null}
+                    </div>
 
-                  {/* Action Buttons */}
-                  <div className="flex gap-2">
-                    {canMessagePatient && (
-                      <button
-                        onClick={() => navigate(`/dashboard/messages?thread=${patient.id}`)}
-                        className="px-4 py-2 rounded-lg bg-primary/10 text-primary text-sm font-medium hover:bg-primary/20 transition"
-                      >
-                        Message
-                      </button>
-                    )}
-                    {canViewHistory && (
-                      <button
-                        onClick={() => navigate(`/dashboard/medical-history?patient=${patient.id}`)}
-                        className="px-4 py-2 rounded-lg bg-secondary text-secondary-foreground text-sm font-medium hover:bg-muted transition"
-                      >
-                        History
-                      </button>
-                    )}
+                    <div className="mt-4 grid gap-3 sm:grid-cols-3">
+                      <div className="rounded-2xl bg-slate-50 px-4 py-3">
+                        <div className="flex items-center gap-2 text-xs font-semibold uppercase tracking-[0.16em] text-slate-500">
+                          <Calendar className="h-3.5 w-3.5" />
+                          Appointments
+                        </div>
+                        <div className="mt-2 text-lg font-semibold text-slate-900">{patient.appointmentCount}</div>
+                      </div>
+                      <div className="rounded-2xl bg-slate-50 px-4 py-3">
+                        <div className="flex items-center gap-2 text-xs font-semibold uppercase tracking-[0.16em] text-slate-500">
+                          <Activity className="h-3.5 w-3.5" />
+                          Prescriptions
+                        </div>
+                        <div className="mt-2 text-lg font-semibold text-slate-900">{patient.prescriptionCount}</div>
+                      </div>
+                      <div className="rounded-2xl bg-slate-50 px-4 py-3">
+                        <div className="flex items-center gap-2 text-xs font-semibold uppercase tracking-[0.16em] text-slate-500">
+                          <Activity className="h-3.5 w-3.5" />
+                          Lab tests
+                        </div>
+                        <div className="mt-2 text-lg font-semibold text-slate-900">{patient.labTestCount}</div>
+                      </div>
+                    </div>
+
+                    <div className="mt-4 text-sm text-slate-500">
+                      {patient.lastVisit
+                        ? `Last visit: ${new Date(patient.lastVisit).toLocaleDateString()}`
+                        : 'No recorded visit yet'}
+                    </div>
                   </div>
                 </div>
-              </motion.div>
-            );
-          })}
+
+                <div className="flex flex-wrap gap-2 xl:justify-end">
+                  {canMessagePatient ? (
+                    <button
+                      onClick={() => navigate(`/dashboard/messages?thread=${patient.id}`)}
+                      className="inline-flex items-center gap-2 rounded-2xl bg-primary/10 px-4 py-2.5 text-sm font-medium text-primary transition hover:bg-primary/20"
+                    >
+                      <MessageSquare className="h-4 w-4" />
+                      Message
+                    </button>
+                  ) : null}
+                  {canViewHistory ? (
+                    <button
+                      onClick={() => navigate(`/dashboard/medical-history?patient=${patient.id}`)}
+                      className="inline-flex items-center gap-2 rounded-2xl border border-slate-200 bg-white px-4 py-2.5 text-sm font-medium text-slate-800 transition hover:bg-slate-50"
+                    >
+                      History
+                      <ChevronRight className="h-4 w-4" />
+                    </button>
+                  ) : null}
+                </div>
+              </div>
+            </motion.div>
+          ))}
         </div>
       )}
+
+      {filteredPatients.length > 0 ? (
+        <div className="rounded-[1.75rem] border border-slate-200 bg-slate-50 px-5 py-4 text-sm text-slate-600">
+          {totalPrescriptions} prescriptions and {totalLabTests} lab tests are linked to the currently visible patient list.
+        </div>
+      ) : null}
     </div>
   );
 };

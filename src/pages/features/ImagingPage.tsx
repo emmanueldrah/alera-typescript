@@ -841,12 +841,11 @@ const ImagingPage = ({ page }: ImagingPageProps) => {
                       <button
                         onClick={() => void handleUpload(scan)}
                         disabled={
-                          uploadingId === scan.id ||
-                          (user?.role === 'imaging' && !user?.postdicomApiUrl)
+                          uploadingId === scan.id
                         }
                         className="px-4 py-2 rounded-lg bg-gradient-primary text-primary-foreground text-sm font-medium hover:opacity-90 transition disabled:opacity-50"
                       >
-                        {uploadingId === scan.id ? 'Submitting...' : user?.role === 'imaging' ? 'Submit to PostDICOM' : 'Submit Results'}
+                        {uploadingId === scan.id ? 'Submitting...' : 'Submit Results'}
                       </button>
                       <button
                         onClick={resetUploadForm}

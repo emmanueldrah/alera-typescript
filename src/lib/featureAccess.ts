@@ -35,7 +35,7 @@ export const featureAccessMap: Record<string, UserRole[]> = {
   'clinical-notes': ['patient', 'doctor', 'cardiologist', 'endocrinologist', 'physiotherapist'],
   'problem-list': ['patient'],
   'medication-adherence': ['patient'],
-  'lab-results-management': ['patient'],
+  'lab-results-management': ['laboratory', 'admin', 'super_admin'],
   'smart-appointment-reminders': ['patient', 'doctor', 'cardiologist', 'endocrinologist', 'physiotherapist'],
   'pricing-settings': ['doctor', 'cardiologist', 'endocrinologist', 'physiotherapist'],
   billing: ['patient'],

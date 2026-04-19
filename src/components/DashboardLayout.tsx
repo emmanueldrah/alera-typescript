@@ -55,6 +55,7 @@ const roleNavItems: Record<string, { label: string; icon: React.ReactNode; path:
     { label: 'Dashboard', icon: <LayoutDashboard className="w-5 h-5" />, path: '/dashboard' },
     { label: 'Test Requests', icon: <FlaskConical className="w-5 h-5" />, path: '/dashboard/test-requests' },
     { label: 'Results', icon: <FileText className="w-5 h-5" />, path: '/dashboard/results' },
+    { label: 'Result Uploads', icon: <FileText className="w-5 h-5" />, path: '/dashboard/lab-results-management' },
     { label: 'Messages', icon: <MessageSquare className="w-5 h-5" />, path: '/dashboard/messages' },
   ],
   imaging: [

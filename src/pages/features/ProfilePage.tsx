@@ -32,6 +32,15 @@ const roleLabels: Record<string, string> = {
   admin: 'Administrator',
 };
 
+const profileTabs = [
+  { id: 'basic', label: 'Basic', icon: <Users className="w-4 h-4" /> },
+  { id: 'contact', label: 'Contact', icon: <Mail className="w-4 h-4" /> },
+  { id: 'security', label: 'Security', icon: <Lock className="w-4 h-4" /> },
+  { id: 'notifications', label: 'Notifications', icon: <Bell className="w-4 h-4" /> },
+  { id: 'privacy', label: 'Privacy', icon: <ShieldCheck className="w-4 h-4" /> },
+  { id: 'account', label: 'Account', icon: <Heart className="w-4 h-4" /> },
+] as const;
+
 const ProfilePage = () => {
   const { user, updateProfile, updateBasicInfo, changePassword, updateNotificationPreferences, updatePrivacySettings, deleteAccount, resendEmailVerification, clearCache } = useAuth();
   const [activeTab, setActiveTab] = useState<'basic' | 'contact' | 'security' | 'notifications' | 'privacy' | 'account'>('basic');
@@ -266,62 +275,134 @@ const ProfilePage = () => {
   };
 
   return (
-    <div className="max-w-4xl space-y-6">
-      <div>
-        <h1 className="text-3xl font-display font-bold text-foreground">Profile Settings</h1>
-        <p className="text-muted-foreground mt-1">Manage your account information and preferences</p>
-      </div>
+    <div className="max-w-6xl space-y-6">
+      <motion.div
+        {...card(0)}
+        className="overflow-hidden rounded-[2rem] border border-slate-200 bg-[radial-gradient(circle_at_top_left,_rgba(14,165,233,0.14),_transparent_28%),linear-gradient(145deg,_#ffffff_0%,_#f8fbff_55%,_#f3faf6_100%)] p-8 shadow-sm"
+      >
+        <div className="grid gap-8 xl:grid-cols-[1.15fr_0.85fr]">
+          <div>
+            <div className="inline-flex items-center gap-2 rounded-full border border-sky-200 bg-white/80 px-4 py-1.5 text-sm font-medium text-sky-700">
+              <ShieldCheck className="h-4 w-4" />
+              Account and verification workspace
+            </div>
+            <h1 className="mt-5 text-3xl font-display font-bold tracking-tight text-foreground">Profile Settings</h1>
+            <p className="mt-3 max-w-2xl text-sm leading-6 text-muted-foreground sm:text-base">
+              Manage your identity, verification status, contact details, security controls, and account preferences from one place.
+            </p>
 
-      {/* Profile Header */}
-      <motion.div {...card(0)} className="bg-gradient-to-r from-primary/10 to-primary/5 rounded-2xl border border-border p-8">
-        <div className="flex items-start gap-6">
-          <div className="w-24 h-24 rounded-2xl bg-gradient-primary flex items-center justify-center text-primary-foreground flex-shrink-0 overflow-hidden">
-            {avatar ? <img src={avatar} alt="Avatar" className="w-full h-full object-cover" /> : roleIcons[user.role] && <div className="text-4xl">{roleIcons[user.role]}</div>}
+            <div className="mt-8 flex flex-col gap-5 sm:flex-row sm:items-start">
+              <div className="flex h-24 w-24 items-center justify-center overflow-hidden rounded-[1.5rem] bg-gradient-primary text-primary-foreground shadow-lg shadow-primary/15">
+                {avatar ? (
+                  <img src={avatar} alt="Avatar" className="h-full w-full object-cover" />
+                ) : (
+                  <div className="text-4xl">{roleIcons[user.role]}</div>
+                )}
+              </div>
+
+              <div className="flex-1">
+                <div className="flex flex-wrap items-center gap-3">
+                  <h2 className="text-2xl font-bold text-foreground">{user.name}</h2>
+                  <div className="inline-flex items-center gap-2 rounded-full bg-primary/10 px-3 py-1.5 text-sm font-medium text-primary">
+                    {roleIcons[user.role]}
+                    {roleLabels[user.role]}
+                  </div>
+                </div>
+                <p className="mt-2 text-sm text-muted-foreground">{user.email}</p>
+                <div className="mt-4 flex flex-wrap gap-3">
+                  <div
+                    className={`inline-flex items-center gap-2 rounded-full px-3 py-1.5 text-sm font-medium ${
+                      professionalVerificationStatus === 'verified'
+                        ? 'bg-success/10 text-success'
+                        : professionalVerificationStatus === 'pending'
+                          ? 'bg-warning/10 text-warning'
+                          : 'bg-destructive/10 text-destructive'
+                    }`}
+                  >
+                    <ShieldCheck className="w-4 h-4" />
+                    {getVerificationStatusLabel(professionalVerificationStatus)}
+                  </div>
+                  <div className={`inline-flex items-center gap-2 rounded-full px-3 py-1.5 text-sm font-medium ${isEmailUnverified ? 'bg-warning/10 text-warning' : 'bg-success/10 text-success'}`}>
+                    <Mail className="w-4 h-4" />
+                    {isEmailUnverified ? 'Email verification pending' : 'Email verified'}
+                  </div>
+                  {user.createdAt ? (
+                    <div className="inline-flex items-center gap-2 rounded-full bg-slate-100 px-3 py-1.5 text-sm text-slate-600">
+                      Member since {new Date(user.createdAt).toLocaleDateString()}
+                    </div>
+                  ) : null}
+                </div>
+              </div>
+            </div>
           </div>
-          <div className="flex-1">
-            <h2 className="text-2xl font-bold text-foreground mb-1">{user.name}</h2>
-            <p className="text-muted-foreground mb-4">{user.email}</p>
-            <div className="flex items-center gap-4">
-              <div className="inline-flex items-center gap-2 px-3 py-1.5 rounded-lg bg-primary/10 text-primary text-sm font-medium">
-                {roleIcons[user.role]}
-                {roleLabels[user.role]}
+
+          <div className="rounded-[1.75rem] border border-slate-200 bg-slate-950 p-6 text-white shadow-xl shadow-slate-950/10">
+            <p className="text-xs font-semibold uppercase tracking-[0.24em] text-slate-400">Status board</p>
+            <div className="mt-5 grid gap-3 sm:grid-cols-2 xl:grid-cols-1">
+              <div className="rounded-2xl border border-white/10 bg-white/5 p-4">
+                <p className="text-xs uppercase tracking-[0.18em] text-slate-400">Verification state</p>
+                <p className="mt-2 text-lg font-semibold text-white">
+                  {getVerificationStatusLabel(professionalVerificationStatus)}
+                </p>
               </div>
-              <div
-                className={`inline-flex items-center gap-2 px-3 py-1.5 rounded-lg text-sm font-medium ${
-                  professionalVerificationStatus === 'verified'
-                    ? 'bg-success/10 text-success'
-                    : professionalVerificationStatus === 'pending'
-                      ? 'bg-warning/10 text-warning'
-                      : 'bg-destructive/10 text-destructive'
-                }`}
-              >
-                <ShieldCheck className="w-4 h-4" />
-                {getVerificationStatusLabel(professionalVerificationStatus)}
+              <div className="rounded-2xl border border-white/10 bg-white/5 p-4">
+                <p className="text-xs uppercase tracking-[0.18em] text-slate-400">Recovery readiness</p>
+                <p className="mt-2 text-sm leading-6 text-slate-300">
+                  {isEmailUnverified
+                    ? 'Verify your email to strengthen account recovery and platform alert delivery.'
+                    : 'Your email is verified and ready for secure recovery flows.'}
+                </p>
               </div>
-              {user.createdAt && <p className="text-xs text-muted-foreground">Member since {new Date(user.createdAt).toLocaleDateString()}</p>}
+              <div className="rounded-2xl border border-white/10 bg-white/5 p-4">
+                <p className="text-xs uppercase tracking-[0.18em] text-slate-400">Current focus</p>
+                <p className="mt-2 text-sm leading-6 text-slate-300">
+                  Use the tabs below to update identity, security, notifications, privacy, or account-level settings.
+                </p>
+              </div>
             </div>
           </div>
         </div>
       </motion.div>
 
-      {/* Tabs */}
-      <div className="flex flex-wrap gap-2 bg-card rounded-xl p-1 border border-border">
-        {(['basic', 'contact', 'security', 'notifications', 'privacy', 'account'] as const).map((tab) => (
-          <button
-            key={tab}
-            onClick={() => setActiveTab(tab)}
-            className={`px-4 py-2 rounded-lg text-sm font-medium transition-all capitalize ${
-              activeTab === tab ? 'bg-primary text-primary-foreground' : 'text-foreground/70 hover:text-foreground'
-            }`}
-          >
-            {tab}
-          </button>
-        ))}
+      <div className="rounded-[1.5rem] border border-border bg-card p-2 shadow-sm">
+        <div className="flex flex-wrap gap-2">
+          {profileTabs.map((tab) => (
+            <button
+              key={tab.id}
+              onClick={() => setActiveTab(tab.id)}
+              className={`inline-flex items-center gap-2 rounded-2xl px-4 py-2.5 text-sm font-medium transition-all ${
+                activeTab === tab.id
+                  ? 'bg-slate-950 text-white shadow'
+                  : 'text-foreground/70 hover:bg-slate-100 hover:text-foreground'
+              }`}
+            >
+              {tab.icon}
+              {tab.label}
+            </button>
+          ))}
+        </div>
       </div>
 
-      {/* Messages */}
-      {error && <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="bg-destructive/10 border border-destructive text-destructive p-4 rounded-lg flex items-start gap-3"><AlertCircle className="w-5 h-5 mt-0.5 flex-shrink-0" /><span className="text-sm">{error}</span></motion.div>}
-      {success && <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="bg-success/10 border border-success text-success p-4 rounded-lg flex items-start gap-3"><Check className="w-5 h-5 mt-0.5 flex-shrink-0" /><span className="text-sm">{success}</span></motion.div>}
+      {error ? (
+        <motion.div
+          initial={{ opacity: 0 }}
+          animate={{ opacity: 1 }}
+          className="flex items-start gap-3 rounded-2xl border border-destructive/20 bg-destructive/10 p-4 text-destructive"
+        >
+          <AlertCircle className="mt-0.5 w-5 h-5 flex-shrink-0" />
+          <span className="text-sm">{error}</span>
+        </motion.div>
+      ) : null}
+      {success ? (
+        <motion.div
+          initial={{ opacity: 0 }}
+          animate={{ opacity: 1 }}
+          className="flex items-start gap-3 rounded-2xl border border-success/20 bg-success/10 p-4 text-success"
+        >
+          <Check className="mt-0.5 w-5 h-5 flex-shrink-0" />
+          <span className="text-sm">{success}</span>
+        </motion.div>
+      ) : null}
 
       {/* Basic Information Tab */}
       {activeTab === 'basic' && (
@@ -457,7 +538,7 @@ const ProfilePage = () => {
                   {showNewPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
                 </button>
               </div>
-              <p className="text-xs text-muted-foreground mt-1">At least 6 characters</p>
+              <p className="text-xs text-muted-foreground mt-1">At least 8 characters with uppercase, lowercase, and a number</p>
             </div>
 
             <div>
