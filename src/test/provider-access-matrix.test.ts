@@ -42,6 +42,15 @@ describe('provider access matrix', () => {
     expect(canAccessFeature('messages', 'pharmacy')).toBe(true);
   });
 
+  it('keeps physiotherapist portal routes accessible', () => {
+    expect(canAccessFeature('appointments', 'physiotherapist')).toBe(true);
+    expect(canAccessFeature('patients', 'physiotherapist')).toBe(true);
+    expect(canAccessFeature('referrals', 'physiotherapist')).toBe(true);
+    expect(canAccessFeature('clinical-notes', 'physiotherapist')).toBe(true);
+    expect(canAccessFeature('messages', 'physiotherapist')).toBe(true);
+    expect(canAccessFeature('pricing-settings', 'physiotherapist')).toBe(true);
+  });
+
   it('does not leak admin-only routes into provider portals', () => {
     expect(canAccessFeature('users', 'doctor')).toBe(false);
     expect(canAccessFeature('users', 'hospital')).toBe(false);

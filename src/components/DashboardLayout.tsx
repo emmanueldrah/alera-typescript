@@ -43,6 +43,16 @@ const roleNavItems: Record<string, { label: string; icon: React.ReactNode; path:
     { label: 'Patient Timeline', icon: <Clock className="w-5 h-5" />, path: '/dashboard/timeline' },
     { label: 'Messages', icon: <MessageSquare className="w-5 h-5" />, path: '/dashboard/messages' },
   ],
+  physiotherapist: [
+    { label: 'Dashboard', icon: <LayoutDashboard className="w-5 h-5" />, path: '/dashboard' },
+    { label: 'Appointments', icon: <Calendar className="w-5 h-5" />, path: '/dashboard/appointments' },
+    { label: 'Patients', icon: <Users className="w-5 h-5" />, path: '/dashboard/patients' },
+    { label: 'Care Plans', icon: <FileText className="w-5 h-5" />, path: '/dashboard/clinical-notes' },
+    { label: 'Referrals', icon: <Activity className="w-5 h-5" />, path: '/dashboard/referrals' },
+    { label: 'Timeline', icon: <Clock className="w-5 h-5" />, path: '/dashboard/timeline' },
+    { label: 'Pricing', icon: <Pill className="w-5 h-5" />, path: '/dashboard/pricing-settings' },
+    { label: 'Messages', icon: <MessageSquare className="w-5 h-5" />, path: '/dashboard/messages' },
+  ],
   hospital: [
     { label: 'Dashboard', icon: <LayoutDashboard className="w-5 h-5" />, path: '/dashboard' },
     { label: 'Patients', icon: <Users className="w-5 h-5" />, path: '/dashboard/patients' },
@@ -99,14 +109,14 @@ const roleNavItems: Record<string, { label: string; icon: React.ReactNode; path:
 
 const roleLabels: Record<string, string> = {
   patient: 'Patient', doctor: 'Doctor', hospital: 'Hospital', laboratory: 'Laboratory',
-  imaging: 'Imaging Center', pharmacy: 'Pharmacy', ambulance: 'Ambulance', admin: 'Admin', super_admin: 'Super Admin',
+  imaging: 'Imaging Center', pharmacy: 'Pharmacy', ambulance: 'Ambulance', physiotherapist: 'Physiotherapist', admin: 'Admin', super_admin: 'Super Admin',
 };
 
 const roleIcons: Record<string, React.ReactNode> = {
   patient: <Users className="w-5 h-5" />, doctor: <Heart className="w-5 h-5" />,
   hospital: <Building2 className="w-5 h-5" />, laboratory: <FlaskConical className="w-5 h-5" />,
   imaging: <ScanLine className="w-5 h-5" />, pharmacy: <Pill className="w-5 h-5" />,
-  ambulance: <Ambulance className="w-5 h-5" />, admin: <ShieldCheck className="w-5 h-5" />, super_admin: <ShieldCheck className="w-5 h-5" />,
+  ambulance: <Ambulance className="w-5 h-5" />, physiotherapist: <Activity className="w-5 h-5" />, admin: <ShieldCheck className="w-5 h-5" />, super_admin: <ShieldCheck className="w-5 h-5" />,
 };
 
 interface DashboardLayoutProps {

@@ -94,6 +94,12 @@ export const getVisibleReferrals = (
     rows = referrals.filter((referral) => referral.fromDoctorId === user.id);
   } else if (role === 'hospital') {
     rows = referrals.filter((referral) => referral.referralType === 'hospital' && referral.destinationProviderId === user.id);
+  } else if (role === 'physiotherapist') {
+    rows = referrals.filter(
+      (referral) =>
+        referral.referralType === 'hospital' &&
+        (referral.destinationProviderId === user.id || referral.destinationProviderRole === 'physiotherapist'),
+    );
   } else if (role === 'patient') {
     rows = referrals.filter((referral) => referral.patientId === user.id);
   } else if (role === 'laboratory' || role === 'imaging' || role === 'pharmacy') {
@@ -152,6 +158,9 @@ export const canAcceptReferral = (referral: Referral, role?: User['role'] | stri
   if (normalized === 'hospital') {
     return referral.referralType === 'hospital';
   }
+  if (normalized === 'physiotherapist') {
+    return referral.referralType === 'hospital' && referral.destinationProviderRole === 'physiotherapist';
+  }
   if (normalized === 'laboratory') return referral.referralType === 'laboratory';
   if (normalized === 'imaging') return referral.referralType === 'imaging';
   if (normalized === 'pharmacy') return referral.referralType === 'pharmacy';
@@ -163,6 +172,9 @@ export const canCompleteReferral = (referral: Referral, role?: User['role'] | st
   const normalized = normalizeUserRole(role) ?? role;
   if (normalized === 'hospital') {
     return referral.referralType === 'hospital';
+  }
+  if (normalized === 'physiotherapist') {
+    return referral.referralType === 'hospital' && referral.destinationProviderRole === 'physiotherapist';
   }
   if (normalized === 'laboratory') return referral.referralType === 'laboratory';
   if (normalized === 'imaging') return referral.referralType === 'imaging';

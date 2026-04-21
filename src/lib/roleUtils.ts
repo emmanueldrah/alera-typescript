@@ -1,6 +1,6 @@
 import type { UserRole } from '@/contexts/AuthContext';
 
-const allowedRoles: UserRole[] = ['patient', 'doctor', 'hospital', 'laboratory', 'imaging', 'pharmacy', 'ambulance', 'cardiologist', 'endocrinologist', 'physiotherapist', 'admin', 'super_admin'];
+const allowedRoles: UserRole[] = ['patient', 'doctor', 'hospital', 'laboratory', 'imaging', 'pharmacy', 'ambulance', 'physiotherapist', 'admin', 'super_admin'];
 
 /**
  * Normalize backend role strings to the frontend UI role strings.
@@ -18,4 +18,3 @@ export const normalizeUserRole = (role: unknown): UserRole | undefined => {
 
   return allowedRoles.includes(mapped as UserRole) ? (mapped as UserRole) : undefined;
 };
-

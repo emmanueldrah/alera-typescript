@@ -11,7 +11,7 @@ let authUser: {
   id: string;
   email: string;
   name: string;
-  role: 'hospital' | 'laboratory' | 'imaging' | 'pharmacy' | 'doctor';
+  role: 'hospital' | 'laboratory' | 'imaging' | 'pharmacy' | 'doctor' | 'physiotherapist';
   isVerified: boolean;
   emailVerified: boolean;
 } | null = null;
@@ -47,6 +47,7 @@ describe('provider portals', () => {
     ['laboratory'],
     ['imaging'],
     ['pharmacy'],
+    ['physiotherapist'],
   ] as const)('shows secure messaging entry for %s portal', (role) => {
     authUser = {
       id: `${role}-1`,
@@ -74,6 +75,7 @@ describe('provider portals', () => {
     expect(canAccessFeature('messages', 'laboratory')).toBe(true);
     expect(canAccessFeature('messages', 'imaging')).toBe(true);
     expect(canAccessFeature('messages', 'pharmacy')).toBe(true);
+    expect(canAccessFeature('messages', 'physiotherapist')).toBe(true);
     expect(canAccessFeature('messages', 'patient')).toBe(true);
     expect(canAccessFeature('messages', 'admin')).toBe(false);
   });

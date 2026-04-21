@@ -501,7 +501,7 @@ export interface Referral {
   fromDoctorName: string;
   destinationProviderId?: string;
   destinationProviderName?: string;
-  destinationProviderRole?: 'hospital' | 'laboratory' | 'imaging' | 'pharmacy';
+  destinationProviderRole?: 'hospital' | 'laboratory' | 'imaging' | 'pharmacy' | 'physiotherapist';
   toDepartmentId: string;
   toDepartment: string;
   reason: string;

@@ -409,6 +409,7 @@ const mapBackendReferral = (r: BackendReferral): Referral => {
       const role = (r.destination_provider_role || '').toLowerCase();
       if (role === 'hospital' || role === 'laboratory' || role === 'imaging') return role;
       if (role === 'pharmacist' || role === 'pharmacy') return 'pharmacy';
+      if (role === 'physiotherapist') return 'physiotherapist';
       return undefined;
     })(),
     toDepartmentId: r.to_department_id || getReferralDepartmentId(r.to_department),

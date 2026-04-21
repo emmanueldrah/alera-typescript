@@ -17,8 +17,6 @@ class UserRole(str, enum.Enum):
     LABORATORY = "laboratory"
     IMAGING = "imaging"
     AMBULANCE = "ambulance"
-    CARDIOLOGIST = "cardiologist"
-    ENDOCRINOLOGIST = "endocrinologist"
     PHYSIOTHERAPIST = "physiotherapist"
 
     def __str__(self) -> str:

@@ -27,16 +27,12 @@ type SignupRole =
   | 'imaging'
   | 'pharmacy'
   | 'ambulance'
-  | 'cardiologist'
-  | 'endocrinologist'
   | 'physiotherapist';
 
 const roles: { value: SignupRole; label: string; icon: React.ReactNode; desc: string }[] = [
   { value: 'patient', label: 'Patient', icon: <User className="w-5 h-5" />, desc: 'Book care, track results, and stay connected' },
   { value: 'doctor', label: 'Doctor', icon: <Heart className="w-5 h-5" />, desc: 'Manage consultations, referrals, and follow-up' },
-  { value: 'cardiologist', label: 'Cardiologist', icon: <Activity className="w-5 h-5" />, desc: 'Monitor heart health and specialist care plans' },
-  { value: 'endocrinologist', label: 'Endocrinologist', icon: <Activity className="w-5 h-5" />, desc: 'Coordinate metabolic and diabetes care' },
-  { value: 'physiotherapist', label: 'Physiotherapist', icon: <Activity className="w-5 h-5" />, desc: 'Manage rehab progress and recovery plans' },
+  { value: 'physiotherapist', label: 'Physiotherapist', icon: <Activity className="w-5 h-5" />, desc: 'Run rehabilitation plans, track mobility goals, and coordinate recovery' },
   { value: 'hospital', label: 'Hospital', icon: <Building2 className="w-5 h-5" />, desc: 'Oversee teams, referrals, and emergency intake' },
   { value: 'laboratory', label: 'Laboratory', icon: <FlaskConical className="w-5 h-5" />, desc: 'Process test queues and publish results' },
   { value: 'imaging', label: 'Imaging Center', icon: <ScanLine className="w-5 h-5" />, desc: 'Coordinate scans and report delivery' },
@@ -51,8 +47,6 @@ const providerRoles = new Set<SignupRole>([
   'imaging',
   'pharmacy',
   'ambulance',
-  'cardiologist',
-  'endocrinologist',
   'physiotherapist',
 ]);
 

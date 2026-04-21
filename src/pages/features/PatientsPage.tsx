@@ -31,11 +31,11 @@ const PatientsPage = () => {
     return patientsList.filter((patient) => patient.name.toLowerCase().includes(normalizedQuery));
   }, [patientsList, search]);
 
-  const canMessagePatient = user?.role === 'doctor';
+  const canMessagePatient = user?.role === 'doctor' || user?.role === 'physiotherapist';
   const canViewHistory =
-    user?.role === 'doctor' || user?.role === 'hospital' || user?.role === 'admin' || user?.role === 'super_admin';
+    user?.role === 'doctor' || user?.role === 'physiotherapist' || user?.role === 'hospital' || user?.role === 'admin' || user?.role === 'super_admin';
 
-  if (user?.role !== 'doctor' && user?.role !== 'admin' && user?.role !== 'hospital') {
+  if (user?.role !== 'doctor' && user?.role !== 'physiotherapist' && user?.role !== 'admin' && user?.role !== 'hospital') {
     return (
       <div className="space-y-6">
         <h1 className="text-2xl font-display font-bold text-foreground">Patients</h1>
@@ -65,7 +65,7 @@ const PatientsPage = () => {
               Patient relationship workspace
             </div>
             <h1 className="mt-5 text-3xl font-bold tracking-tight text-slate-950">
-              {user?.role === 'doctor' ? 'My Patients' : 'Patients'}
+              {user?.role === 'doctor' || user?.role === 'physiotherapist' ? 'My Patients' : 'Patients'}
             </h1>
             <p className="mt-3 max-w-2xl text-sm leading-6 text-slate-600 sm:text-base">
               Review the people currently connected to your workflow, jump into their history, and pick up the next conversation without digging through separate modules.

@@ -9,6 +9,7 @@ import PharmacyDashboard from '@/pages/dashboards/PharmacyDashboard';
 import AmbulanceDashboard from '@/pages/dashboards/AmbulanceDashboard';
 import AdminDashboard from '@/pages/dashboards/AdminDashboard';
 import SuperAdminDashboard from '@/pages/dashboards/SuperAdminDashboard';
+import PhysiotherapistDashboard from '@/pages/dashboards/PhysiotherapistDashboard';
 
 const dashboardMap: Record<string, React.ComponentType> = {
   // Frontend role labels
@@ -19,6 +20,7 @@ const dashboardMap: Record<string, React.ComponentType> = {
   imaging: ImagingDashboard,
   pharmacy: PharmacyDashboard,
   ambulance: AmbulanceDashboard,
+  physiotherapist: PhysiotherapistDashboard,
   admin: AdminDashboard,
   super_admin: SuperAdminDashboard,
   // Backend enum values (may differ from frontend labels)

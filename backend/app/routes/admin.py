@@ -82,8 +82,6 @@ ROLE_ALIASES: dict[str, UserRole] = {
     "laboratory": UserRole.LABORATORY,
     "imaging": UserRole.IMAGING,
     "ambulance": UserRole.AMBULANCE,
-    "cardiologist": UserRole.CARDIOLOGIST,
-    "endocrinologist": UserRole.ENDOCRINOLOGIST,
     "physiotherapist": UserRole.PHYSIOTHERAPIST,
     "admin": UserRole.ADMIN,
     "super_admin": UserRole.SUPER_ADMIN,
