@@ -8,6 +8,7 @@ from urllib.parse import parse_qs, urlparse
 import pytest
 from fastapi import HTTPException
 from fastapi.security import HTTPAuthorizationCredentials
+from fastapi.testclient import TestClient
 from pydantic import ValidationError
 from starlette.datastructures import UploadFile
 
@@ -52,9 +53,11 @@ from app.schemas.additional_features import AppointmentReminderCreate, PatientCo
 from app.utils.access import WORKFORCE_ROLES, normalized_enum_text
 from app.utils.dependencies import get_current_user
 from app.utils.db_types import enum_value_renames
+from app.utils.auth import create_access_token
 from app.utils.time import utcnow
 from database import SessionLocal
 import database
+from main import app
 
 
 ADMIN_EMAIL = "admin@alera.health"
@@ -64,6 +67,10 @@ ADMIN_PASSWORD_HASH = "$argon2id$v=19$m=65536,t=3,p=4$MgbgnJPyvteaE+L8v5cS4g$VBM
 
 def auth_credentials(token: str) -> HTTPAuthorizationCredentials:
     return HTTPAuthorizationCredentials(scheme="Bearer", credentials=token)
+
+
+def issue_access_token_for_user(user: User) -> str:
+    return create_access_token({"sub": str(user.id), "sv": int(user.session_version or 0)})
 
 
 def run(coro):
@@ -268,6 +275,29 @@ def test_super_admin_can_list_and_view_users(db_session):
     assert any(user.id == patient.id for user in users)
     assert fetched.id == patient.id
     assert any(user.id == patient.id for user in accessible)
+
+
+def test_patient_accessible_directory_and_doctors_include_verified_physiotherapists(db_session):
+    patient = seed_user(
+        db_session,
+        email="directory-patient@example.com",
+        role=UserRole.PATIENT,
+        first_name="Directory",
+        last_name="Patient",
+    )
+    physiotherapist = seed_user(
+        db_session,
+        email="physio@example.com",
+        role=UserRole.PHYSIOTHERAPIST,
+        first_name="Physio",
+        last_name="Therapist",
+    )
+
+    accessible = run(list_accessible_users(current_user=patient, db=db_session))
+    doctors = run(list_doctors(current_user=patient, db=db_session))
+
+    assert any(user.id == physiotherapist.id for user in accessible)
+    assert any(user.id == physiotherapist.id for user in doctors)
 
 
 def test_super_admin_can_view_patient_document_collections(db_session):
@@ -487,19 +517,36 @@ def test_logout_revokes_previous_token(db_session):
         db_session,
     ))
 
-    login_result = run(login(LoginRequest(email="logout@example.com", password="password123"), db_session))
-    token = login_result["access_token"]
+    run(login(LoginRequest(email="logout@example.com", password="password123"), db_session))
+    token = issue_access_token_for_user(load_user(db_session, "logout@example.com"))
 
-    current_user = run(get_current_user(auth_credentials(token), db_session))
+    current_user = run(get_current_user(request=None, credentials=auth_credentials(token), db=db_session))
     assert current_user.email == "logout@example.com"
 
     run(logout(current_user=current_user, db=db_session))
 
     with pytest.raises(HTTPException) as exc_info:
-        run(get_current_user(auth_credentials(token), db_session))
+        run(get_current_user(request=None, credentials=auth_credentials(token), db=db_session))
 
     assert exc_info.value.status_code == 401
     assert exc_info.value.detail == "Session expired"
+
+
+def test_login_sets_http_only_cookies_without_returning_raw_tokens():
+    client = TestClient(app)
+
+    response = client.post(
+        "/api/auth/login",
+        json={"email": ADMIN_EMAIL, "password": ADMIN_PASSWORD},
+    )
+
+    assert response.status_code == 200
+    payload = response.json()
+    assert payload["user"]["email"] == ADMIN_EMAIL
+    assert "access_token" not in payload
+    assert "refresh_token" not in payload
+    assert response.cookies.get("access_token")
+    assert response.cookies.get("refresh_token")
 
 
 def test_password_change_revokes_previous_token(db_session):
@@ -515,9 +562,9 @@ def test_password_change_revokes_previous_token(db_session):
         db_session,
     ))
 
-    login_result = run(login(LoginRequest(email="change@example.com", password="password123"), db_session))
-    token = login_result["access_token"]
-    current_user = run(get_current_user(auth_credentials(token), db_session))
+    run(login(LoginRequest(email="change@example.com", password="password123"), db_session))
+    token = issue_access_token_for_user(load_user(db_session, "change@example.com"))
+    current_user = run(get_current_user(request=None, credentials=auth_credentials(token), db=db_session))
 
     run(change_password(
         PasswordChangeRequest(
@@ -530,7 +577,7 @@ def test_password_change_revokes_previous_token(db_session):
     ))
 
     with pytest.raises(HTTPException) as exc_info:
-        run(get_current_user(auth_credentials(token), db_session))
+        run(get_current_user(request=None, credentials=auth_credentials(token), db=db_session))
 
     assert exc_info.value.status_code == 401
 
@@ -538,7 +585,7 @@ def test_password_change_revokes_previous_token(db_session):
         run(login(LoginRequest(email="change@example.com", password="password123"), db_session))
 
     new_login = run(login(LoginRequest(email="change@example.com", password="newpassword123"), db_session))
-    assert new_login["access_token"]
+    assert new_login["user"].email == "change@example.com"
 
 
 def test_admin_deactivation_revokes_current_tokens(db_session):
@@ -554,17 +601,17 @@ def test_admin_deactivation_revokes_current_tokens(db_session):
         db_session,
     ))
 
-    patient_login = run(login(LoginRequest(email="deactivate@example.com", password="password123"), db_session))
-    patient_token = patient_login["access_token"]
-    patient_user = run(get_current_user(auth_credentials(patient_token), db_session))
+    run(login(LoginRequest(email="deactivate@example.com", password="password123"), db_session))
+    patient_token = issue_access_token_for_user(load_user(db_session, "deactivate@example.com"))
+    patient_user = run(get_current_user(request=None, credentials=auth_credentials(patient_token), db=db_session))
 
-    admin_login = run(login(LoginRequest(email=ADMIN_EMAIL, password=ADMIN_PASSWORD), db_session))
-    admin_user = run(get_current_user(auth_credentials(admin_login["access_token"]), db_session))
+    run(login(LoginRequest(email=ADMIN_EMAIL, password=ADMIN_PASSWORD), db_session))
+    admin_user = run(get_current_user(request=None, credentials=auth_credentials(issue_access_token_for_user(load_user(db_session, ADMIN_EMAIL))), db=db_session))
 
     run(deactivate_user(user_id=patient_user.id, current_user=admin_user, db=db_session))
 
     with pytest.raises(HTTPException) as exc_info:
-        run(get_current_user(auth_credentials(patient_token), db_session))
+        run(get_current_user(request=None, credentials=auth_credentials(patient_token), db=db_session))
 
     assert exc_info.value.status_code == 403
     assert exc_info.value.detail == "User account is inactive"
@@ -825,8 +872,8 @@ def test_password_reset_flow_revokes_sessions_and_allows_new_login(db_session, m
         db_session,
     ))
 
-    login_result = run(login(LoginRequest(email="resetme@example.com", password="password123"), db_session))
-    token = login_result["access_token"]
+    run(login(LoginRequest(email="resetme@example.com", password="password123"), db_session))
+    token = issue_access_token_for_user(load_user(db_session, "resetme@example.com"))
 
     request_result = run(request_password_reset(PasswordResetRequest(email="resetme@example.com"), db_session))
     assert "reset link has been sent" in request_result["message"].lower()
@@ -846,7 +893,7 @@ def test_password_reset_flow_revokes_sessions_and_allows_new_login(db_session, m
     assert reset_result["message"] == "Password reset successfully"
 
     with pytest.raises(HTTPException) as exc_info:
-        run(get_current_user(auth_credentials(token), db_session))
+        run(get_current_user(request=None, credentials=auth_credentials(token), db=db_session))
 
     assert exc_info.value.status_code == 401
 
@@ -854,7 +901,7 @@ def test_password_reset_flow_revokes_sessions_and_allows_new_login(db_session, m
         run(login(LoginRequest(email="resetme@example.com", password="password123"), db_session))
 
     new_login = run(login(LoginRequest(email="resetme@example.com", password="newpassword123"), db_session))
-    assert new_login["access_token"]
+    assert new_login["user"].email == "resetme@example.com"
 
 
 def test_imaging_center_can_upload_report_and_multiple_scan_files(db_session, monkeypatch):

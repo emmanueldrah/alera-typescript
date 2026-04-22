@@ -29,6 +29,7 @@
     "lint:fix": "eslint . --fix",
     "test": "node ./node_modules/vitest/vitest.mjs run",
     "test:watch": "vitest",
+    "test:e2e": "playwright test",
     "type-check": "tsc --noEmit"
   },
   "dependencies": {

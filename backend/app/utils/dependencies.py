@@ -1,22 +1,31 @@
 from fastapi import Depends, HTTPException, status, Request
-from fastapi.security import HTTPAuthorizationCredentials
+from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 from sqlalchemy.orm import Session
 from database import get_db
 from app.models.user import User, UserRole
 from app.utils.auth import decode_token, get_user_id_from_payload
 from app.utils.access import require_verified_workforce_member
 
+bearer_scheme = HTTPBearer(auto_error=False)
+
 
 async def get_current_user(
     request: Request,
+    credentials: HTTPAuthorizationCredentials | None = Depends(bearer_scheme),
     db: Session = Depends(get_db)
 ) -> User:
-    """Get current authenticated user from JWT token in cookie"""
+    """Get the current authenticated user from a bearer token or auth cookie."""
     token: str | None = None
-    if isinstance(request, HTTPAuthorizationCredentials):
-        token = request.credentials
+    if credentials is not None:
+        token = credentials.credentials
     else:
-        token = request.cookies.get("access_token")
+        authorization = request.headers.get("Authorization")
+        if authorization:
+            scheme, _, token_value = authorization.partition(" ")
+            if scheme.lower() == "bearer" and token_value:
+                token = token_value.strip()
+        if not token:
+            token = request.cookies.get("access_token")
     if not token:
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,

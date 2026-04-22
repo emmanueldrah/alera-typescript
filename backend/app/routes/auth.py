@@ -5,8 +5,6 @@ from pydantic import BaseModel
 from database import get_db
 from app.schemas import (
     LoginRequest,
-    TokenResponse,
-    AuthResponse,
     UserCreate,
     UserResponse,
     PasswordChangeRequest,
@@ -179,8 +177,6 @@ async def register(
     return {
         "message": "Account created successfully",
         "user": _serialize_user(db_user),
-        "access_token": access_token,
-        "refresh_token": refresh_token,
         "csrf_token": csrf_token,
     }
 
@@ -238,8 +234,6 @@ async def login(
     return {
         "message": "Login successful",
         "user": _serialize_user(user),
-        "access_token": access_token,
-        "refresh_token": refresh_token,
         "csrf_token": csrf_token,
     }
 

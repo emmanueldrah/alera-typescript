@@ -33,10 +33,8 @@ export interface ApiUser {
 }
 
 export interface ApiAuthResponse {
-  access_token: string;
-  refresh_token?: string;
-  token_type?: string;
-  expires_in?: number;
+  message: string;
+  csrf_token: string;
   user: ApiUser;
 }
 
@@ -305,8 +303,8 @@ export const authApi = {
     return response.data;
   },
 
-  refreshToken: async (refreshToken: string) => {
-    const response = await apiClient.post<{ access_token: string; refresh_token?: string; token_type?: string; expires_in?: number }>('/auth/refresh', { refresh_token: refreshToken });
+  refreshToken: async () => {
+    const response = await apiClient.post<{ message: string; csrf_token: string }>('/auth/refresh');
     return response.data;
   },
 

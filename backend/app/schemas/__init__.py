@@ -120,10 +120,8 @@ class LoginRequest(BaseModel):
 
 
 class TokenResponse(BaseModel):
-    access_token: str
-    refresh_token: Optional[str]
-    token_type: str = "bearer"
-    expires_in: int
+    message: str
+    csrf_token: str
 
 
 class AuthResponse(TokenResponse):

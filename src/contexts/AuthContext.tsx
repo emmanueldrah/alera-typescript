@@ -2,7 +2,7 @@ import React, { useState, useCallback, useEffect } from 'react';
 import { clearAleraStorage } from '@/lib/storageKeys';
 import { AuthContext } from './auth-context';
 import { authApi, usersApi, type ApiUser } from '@/lib/apiService';
-import { setTokens, getAccessToken, clearTokens, setGlobalLogoutCallback } from '@/lib/apiClient';
+import { clearTokens, setGlobalLogoutCallback } from '@/lib/apiClient';
 
 export type UserRole =
   | 'patient'

@@ -56,7 +56,7 @@ async def list_doctors(
     """
     role_text = normalized_enum_text(User.role)
     doctors = db.query(User).filter(
-        role_text == UserRole.PROVIDER.value,
+        role_text.in_([UserRole.PROVIDER.value, UserRole.PHYSIOTHERAPIST.value]),
         User.is_active.is_(True),
         User.is_verified.is_(True),
     ).all()
@@ -89,6 +89,7 @@ async def list_accessible_users(
                         UserRole.LABORATORY.value,
                         UserRole.IMAGING.value,
                         UserRole.AMBULANCE.value,
+                        UserRole.PHYSIOTHERAPIST.value,
                     ]
                 ),
             )
