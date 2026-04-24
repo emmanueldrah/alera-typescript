@@ -29,6 +29,7 @@ from app.utils.rate_limit import enforce_rate_limit
 from app.services.email_service import EmailService
 from app.utils.time import utcnow
 from config import settings
+from app.services.audit_service import client_ip_from_request, summarize_device_info, log_action
 import sys
 
 router = APIRouter(prefix="/api/auth", tags=["auth"])
@@ -162,8 +163,6 @@ async def register(
         # Set CSRF token
         set_csrf_token(response, csrf_token)
 
-    from app.routes.audit import log_action
-
     await log_action(
         db=db,
         user_id=db_user.id,
@@ -195,12 +194,40 @@ async def login(
     user = db.query(User).filter(User.email == credentials.email).first()
 
     if not user or not verify_password(credentials.password, user.hashed_password):
+        await log_action(
+            db=db,
+            user_id=user.id if user else None,
+            role=user.role.value if user and hasattr(user.role, "value") else (str(user.role) if user else None),
+            action="auth.login.failed",
+            resource="auth/session",
+            resource_type="auth",
+            status="failed",
+            ip_address=client_ip_from_request(request),
+            user_agent=request.headers.get("user-agent") if request else None,
+            device_info=summarize_device_info(request.headers.get("user-agent")) if request else None,
+            metadata={"email": credentials.email, "reason": "invalid_credentials"},
+            error_message="Invalid email or password",
+        )
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="Invalid email or password"
         )
 
     if not user.is_active:
+        await log_action(
+            db=db,
+            user_id=user.id,
+            role=user.role.value if hasattr(user.role, "value") else str(user.role),
+            action="auth.login.failed",
+            resource="auth/session",
+            resource_type="auth",
+            status="failed",
+            ip_address=client_ip_from_request(request),
+            user_agent=request.headers.get("user-agent") if request else None,
+            device_info=summarize_device_info(request.headers.get("user-agent")) if request else None,
+            metadata={"email": credentials.email, "reason": "inactive_account"},
+            error_message="User account is disabled",
+        )
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
             detail="User account is disabled"
@@ -219,16 +246,20 @@ async def login(
         # Set CSRF token
         set_csrf_token(response, csrf_token)
 
-    from app.routes.audit import log_action
-
     await log_action(
         db=db,
         user_id=user.id,
+        role=user.role.value if hasattr(user.role, "value") else str(user.role),
         action="auth.login",
-        resource_type="user",
+        resource="auth/session",
+        resource_type="auth",
         resource_id=user.id,
         description="Successful login",
         status="success",
+        ip_address=client_ip_from_request(request),
+        user_agent=request.headers.get("user-agent") if request else None,
+        device_info=summarize_device_info(request.headers.get("user-agent")) if request else None,
+        metadata={"event": "login_success"},
     )
     
     return {
@@ -308,8 +339,6 @@ async def reset_password(
         db.rollback()
         raise
 
-    from app.routes.audit import log_action
-
     await log_action(
         db=db,
         user_id=user.id,
@@ -351,8 +380,6 @@ async def verify_email(
     user.email_verification_expires_at = None
     db.commit()
 
-    from app.routes.audit import log_action
-
     await log_action(
         db=db,
         user_id=user.id,
@@ -390,8 +417,6 @@ async def resend_email_verification(
         raise
 
     db.commit()
-
-    from app.routes.audit import log_action
 
     await log_action(
         db=db,
@@ -505,8 +530,6 @@ async def change_password(
     db.commit()
     db.refresh(current_user)
 
-    from app.routes.audit import log_action
-
     await log_action(
         db=db,
         user_id=current_user.id,
@@ -522,6 +545,7 @@ async def change_password(
 
 @router.post("/logout")
 async def logout(
+    request: Request = None,
     current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db),
     response: Response = None,
@@ -535,16 +559,22 @@ async def logout(
         clear_auth_cookies(response)
         clear_csrf_token(response)
 
-    from app.routes.audit import log_action
-
     await log_action(
         db=db,
         user_id=current_user.id,
+        role=current_user.role.value if hasattr(current_user.role, "value") else str(current_user.role),
         action="auth.logout",
-        resource_type="user",
+        resource="auth/session",
+        resource_type="auth",
         resource_id=current_user.id,
         description="Session revoked on logout",
         status="success",
+        ip_address=client_ip_from_request(request),
+        user_agent=request.headers.get("user-agent") if request else None,
+        device_info=summarize_device_info(request.headers.get("user-agent")) if request else None,
+        metadata={
+            "session_duration_seconds": max(0, int((utcnow() - current_user.last_login).total_seconds())) if current_user.last_login else None,
+        },
     )
 
     return {"message": "Logged out successfully"}
@@ -567,8 +597,6 @@ async def delete_account(
     current_user.is_active = False
     current_user.session_version = int(current_user.session_version or 0) + 1
     db.commit()
-
-    from app.routes.audit import log_action
 
     await log_action(
         db=db,

@@ -503,9 +503,12 @@ const toOptionalNumber = (value: string | number | null | undefined): number | n
   return Number.isFinite(parsed) ? parsed : null;
 };
 
+const INITIAL_API_PAGE_SIZE = 100;
+const STRUCTURED_RECORD_PAGE_SIZE = 100;
+
 const loadStructuredPayloads = async <T extends { id?: string }>(recordType: string): Promise<T[]> => {
   try {
-    const response = await recordsApi.listRecords<T>(recordType, { skip: 0, limit: 500 });
+    const response = await recordsApi.listRecords<T>(recordType, { skip: 0, limit: STRUCTURED_RECORD_PAGE_SIZE });
     return getListPayload<StructuredRecordRow<T>>(response).map((record) => {
       const payload = record.payload;
       if (payload && typeof payload === 'object') {
@@ -616,13 +619,13 @@ export const AppDataProvider: React.FC<{ children: React.ReactNode }> = ({ child
         appointmentReminders,
         prescriptionRefillRequests,
       ] = await Promise.all([
-        appointmentsApi.listAppointments(0, 200).catch(() => []),
-        prescriptionsApi.listPrescriptions(0, 200).catch(() => []),
-        allergiesApi.listAllergies({ skip: 0, limit: 200 }).catch(() => []),
-        api.labTests.listLabTests(0, 200).catch(() => []),
-        api.imaging.listImagingScans(0, 200).catch(() => []),
-        referralsApi.listReferrals(0, 200).catch(() => []),
-        ambulanceApi.listRequests(0, 200).catch(() => []),
+        appointmentsApi.listAppointments(0, INITIAL_API_PAGE_SIZE).catch(() => []),
+        prescriptionsApi.listPrescriptions(0, INITIAL_API_PAGE_SIZE).catch(() => []),
+        allergiesApi.listAllergies({ skip: 0, limit: INITIAL_API_PAGE_SIZE }).catch(() => []),
+        api.labTests.listLabTests(0, INITIAL_API_PAGE_SIZE).catch(() => []),
+        api.imaging.listImagingScans(0, INITIAL_API_PAGE_SIZE).catch(() => []),
+        referralsApi.listReferrals(0, INITIAL_API_PAGE_SIZE).catch(() => []),
+        ambulanceApi.listRequests(0, INITIAL_API_PAGE_SIZE).catch(() => []),
         loadStructuredPayloads<VitalSigns>('vital_sign'),
         loadStructuredPayloads<HealthMetric>('health_metric'),
         loadStructuredPayloads<InventoryItem>('inventory_item'),

@@ -1,5 +1,4 @@
 import secrets
-import hashlib
 from typing import Optional
 from fastapi import Request, HTTPException, status
 
@@ -28,8 +27,7 @@ def validate_csrf_token(request: Request, token: Optional[str] = None) -> bool:
     if not cookie_token:
         return False
 
-    # Compare tokens (in production, you might want to hash them)
-    return token == cookie_token
+    return secrets.compare_digest(token, cookie_token)
 
 
 def require_csrf(request: Request) -> None:

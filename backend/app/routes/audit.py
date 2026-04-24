@@ -3,6 +3,7 @@ Audit log and compliance endpoints
 """
 
 from fastapi import APIRouter, Depends, HTTPException, status
+from sqlalchemy import or_, func
 from sqlalchemy.orm import Session
 from datetime import datetime, timedelta
 from typing import Optional
@@ -16,58 +17,11 @@ from app.schemas.additional_features import (
     AuditLogFilter,
     AuditLogListResponse,
 )
-from app.utils.dependencies import get_current_user
+from app.utils.dependencies import get_current_super_admin
 from app.utils.time import utcnow
+from app.services.audit_service import log_action
 
 router = APIRouter(prefix="/api/audit", tags=["audit"])
-
-
-def _normalize_audit_severity(value: str) -> str:
-    normalized = value.strip().lower()
-    if normalized in {"success", "info", "created", "updated"}:
-        return "info"
-    if normalized in {"warning", "warn"}:
-        return "warning"
-    if normalized in {"error", "failed", "failure", "critical"}:
-        return "critical"
-    return "info"
-
-
-async def log_action(
-    db: Session,
-    user_id: Optional[int],
-    action: str,
-    resource_type: Optional[str] = None,
-    resource_id: Optional[int] = None,
-    changes: Optional[str] = None,
-    description: Optional[str] = None,
-    ip_address: Optional[str] = None,
-    user_agent: Optional[str] = None,
-    status: str = "success",
-    error_message: Optional[str] = None,
-):
-    """
-    Helper function to log an action for audit trail
-    This should be called from other endpoints to record actions
-    """
-    try:
-        audit_log = AuditLog(
-            user_id=user_id,
-            action=action,
-            resource_type=resource_type,
-            resource_id=resource_id,
-            old_value=changes,
-            new_value=description,
-            ip_address=ip_address,
-            user_agent=user_agent,
-            reason=error_message,
-            severity=_normalize_audit_severity(status),
-        )
-        db.add(audit_log)
-        db.commit()
-    except Exception as e:
-        db.rollback()
-        print(f"Failed to log audit action: {str(e)}")
 
 
 @router.get("", response_model=AuditLogListResponse)
@@ -75,11 +29,15 @@ async def get_audit_logs(
     skip: int = 0,
     limit: int = 50,
     user_id: Optional[int] = None,
+    role: Optional[str] = None,
     action: Optional[str] = None,
     resource_type: Optional[str] = None,
-    days: int = 30,
+    status_filter: Optional[str] = None,
+    search: Optional[str] = None,
+    start_date: Optional[datetime] = None,
+    end_date: Optional[datetime] = None,
     db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_user),
+    current_user: User = Depends(get_current_super_admin),
 ):
     """
     Get audit logs (admin only)
@@ -91,26 +49,46 @@ async def get_audit_logs(
     - days: Number of days to look back (default: 30, max: 2555 for 7 years)
     """
     
-    if current_user.role.value not in ("admin", "super_admin"):
-        raise HTTPException(status_code=403, detail="Only admins can view audit logs")
-
-    # Clamp request parameters to safe ranges.
-    days = max(1, min(days, 2555))
     skip = max(skip, 0)
-    limit = max(1, min(limit, 100))
-
-    start_date = utcnow() - timedelta(days=days)
+    limit = max(1, min(limit, 200))
     
-    query = db.query(AuditLog).filter(AuditLog.created_at >= start_date)
+    query = db.query(AuditLog)
+
+    if start_date:
+        query = query.filter(AuditLog.created_at >= start_date)
+    if end_date:
+        query = query.filter(AuditLog.created_at <= end_date)
 
     if user_id is not None:
         query = query.filter(AuditLog.user_id == user_id)
+
+    if role:
+        query = query.filter(AuditLog.role == role)
 
     if action:
         query = query.filter(AuditLog.action == action)
 
     if resource_type:
         query = query.filter(AuditLog.resource_type == resource_type)
+
+    if status_filter:
+        query = query.filter(AuditLog.status == status_filter)
+
+    if search:
+        like_term = f"%{search.strip()}%"
+        query = query.filter(
+            or_(
+                AuditLog.action.ilike(like_term),
+                AuditLog.role.ilike(like_term),
+                AuditLog.resource.ilike(like_term),
+                AuditLog.resource_type.ilike(like_term),
+                AuditLog.ip_address.ilike(like_term),
+                AuditLog.device_info.ilike(like_term),
+                AuditLog.new_value.ilike(like_term),
+                AuditLog.reason.ilike(like_term),
+                AuditLog.metadata_json.ilike(like_term),
+            )
+        )
 
     # Order by most recent first
     query = query.order_by(AuditLog.created_at.desc())
@@ -128,7 +106,7 @@ async def get_audit_logs(
 async def export_audit_logs(
     filter_data: AuditLogFilter,
     db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_user),
+    current_user: User = Depends(get_current_super_admin),
 ):
     """
     Export audit logs as CSV
@@ -136,9 +114,6 @@ async def export_audit_logs(
     (Admin only)
     """
     
-    if current_user.role.value not in ("admin", "super_admin"):
-        raise HTTPException(status_code=403, detail="Only admins can export logs")
-
     from fastapi.responses import StreamingResponse
     import csv
     import io
@@ -151,8 +126,30 @@ async def export_audit_logs(
     if filter_data.action:
         query = query.filter(AuditLog.action == filter_data.action)
 
+    if filter_data.role:
+        query = query.filter(AuditLog.role == filter_data.role)
+
     if filter_data.resource_type:
         query = query.filter(AuditLog.resource_type == filter_data.resource_type)
+
+    if filter_data.status:
+        query = query.filter(AuditLog.status == filter_data.status)
+
+    if filter_data.search:
+        like_term = f"%{filter_data.search.strip()}%"
+        query = query.filter(
+            or_(
+                AuditLog.action.ilike(like_term),
+                AuditLog.role.ilike(like_term),
+                AuditLog.resource.ilike(like_term),
+                AuditLog.resource_type.ilike(like_term),
+                AuditLog.ip_address.ilike(like_term),
+                AuditLog.device_info.ilike(like_term),
+                AuditLog.new_value.ilike(like_term),
+                AuditLog.reason.ilike(like_term),
+                AuditLog.metadata_json.ilike(like_term),
+            )
+        )
 
     if filter_data.start_date:
         query = query.filter(AuditLog.created_at >= filter_data.start_date)
@@ -166,7 +163,7 @@ async def export_audit_logs(
     output = io.StringIO()
     writer = csv.DictWriter(output, fieldnames=[
         'id', 'user_id', 'action', 'resource_type', 'resource_id',
-        'description', 'status', 'timestamp', 'ip_address'
+        'role', 'resource', 'description', 'status', 'timestamp', 'ip_address', 'device_info'
     ])
     writer.writeheader()
 
@@ -176,12 +173,15 @@ async def export_audit_logs(
             'id': log_data["id"],
             'user_id': log_data["user_id"],
             'action': log_data["action"],
+            'role': log_data["role"],
+            'resource': log_data["resource"],
             'resource_type': log_data["resource_type"],
             'resource_id': log_data["resource_id"],
             'description': log_data["description"],
             'status': log_data["status"],
             'timestamp': log_data["timestamp"],
             'ip_address': log_data["ip_address"],
+            'device_info': log_data["device_info"],
         })
 
     output.seek(0)
@@ -196,16 +196,13 @@ async def export_audit_logs(
 @router.get("/compliance/data-retention", status_code=status.HTTP_200_OK)
 async def get_data_retention_policy(
     db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_user),
+    current_user: User = Depends(get_current_super_admin),
 ):
     """
     Get data retention policy information
     Shows HIPAA compliance details
     """
     
-    if not current_user.is_admin_or_super():
-        raise HTTPException(status_code=403, detail="Only admins can view compliance info")
-
     # Get oldest log
     oldest_log = db.query(AuditLog).order_by(AuditLog.created_at.asc()).first()
 
@@ -226,12 +223,9 @@ async def get_user_audit_history(
     limit: int = 20,
     days: int = 30,
     db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_user),
+    current_user: User = Depends(get_current_super_admin),
 ):
     """Get audit history for a specific user"""
-    
-    if not current_user.is_admin_or_super():
-        raise HTTPException(status_code=403, detail="Only admins can view audit history")
 
     days = max(1, min(days, 2555))
     skip = max(skip, 0)
@@ -256,20 +250,17 @@ async def get_user_audit_history(
 @router.get("/resource/{resource_type}/{resource_id}/changes", response_model=AuditLogListResponse)
 async def get_resource_changes(
     resource_type: str,
-    resource_id: int,
+    resource_id: str,
     skip: int = 0,
     limit: int = 50,
     db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_user),
+    current_user: User = Depends(get_current_super_admin),
 ):
     """
     Get audit trail for a specific resource
     Shows all changes to a patient, appointment, prescription, etc.
     """
     
-    if not current_user.is_admin_or_super():
-        raise HTTPException(status_code=403, detail="Only admins can view resource changes")
-
     skip = max(skip, 0)
     limit = max(1, min(limit, 100))
 
@@ -291,12 +282,9 @@ async def get_resource_changes(
 async def get_audit_log(
     log_id: int,
     db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_user),
+    current_user: User = Depends(get_current_super_admin),
 ):
     """Get a specific audit log entry (admin only)"""
-    
-    if not current_user.is_admin_or_super():
-        raise HTTPException(status_code=403, detail="Only admins can view audit logs")
 
     audit_log = db.query(AuditLog).filter(
         AuditLog.id == log_id
@@ -306,6 +294,52 @@ async def get_audit_log(
         raise HTTPException(status_code=404, detail="Audit log not found")
 
     return AuditLogResponse(**audit_log.to_dict())
+
+
+@router.get("/summary/overview")
+async def get_audit_summary(
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_super_admin),
+    days: int = 7,
+):
+    days = max(1, min(days, 90))
+    start_date = utcnow() - timedelta(days=days)
+
+    base_query = db.query(AuditLog).filter(AuditLog.created_at >= start_date)
+    total = base_query.count()
+    failed_logins = base_query.filter(AuditLog.action == "auth.login.failed").count()
+    critical = base_query.filter(AuditLog.severity == "critical").count()
+
+    top_actions = (
+        db.query(AuditLog.action, func.count(AuditLog.id))
+        .filter(AuditLog.created_at >= start_date)
+        .group_by(AuditLog.action)
+        .order_by(func.count(AuditLog.id).desc())
+        .limit(10)
+        .all()
+    )
+
+    recent_suspicious = (
+        base_query.filter(
+            or_(
+                AuditLog.action == "auth.login.failed",
+                AuditLog.severity == "critical",
+                AuditLog.status == "failed",
+            )
+        )
+        .order_by(AuditLog.created_at.desc())
+        .limit(20)
+        .all()
+    )
+
+    return {
+        "period_days": days,
+        "total_logs": total,
+        "failed_logins": failed_logins,
+        "critical_events": critical,
+        "top_actions": [{"action": action, "count": count} for action, count in top_actions],
+        "recent_suspicious": [log.to_dict() for log in recent_suspicious],
+    }
 
 
 sys.modules.setdefault("app.routes.audit", sys.modules[__name__])

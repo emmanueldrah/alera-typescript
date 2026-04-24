@@ -162,6 +162,7 @@ REQUIRED_ENV_VARS=(
     "SECRET_KEY"
     "ENCRYPTION_KEY"
     "FRONTEND_URL"
+    "CORS_ORIGINS"
 )
 
 for env_var in "${REQUIRED_ENV_VARS[@]}"; do

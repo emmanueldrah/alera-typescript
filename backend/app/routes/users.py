@@ -67,13 +67,24 @@ async def list_doctors(
 async def list_accessible_users(
     current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db),
+    skip: int = 0,
+    limit: int = 100,
 ):
     """Return the users relevant to the authenticated session."""
 
+    skip = max(skip, 0)
+    limit = min(max(limit, 1), 200)
     role_text = normalized_enum_text(User.role)
 
     if current_user.role in (UserRole.ADMIN, UserRole.SUPER_ADMIN):
-        return db.query(User).filter(User.is_active.is_(True)).all()
+        return (
+            db.query(User)
+            .filter(User.is_active.is_(True))
+            .order_by(User.created_at.desc())
+            .offset(skip)
+            .limit(limit)
+            .all()
+        )
 
     if current_user.role.value == "patient":
         return (
@@ -93,6 +104,9 @@ async def list_accessible_users(
                     ]
                 ),
             )
+            .order_by(User.created_at.desc())
+            .offset(skip)
+            .limit(limit)
             .all()
         )
 
@@ -118,7 +132,7 @@ async def list_accessible_users(
                 referral_destinations_filter,
             )
         )
-        return query.all()
+        return query.order_by(User.created_at.desc()).offset(skip).limit(limit).all()
 
     if is_workforce_role(current_user.role):
         return (
@@ -133,6 +147,9 @@ async def list_accessible_users(
                     ),
                 ),
             )
+            .order_by(User.created_at.desc())
+            .offset(skip)
+            .limit(limit)
             .all()
         )
 

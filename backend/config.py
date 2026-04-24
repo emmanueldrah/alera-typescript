@@ -3,6 +3,7 @@ from pydantic import field_validator, Field, model_validator
 from typing import List
 import sys
 import os
+import json
 
 # Set default environment
 os.environ.setdefault('ENVIRONMENT', 'development')
@@ -31,8 +32,13 @@ class Settings(BaseSettings):
     def set_cookie_secure(cls, value):
         if isinstance(value, bool):
             return value
-        # In development, allow non-secure cookies for localhost
-        return cls().ENVIRONMENT in ["production", "staging"]
+        if isinstance(value, str):
+            normalized = value.strip().lower()
+            if normalized in {"1", "true", "yes", "on"}:
+                return True
+            if normalized in {"0", "false", "no", "off"}:
+                return False
+        return os.environ.get("ENVIRONMENT", "development").strip().lower() in {"production", "staging"}
 
     JWT_EXPIRE_HOURS: int = 24
 
@@ -84,10 +90,29 @@ class Settings(BaseSettings):
     AUDIT_LOG_RETENTION_DAYS: int = 2555
 
     model_config = SettingsConfigDict(
-        env_file=".env",
+        env_file=(".env", ".env.local", "backend/.env"),
         case_sensitive=True,
         extra="allow",  # Allow extra fields from environment variables
     )
+
+    @field_validator("CORS_ORIGINS", mode="before")
+    @classmethod
+    def parse_cors_origins(cls, value):
+        if isinstance(value, list):
+            return value
+        if value is None:
+            return []
+        if isinstance(value, str):
+            normalized = value.strip()
+            if not normalized:
+                return []
+            if normalized.startswith("["):
+                parsed = json.loads(normalized)
+                if not isinstance(parsed, list):
+                    raise ValueError("CORS_ORIGINS JSON must be an array of origins")
+                return [str(origin).strip() for origin in parsed if str(origin).strip()]
+            return [origin.strip() for origin in normalized.split(",") if origin.strip()]
+        raise ValueError("CORS_ORIGINS must be a list or comma-separated string")
 
     @field_validator("DEBUG", mode="before")
     @classmethod
@@ -151,7 +176,7 @@ class Settings(BaseSettings):
     def validate_frontend_url(cls, value: str):
         if not value:
             raise ValueError("FRONTEND_URL is required")
-        return value
+        return value.rstrip("/")
 
     @classmethod
     def _is_placeholder_secret(cls, value: str) -> bool:

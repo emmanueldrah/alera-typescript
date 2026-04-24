@@ -1,21 +1,7 @@
 import axios, { AxiosInstance, AxiosError } from 'axios';
 import type { InternalAxiosRequestConfig } from 'axios';
-
-const resolveApiBaseUrl = () => {
-  if (import.meta.env.PROD) {
-    return '/api';
-  }
-
-  const configuredUrl = import.meta.env.VITE_API_URL?.trim()
-    || import.meta.env.VITE_API_BASE_URL?.trim();
-  if (configuredUrl) {
-    return configuredUrl.replace(/\/+$/, '');
-  }
-
-  return '/api';
-};
-
-const API_BASE_URL = resolveApiBaseUrl();
+import { frontendEnv } from '@/config/env';
+const API_BASE_URL = frontendEnv.apiBaseUrl;
 
 const getCsrfTokenFromCookie = (): string | null => {
   if (typeof document === 'undefined') return null;
@@ -29,7 +15,7 @@ const getCsrfTokenFromCookie = (): string | null => {
 // Create axios instance
 export const apiClient: AxiosInstance = axios.create({
   baseURL: API_BASE_URL,
-  timeout: 10000,
+  timeout: frontendEnv.apiTimeoutMs,
   withCredentials: true,
   headers: {
     'Content-Type': 'application/json',

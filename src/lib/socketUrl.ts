@@ -1,3 +1,5 @@
+import { frontendEnv } from '@/config/env';
+
 const toWebSocketBase = (value: string) => {
   if (value.startsWith('wss://') || value.startsWith('ws://')) {
     return value;
@@ -21,9 +23,7 @@ const toWebSocketBase = (value: string) => {
 
 export const resolveSocketBaseUrl = (configuredApiUrl?: string | null) => {
   const rawBaseUrl = configuredApiUrl?.trim()
-    || import.meta.env.VITE_API_URL?.trim()
-    || import.meta.env.VITE_API_BASE_URL?.trim()
-    || '/api';
+    || frontendEnv.apiBaseUrl;
 
   return toWebSocketBase(rawBaseUrl.replace(/\/+$/, ''));
 };

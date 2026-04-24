@@ -2,6 +2,7 @@ from pydantic import BaseModel, EmailStr, Field, model_validator, field_validato
 from datetime import datetime
 from typing import Optional, List, Literal
 from enum import Enum
+from app.utils.auth import validate_password_strength
 
 
 class UserRole(str, Enum):
@@ -133,6 +134,8 @@ class PasswordChangeRequest(BaseModel):
     new_password: str = Field(..., min_length=8)
     confirm_password: str
 
+    _validate_new_password = field_validator("new_password")(validate_password_strength)
+
 
 class PasswordResetRequest(BaseModel):
     email: EmailStr
@@ -142,6 +145,8 @@ class PasswordResetConfirmRequest(BaseModel):
     token: str
     new_password: str = Field(..., min_length=8)
     confirm_password: str
+
+    _validate_new_password = field_validator("new_password")(validate_password_strength)
 
 
 class EmailVerificationConfirmRequest(BaseModel):

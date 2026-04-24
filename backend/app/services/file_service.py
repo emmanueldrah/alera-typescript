@@ -31,6 +31,23 @@ ALLOWED_EXTENSIONS = {
     ".bmp",
     ".zip",
 }
+ALLOWED_CONTENT_TYPES = {
+    ".pdf": {"application/pdf"},
+    ".doc": {"application/msword", "application/octet-stream"},
+    ".docx": {"application/vnd.openxmlformats-officedocument.wordprocessingml.document", "application/zip", "application/octet-stream"},
+    ".jpg": {"image/jpeg"},
+    ".jpeg": {"image/jpeg"},
+    ".png": {"image/png"},
+    ".txt": {"text/plain", "application/octet-stream"},
+    ".xls": {"application/vnd.ms-excel", "application/octet-stream"},
+    ".xlsx": {"application/vnd.openxmlformats-officedocument.spreadsheetml.sheet", "application/zip", "application/octet-stream"},
+    ".dcm": {"application/dicom", "application/octet-stream"},
+    ".dicom": {"application/dicom", "application/octet-stream"},
+    ".tif": {"image/tiff", "application/octet-stream"},
+    ".tiff": {"image/tiff", "application/octet-stream"},
+    ".bmp": {"image/bmp", "application/octet-stream"},
+    ".zip": {"application/zip", "application/x-zip-compressed", "multipart/x-zip", "application/octet-stream"},
+}
 MAX_FILE_SIZE = 25 * 1024 * 1024  # 25 MB
 
 # Upload directory cache
@@ -59,6 +76,23 @@ def get_upload_dir():
         _UPLOAD_DIR_CACHE = Path("/tmp/alera_uploads")
     
     return _UPLOAD_DIR_CACHE
+
+
+def _safe_subfolder_path(subfolder: str) -> Path:
+    parts = [part for part in Path(subfolder).parts if part not in {"", ".", ".."}]
+    return Path(*parts) if parts else Path("documents")
+
+
+def _matches_expected_signature(file_ext: str, contents: bytes) -> bool:
+    if file_ext == ".pdf":
+        return contents.startswith(b"%PDF-")
+    if file_ext in {".jpg", ".jpeg"}:
+        return contents.startswith(b"\xff\xd8\xff")
+    if file_ext == ".png":
+        return contents.startswith(b"\x89PNG\r\n\x1a\n")
+    if file_ext == ".zip":
+        return contents.startswith(b"PK\x03\x04") or contents.startswith(b"PK\x05\x06") or contents.startswith(b"PK\x07\x08")
+    return True
 
 
 class FileStorageService:
@@ -93,6 +127,11 @@ class FileStorageService:
             allowed = ", ".join(ALLOWED_EXTENSIONS)
             return False, f"File type not allowed. Allowed types: {allowed}"
 
+        content_type = (file.content_type or "application/octet-stream").lower()
+        allowed_types = ALLOWED_CONTENT_TYPES.get(file_ext, {"application/octet-stream"})
+        if content_type not in allowed_types:
+            return False, "File content type does not match the allowed type for this extension"
+
         # Check file size (we'll verify actual size during upload)
         return True, "Valid"
 
@@ -126,7 +165,7 @@ class FileStorageService:
         FileStorageService.ensure_upload_directory()
 
         # Create subfolder
-        save_dir = get_upload_dir() / subfolder
+        save_dir = get_upload_dir() / _safe_subfolder_path(subfolder)
         try:
             save_dir.mkdir(parents=True, exist_ok=True)
         except Exception:
@@ -142,11 +181,15 @@ class FileStorageService:
         # Check file size while reading
         try:
             contents = await file.read()
+            if not contents:
+                raise HTTPException(status_code=400, detail="Uploaded file is empty")
             if len(contents) > MAX_FILE_SIZE:
                 raise HTTPException(
                     status_code=413,
                     detail=f"File too large. Max size: 25 MB"
                 )
+            if not _matches_expected_signature(file_ext, contents):
+                raise HTTPException(status_code=400, detail="Uploaded file content does not match the declared file type")
 
             # Write file
             with open(file_path, "wb") as f:
@@ -173,7 +216,7 @@ class FileStorageService:
                     file_path.unlink()
             except Exception:
                 pass
-            raise HTTPException(status_code=500, detail=f"Failed to save file: {str(e)}")
+            raise HTTPException(status_code=500, detail="Failed to save file")
 
     @staticmethod
     def get_file_path(file_id: str, subfolder: str = "documents") -> Optional[Path]:
@@ -181,7 +224,7 @@ class FileStorageService:
         if not file_id or not isinstance(file_id, str):
             return None
         
-        save_dir = get_upload_dir() / subfolder
+        save_dir = get_upload_dir() / _safe_subfolder_path(subfolder)
         
         # Find file with this ID (could be any extension)
         try:

@@ -130,7 +130,7 @@ async def upload_document(
         db.rollback()
         raise HTTPException(
             status_code=500,
-            detail=f"Failed to upload document: {str(e)}"
+            detail="Failed to upload document"
         )
 
 
@@ -347,7 +347,11 @@ async def download_document(
     return FileResponse(
         path=file_path,
         filename=document.filename,
-        media_type=document.mime_type
+        media_type=document.mime_type,
+        headers={
+            "Cache-Control": "no-store",
+            "X-Content-Type-Options": "nosniff",
+        },
     )
 
 

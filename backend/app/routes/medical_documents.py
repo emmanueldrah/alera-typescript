@@ -80,4 +80,12 @@ async def download_medical_document(
     file_path = file_path_for_medical_document(document)
     if file_path is None:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Stored file not found")
-    return FileResponse(file_path, filename=document.filename, media_type=document.mime_type)
+    return FileResponse(
+        file_path,
+        filename=document.filename,
+        media_type=document.mime_type,
+        headers={
+            "Cache-Control": "no-store",
+            "X-Content-Type-Options": "nosniff",
+        },
+    )

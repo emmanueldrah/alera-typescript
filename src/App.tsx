@@ -12,6 +12,7 @@ import { useAuth } from "@/contexts/useAuth";
 import ProtectedRoute from "@/components/ProtectedRoute";
 import ErrorBoundary from "./components/ErrorBoundary";
 import RouteLoader from "./components/RouteLoader";
+import { featureRouteKeys } from "@/app/featureRegistry";
 
 const MainLayout = lazy(() => import("./components/MainLayout"));
 const LandingHome = lazy(() => import("./pages/Landing/Home"));
@@ -58,17 +59,6 @@ const AuthRedirect = ({ children }: { children: React.ReactNode }) => {
   return <>{children}</>;
 };
 
-const featureRoutes = [
-  'appointments', 'prescriptions', 'lab-results', 'lab-referrals', 'test-requests', 'lab-results-management',
-  'imaging', 'imaging-referrals', 'scan-requests', 'ambulance', 'requests',
-  'timeline', 'inventory', 'vehicles', 'users', 'verifications', 'analytics',
-  'patients', 'doctors', 'referrals', 'pharmacy-referrals', 'results', 'messages', 'profile',
-  'health-metrics', 'notifications', 'appointment-reminders', 'smart-appointment-reminders',
-  'allergies', 'prescription-refills', 'medical-history', 'consent',
-  'clinical-notes', 'problem-list', 'medication-adherence',
-  'pricing-settings', 'billing', 'admin-billing', 'audit', 'admin/create',
-];
-
 const App = () => {
   try {
     return (
@@ -101,7 +91,7 @@ const App = () => {
                         <Route path="/reset-password" element={<ResetPassword />} />
                         <Route path="/verify-email" element={<VerifyEmail />} />
                         <Route path="/dashboard" element={<ProtectedRoute><DashboardHome /></ProtectedRoute>} />
-                        {featureRoutes.map(page => (
+                        {featureRouteKeys.map(page => (
                           <Route key={page} path={`/dashboard/${page}`} element={<ProtectedRoute><FeatureWrapper page={page} /></ProtectedRoute>} />
                         ))}
                         <Route path="*" element={<NotFound />} />

@@ -56,6 +56,8 @@ const isApiUser = (data: unknown): data is ApiUser => {
   return typeof data === 'object' && data !== null && 'id' in data && 'email' in data;
 };
 
+const ACCESSIBLE_USERS_PAGE_SIZE = 100;
+
 type BackendRole = ApiUser['role'];
 
 // Map backend user roles to frontend format
@@ -135,7 +137,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
   const loadAccessibleUsers = useCallback(async () => {
     try {
-      const response = await usersApi.getAccessibleUsers();
+      const response = await usersApi.getAccessibleUsers(0, ACCESSIBLE_USERS_PAGE_SIZE);
       const mapped = Array.isArray(response) ? response.filter(isApiUser).map(mapBackendUser) : [];
       setUsers(mapped);
       return mapped;

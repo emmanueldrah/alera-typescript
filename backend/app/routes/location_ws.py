@@ -1,4 +1,4 @@
-from fastapi import APIRouter, WebSocket, WebSocketDisconnect, Query, Depends, Cookie
+from fastapi import APIRouter, WebSocket, WebSocketDisconnect, Depends, Cookie
 from typing import Optional
 from sqlalchemy.orm import Session
 from database import get_db
@@ -31,25 +31,22 @@ def _can_track_request(user: User, db_request: AmbulanceRequest) -> bool:
 async def location_websocket(
     websocket: WebSocket,
     request_id: str,
-    token: Optional[str] = Query(None),
     access_token: Optional[str] = Cookie(None),
     db: Session = Depends(get_db)
 ):
     """
     WebSocket endpoint for live location tracking.
-    token: Optional JWT access token passed as a query parameter.
-    access_token: Optional JWT access token passed as a cookie.
+    access_token: JWT access token passed as a cookie.
     request_id: The ID of the ambulance request being tracked.
     """
     try:
         # 1. Authenticate user
-        actual_token = token or access_token
-        if not actual_token:
-            logger.warning("WebSocket connection attempt without token")
+        if not access_token:
+            logger.warning("WebSocket connection attempt without cookie auth")
             await websocket.close(code=4001) # Missing token
             return
 
-        user_id = get_user_id_from_token(actual_token)
+        user_id = get_user_id_from_token(access_token)
         user = db.query(User).filter(User.id == user_id).first()
         
         if not user:

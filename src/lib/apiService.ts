@@ -244,6 +244,48 @@ export interface AdminUserRow {
   last_login?: string | null;
 }
 
+export interface AuditLogEntry {
+  id: number;
+  user_id?: number | null;
+  role?: string | null;
+  action: string;
+  resource?: string | null;
+  resource_type?: string | null;
+  resource_id?: string | null;
+  old_value?: string | null;
+  new_value?: string | null;
+  changes?: string | null;
+  description?: string | null;
+  ip_address?: string | null;
+  user_agent?: string | null;
+  device_info?: string | null;
+  metadata?: Record<string, unknown>;
+  reason?: string | null;
+  severity: 'info' | 'warning' | 'critical';
+  status?: string | null;
+  error_message?: string | null;
+  request_id?: string | null;
+  request_method?: string | null;
+  request_path?: string | null;
+  duration_ms?: number | null;
+  timestamp: string;
+  created_at?: string | null;
+}
+
+export interface AuditLogListApiResponse {
+  total: number;
+  items: AuditLogEntry[];
+}
+
+export interface AuditSummaryApiResponse {
+  period_days: number;
+  total_logs: number;
+  failed_logins: number;
+  critical_events: number;
+  top_actions: Array<{ action: string; count: number }>;
+  recent_suspicious: AuditLogEntry[];
+}
+
 // ============================================================================
 // AUTH ENDPOINTS
 // ============================================================================
@@ -401,8 +443,8 @@ export const usersApi = {
     return response.data;
   },
 
-  getAccessibleUsers: async () => {
-    const response = await apiClient.get<ApiUser[]>('/users/accessible');
+  getAccessibleUsers: async (skip: number = 0, limit: number = 100) => {
+    const response = await apiClient.get<ApiUser[]>('/users/accessible', { params: { skip, limit } });
     return response.data;
   },
 };
@@ -986,6 +1028,48 @@ export const adminApi = {
   },
 };
 
+export const auditApi = {
+  getLogs: async (params?: {
+    skip?: number;
+    limit?: number;
+    user_id?: number;
+    role?: string;
+    action?: string;
+    resource_type?: string;
+    status_filter?: string;
+    search?: string;
+    start_date?: string;
+    end_date?: string;
+  }) => {
+    const response = await apiClient.get<AuditLogListApiResponse>('/audit', { params });
+    return response.data;
+  },
+
+  getSummary: async (days: number = 7) => {
+    const response = await apiClient.get<AuditSummaryApiResponse>('/audit/summary/overview', { params: { days } });
+    return response.data;
+  },
+
+  getUserHistory: async (userId: number, params?: { skip?: number; limit?: number; days?: number }) => {
+    const response = await apiClient.get<AuditLogListApiResponse>(`/audit/user/${userId}/history`, { params });
+    return response.data;
+  },
+
+  exportLogs: async (body: {
+    user_id?: number;
+    role?: string;
+    action?: string;
+    resource_type?: string;
+    status?: string;
+    search?: string;
+    start_date?: string;
+    end_date?: string;
+  }) => {
+    const response = await apiClient.post('/audit/export', body, { responseType: 'blob' });
+    return response.data as Blob;
+  },
+};
+
 // ============================================================================
 // LAB TEST ENDPOINTS
 // ============================================================================
@@ -1237,6 +1321,7 @@ export const api = {
   videoCalls: videoCallsApi,
   messaging: messagingApi,
   admin: adminApi,
+  audit: auditApi,
   labTests: labTestsApi,
   imaging: imagingApi,
   referrals: referralsApi,

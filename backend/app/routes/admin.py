@@ -1,4 +1,5 @@
 from fastapi import APIRouter, Depends, HTTPException, status, Body
+from sqlalchemy import func
 from sqlalchemy.orm import Session
 from database import get_db
 from app.models import (
@@ -562,18 +563,26 @@ async def get_appointment_analytics(
     """Get appointment analytics for last N days"""
 
     start_date = utcnow() - timedelta(days=days)
-    appointments = db.query(Appointment).filter(Appointment.created_at >= start_date).all()
+    aggregates = (
+        db.query(Appointment.status, func.count(Appointment.id))
+        .filter(Appointment.created_at >= start_date)
+        .group_by(Appointment.status)
+        .all()
+    )
 
+    total = 0
     status_counts = {}
-    for appt in appointments:
-        s = appt.status
-        status_counts[s] = status_counts.get(s, 0) + 1
+    for status_value, count in aggregates:
+        normalized_status = status_value.value if hasattr(status_value, "value") else str(status_value)
+        numeric_count = int(count or 0)
+        status_counts[normalized_status] = numeric_count
+        total += numeric_count
 
     return {
         "period_days": days,
-        "total": len(appointments),
+        "total": total,
         "by_status": status_counts,
-        "average_per_day": len(appointments) / days if days > 0 else 0
+        "average_per_day": total / days if days > 0 else 0
     }
 
 
@@ -586,16 +595,24 @@ async def get_user_analytics(
     """Get user signup analytics"""
 
     start_date = utcnow() - timedelta(days=days)
-    new_users = db.query(User).filter(User.created_at >= start_date).all()
+    aggregates = (
+        db.query(User.role, func.count(User.id))
+        .filter(User.created_at >= start_date)
+        .group_by(User.role)
+        .all()
+    )
 
+    total = 0
     users_by_role = {}
-    for user in new_users:
-        r = user.role.value
-        users_by_role[r] = users_by_role.get(r, 0) + 1
+    for role_value, count in aggregates:
+        normalized_role = role_value.value if hasattr(role_value, "value") else str(role_value)
+        numeric_count = int(count or 0)
+        users_by_role[normalized_role] = numeric_count
+        total += numeric_count
 
     return {
         "period_days": days,
-        "new_users": len(new_users),
+        "new_users": total,
         "by_role": users_by_role
     }
 

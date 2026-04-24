@@ -1,4 +1,4 @@
-from fastapi import APIRouter, Depends, HTTPException, WebSocket, WebSocketDisconnect, status, Query, Cookie
+from fastapi import APIRouter, Depends, HTTPException, WebSocket, WebSocketDisconnect, status, Cookie
 from sqlalchemy.orm import Session
 from typing import Optional
 from database import get_db
@@ -398,17 +398,15 @@ async def delete_message(
 @router.websocket("/ws")
 async def telemedicine_websocket(
     websocket: WebSocket,
-    token: Optional[str] = Query(None),
     access_token: Optional[str] = Cookie(None),
     db: Session = Depends(get_db),
 ):
-    actual_token = token or access_token
-    if not actual_token:
+    if not access_token:
         await websocket.close(code=4001)
         return
 
     try:
-        user_id = get_user_id_from_token(actual_token)
+        user_id = get_user_id_from_token(access_token)
     except HTTPException:
         await websocket.close(code=4003)
         return

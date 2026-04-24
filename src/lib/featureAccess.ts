@@ -40,7 +40,7 @@ export const featureAccessMap: Record<string, UserRole[]> = {
   'pricing-settings': ['doctor', 'physiotherapist'],
   billing: ['patient'],
   'admin-billing': ['admin', 'super_admin'],
-  audit: ['admin', 'super_admin'],
+  audit: ['super_admin'],
   'admin/create': ['super_admin'],
 };
 

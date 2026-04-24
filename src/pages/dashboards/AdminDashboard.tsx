@@ -260,15 +260,6 @@ const AdminDashboard = () => {
                 <Activity className="w-4 h-4 text-muted-foreground group-hover:text-destructive" />
               </Link>
             )}
-            <Link to="/dashboard/audit" className="flex items-center justify-between p-3 rounded-xl hover:bg-secondary transition-colors border border-border/50 group">
-              <div className="flex items-center gap-3 text-sm font-medium">
-                <div className="w-8 h-8 rounded-lg bg-warning/10 flex items-center justify-center text-warning">
-                  <FileText className="w-4 h-4" />
-                </div>
-                Audit Logs
-              </div>
-              <Activity className="w-4 h-4 text-muted-foreground group-hover:text-warning" />
-            </Link>
             <button onClick={generateReport} className="w-full flex items-center justify-between p-3 rounded-xl hover:bg-secondary transition-colors border border-border/50 group text-left">
               <div className="flex items-center gap-3 text-sm font-medium">
                 <div className="w-8 h-8 rounded-lg bg-info/10 flex items-center justify-center text-info">

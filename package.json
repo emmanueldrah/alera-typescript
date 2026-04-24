@@ -23,6 +23,7 @@
   "scripts": {
     "dev": "vite",
     "build": "vite build",
+    "build:prod": "vite build --mode production",
     "build:dev": "vite build --mode development",
     "preview": "vite preview",
     "lint": "eslint .",
@@ -30,7 +31,8 @@
     "test": "node ./node_modules/vitest/vitest.mjs run",
     "test:watch": "vitest",
     "test:e2e": "playwright test",
-    "type-check": "tsc --noEmit"
+    "type-check": "tsc --noEmit",
+    "verify:deployment": "bash scripts/verify-deployment.sh"
   },
   "dependencies": {
     "@hookform/resolvers": "^3.10.0",

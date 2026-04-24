@@ -339,9 +339,43 @@ def backfill_patient_canonical_records(db: Session, patient_id: int) -> Backfill
         if record is not None:
             result.created_or_updated += 1
 
+    def _users_by_id(ids: set[int]) -> dict[int, User]:
+        if not ids:
+            return {}
+        return {
+            user.id: user
+            for user in db.query(User).filter(User.id.in_(ids)).all()
+        }
+
     appointments = db.query(Appointment).filter(Appointment.patient_id == patient_id).all()
+    prescriptions = db.query(Prescription).filter(Prescription.patient_id == patient_id).all()
+    lab_tests = db.query(LabTest).filter(LabTest.patient_id == patient_id).all()
+    imaging_scans = db.query(ImagingScan).filter(ImagingScan.patient_id == patient_id).all()
+    structured_records = db.query(StructuredRecord).filter(StructuredRecord.patient_id == patient_id).all()
+    patient_documents = db.query(PatientDocument).filter(PatientDocument.patient_id == patient_id).all()
+
+    provider_ids = {
+        appointment.provider_id for appointment in appointments if appointment.provider_id is not None
+    }
+    provider_ids |= {
+        prescription.provider_id for prescription in prescriptions if prescription.provider_id is not None
+    }
+    provider_ids |= {
+        test.ordered_by for test in lab_tests if test.ordered_by is not None
+    }
+    provider_ids |= {
+        scan.ordered_by for scan in imaging_scans if scan.ordered_by is not None
+    }
+    provider_ids |= {
+        structured.provider_id for structured in structured_records if structured.provider_id is not None
+    }
+    provider_ids |= {
+        patient_document.uploaded_by for patient_document in patient_documents if patient_document.uploaded_by is not None
+    }
+    users_by_id = _users_by_id(provider_ids)
+
     for appointment in appointments:
-        provider = db.query(User).filter(User.id == appointment.provider_id).first()
+        provider = users_by_id.get(appointment.provider_id)
         apply(
             upsert_medical_record(
                 db,
@@ -408,9 +442,8 @@ def backfill_patient_canonical_records(db: Session, patient_id: int) -> Backfill
             )
         )
 
-    prescriptions = db.query(Prescription).filter(Prescription.patient_id == patient_id).all()
     for prescription in prescriptions:
-        provider = db.query(User).filter(User.id == prescription.provider_id).first()
+        provider = users_by_id.get(prescription.provider_id)
         apply(
             upsert_medical_record(
                 db,
@@ -435,9 +468,8 @@ def backfill_patient_canonical_records(db: Session, patient_id: int) -> Backfill
             )
         )
 
-    lab_tests = db.query(LabTest).filter(LabTest.patient_id == patient_id).all()
     for test in lab_tests:
-        provider = db.query(User).filter(User.id == test.ordered_by).first()
+        provider = users_by_id.get(test.ordered_by)
         apply(
             upsert_medical_record(
                 db,
@@ -454,9 +486,8 @@ def backfill_patient_canonical_records(db: Session, patient_id: int) -> Backfill
             )
         )
 
-    imaging_scans = db.query(ImagingScan).filter(ImagingScan.patient_id == patient_id).all()
     for scan in imaging_scans:
-        provider = db.query(User).filter(User.id == scan.ordered_by).first()
+        provider = users_by_id.get(scan.ordered_by)
         record = upsert_medical_record(
             db,
             patient_id=patient_id,
@@ -498,9 +529,8 @@ def backfill_patient_canonical_records(db: Session, patient_id: int) -> Backfill
                 )
                 db.add(document)
 
-    structured_records = db.query(StructuredRecord).filter(StructuredRecord.patient_id == patient_id).all()
     for structured in structured_records:
-        provider = db.query(User).filter(User.id == structured.provider_id).first() if structured.provider_id else None
+        provider = users_by_id.get(structured.provider_id) if structured.provider_id else None
         apply(
             upsert_medical_record(
                 db,
@@ -517,12 +547,11 @@ def backfill_patient_canonical_records(db: Session, patient_id: int) -> Backfill
             )
         )
 
-    patient_documents = db.query(PatientDocument).filter(PatientDocument.patient_id == patient_id).all()
     for patient_document in patient_documents:
         record = upsert_medical_record(
             db,
             patient_id=patient_id,
-            provider=db.query(User).filter(User.id == patient_document.uploaded_by).first() if patient_document.uploaded_by else None,
+            provider=users_by_id.get(patient_document.uploaded_by) if patient_document.uploaded_by else None,
             record_type="external_document" if patient_document.file_type.value == "other" else patient_document.file_type.value,
             category="document",
             title=patient_document.filename,

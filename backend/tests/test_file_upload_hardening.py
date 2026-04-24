@@ -33,7 +33,7 @@ def test_save_file_rejects_oversized_uploads_with_413():
 
 def test_save_file_sanitizes_original_filename_metadata():
     upload = UploadFile(
-        file=BytesIO(b"ok"),
+        file=BytesIO(b"%PDF-1.4\nok"),
         filename="../../sneaky/report.pdf",
         headers=Headers({"content-type": "application/pdf"}),
     )

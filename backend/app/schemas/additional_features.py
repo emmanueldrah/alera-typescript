@@ -4,7 +4,7 @@ Pydantic schemas for Phase 3C features
 
 from pydantic import BaseModel, Field, ConfigDict
 from datetime import datetime
-from typing import Optional, List
+from typing import Optional, List, Any
 from enum import Enum
 
 
@@ -182,28 +182,40 @@ class SMSTemplateResponse(BaseModel):
 class AuditLogResponse(BaseModel):
     id: int
     user_id: Optional[int]
+    role: Optional[str] = None
     action: str
+    resource: Optional[str] = None
     resource_type: Optional[str]
-    resource_id: Optional[int]
+    resource_id: Optional[str]
     old_value: Optional[str]
     new_value: Optional[str]
     changes: Optional[str] = None
     description: Optional[str] = None
     ip_address: Optional[str]
     user_agent: Optional[str]
+    device_info: Optional[str] = None
+    metadata: dict[str, Any] = Field(default_factory=dict)
     reason: Optional[str] = None
     severity: str
     status: Optional[str] = None
     error_message: Optional[str] = None
+    request_id: Optional[str] = None
+    request_method: Optional[str] = None
+    request_path: Optional[str] = None
+    duration_ms: Optional[int] = None
     timestamp: str
+    created_at: Optional[str] = None
 
     model_config = ConfigDict(from_attributes=True)
 
 
 class AuditLogFilter(BaseModel):
     user_id: Optional[int] = None
+    role: Optional[str] = None
     action: Optional[str] = None
     resource_type: Optional[str] = None
+    status: Optional[str] = None
+    search: Optional[str] = None
     start_date: Optional[datetime] = None
     end_date: Optional[datetime] = None
 

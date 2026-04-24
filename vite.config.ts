@@ -1,4 +1,4 @@
-import { defineConfig } from 'vite';
+import { defineConfig, loadEnv } from 'vite';
 import react from '@vitejs/plugin-react';
 import path from 'path';
 
@@ -14,7 +14,14 @@ const manualChunks = (id: string) => {
 
 // https://vitejs.dev/config/
 export default defineConfig(({ mode }) => {
+  const env = loadEnv(mode, process.cwd(), '');
   const isDev = mode === 'development';
+  const sourcemap = env.VITE_SOURCEMAP
+    ? ['1', 'true', 'yes', 'on'].includes(env.VITE_SOURCEMAP.toLowerCase())
+    : isDev;
+  const dropConsole = env.VITE_DROP_CONSOLE
+    ? ['1', 'true', 'yes', 'on'].includes(env.VITE_DROP_CONSOLE.toLowerCase())
+    : !isDev;
   
   return {
     server: {
@@ -33,10 +40,14 @@ export default defineConfig(({ mode }) => {
     },
     build: {
       outDir: 'dist',
-      sourcemap: isDev,
+      target: 'es2020',
+      sourcemap,
       minify: isDev ? false : 'esbuild',
+      cssCodeSplit: true,
+      reportCompressedSize: false,
       esbuild: isDev ? undefined : {
         drop: ['console', 'debugger'],
+        dropLabels: dropConsole ? ['DEV_ONLY'] : [],
       },
       chunkSizeWarningLimit: 1000,
       rollupOptions: {
