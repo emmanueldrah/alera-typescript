@@ -104,6 +104,26 @@ def test_settings_can_recover_frontend_origin_from_cors_in_production(monkeypatc
     assert settings.FRONTEND_URL == "https://alera.health"
 
 
+def test_settings_can_recover_frontend_origin_from_default_cors_in_production(monkeypatch):
+    monkeypatch.setenv("ENVIRONMENT", "production")
+    monkeypatch.delenv("VERCEL_ENV", raising=False)
+    monkeypatch.delenv("VERCEL", raising=False)
+    monkeypatch.delenv("VERCEL_URL", raising=False)
+    monkeypatch.delenv("VERCEL_PROJECT_PRODUCTION_URL", raising=False)
+    monkeypatch.delenv("VERCEL_BRANCH_URL", raising=False)
+    monkeypatch.delenv("FRONTEND_URL", raising=False)
+    monkeypatch.delenv("CORS_ORIGINS", raising=False)
+
+    settings = Settings(
+        DATABASE_URL="postgresql://alera:secret@db.example.com:5432/alera",
+        SECRET_KEY="strong-secret-key",
+        ENCRYPTION_KEY="strong-encryption-key",
+    )
+
+    assert settings.FRONTEND_URL == "https://alera-typescript.vercel.app"
+    assert "https://alera-typescript.vercel.app" in settings.CORS_ORIGINS
+
+
 def test_settings_infer_frontend_from_vercel_url_when_frontend_url_missing(monkeypatch):
     monkeypatch.setenv("ENVIRONMENT", "production")
     monkeypatch.setenv("VERCEL", "1")
