@@ -30,6 +30,20 @@ LEGACY_USER_ROLE_ALIASES = {
     "superadmin": "super_admin",
 }
 
+AUDIT_STATUS_SEVERITY_MAP = {
+    "success": "info",
+    "info": "info",
+    "created": "info",
+    "updated": "info",
+    "read": "info",
+    "warning": "warning",
+    "warn": "warning",
+    "error": "critical",
+    "failed": "critical",
+    "failure": "critical",
+    "critical": "critical",
+}
+
 # Handle production database settings
 if settings.ENVIRONMENT == "production":
     # For SQLite in production, use /tmp
@@ -388,6 +402,7 @@ def _patch_audit_log_columns():
         "role": "VARCHAR(50)",
         "resource": "VARCHAR(255)",
         "status": "VARCHAR(50) NOT NULL DEFAULT 'success'",
+        "severity": "VARCHAR(50) NOT NULL DEFAULT 'info'",
         "device_info": "TEXT",
         "metadata_json": "TEXT",
         "request_id": "VARCHAR(64)",
@@ -416,6 +431,89 @@ def _normalize_user_role_value(raw_role: str | None) -> str | None:
     if normalized in CANONICAL_USER_ROLE_VALUES:
         return normalized
     return LEGACY_USER_ROLE_ALIASES.get(normalized)
+
+
+def _normalize_audit_status(raw_status: str | None) -> str:
+    if raw_status is None:
+        return "success"
+
+    normalized = raw_status.strip().lower().replace("-", "_")
+    if not normalized:
+        return "success"
+    return normalized
+
+
+def _normalize_audit_severity(raw_severity: str | None, status: str) -> str:
+    if raw_severity is not None:
+        normalized = raw_severity.strip().lower()
+        if normalized in {"info", "warning", "critical"}:
+            return normalized
+
+    return AUDIT_STATUS_SEVERITY_MAP.get(status, "info")
+
+
+def _backfill_audit_log_defaults():
+    """Normalize legacy audit rows so list/detail endpoints can serialize them safely."""
+    try:
+        existing = {column["name"] for column in inspect(engine).get_columns("audit_logs")}
+    except Exception:
+        return
+
+    required = {"id", "role", "resource_type", "status", "severity", "created_at"}
+    if not required.issubset(existing):
+        return
+
+    updated_rows = 0
+    try:
+        with engine.begin() as conn:
+            rows = conn.execute(
+                text(
+                    """
+                    SELECT id, role, resource_type, status, severity, created_at
+                    FROM audit_logs
+                    """
+                )
+            ).fetchall()
+
+            for row in rows:
+                row_id, raw_role, raw_resource_type, raw_status, raw_severity, raw_created_at = row
+                updates: dict[str, object] = {}
+
+                normalized_role = _normalize_user_role_value(raw_role)
+                if normalized_role and normalized_role != raw_role:
+                    updates["role"] = normalized_role
+
+                normalized_resource_type = (raw_resource_type or "").strip()
+                if not normalized_resource_type:
+                    updates["resource_type"] = "system"
+
+                normalized_status = _normalize_audit_status(raw_status)
+                if normalized_status != raw_status:
+                    updates["status"] = normalized_status
+
+                normalized_severity = _normalize_audit_severity(raw_severity, normalized_status)
+                if normalized_severity != raw_severity:
+                    updates["severity"] = normalized_severity
+
+                if raw_created_at is None:
+                    updates["created_at"] = utcnow()
+
+                if not updates:
+                    continue
+
+                assignments = ", ".join(f"{column_name} = :{column_name}" for column_name in updates)
+                updates["row_id"] = row_id
+                conn.execute(
+                    text(f"UPDATE audit_logs SET {assignments} WHERE id = :row_id"),
+                    updates,
+                )
+                updated_rows += 1
+    except Exception as e:
+        print(f"WARNING: Could not backfill audit log defaults: {e}")
+        return
+
+    if updated_rows > 0:
+        print(f"✓ Normalized {updated_rows} audit log row(s) for legacy compatibility")
 
 
 def _collect_sqlalchemy_enum_specs() -> dict[str, list[str]]:
@@ -644,6 +742,7 @@ def init_db():
         _patch_imaging_result_asset_columns()
         _patch_user_postdicom_columns()
         _patch_audit_log_columns()
+        _backfill_audit_log_defaults()
         _patch_userrole_enum_values()
         _patch_postgres_enum_values()
         _patch_admin_accounts_email_verified()

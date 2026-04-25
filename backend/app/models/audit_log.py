@@ -1,4 +1,5 @@
 import json
+from datetime import datetime
 
 from sqlalchemy import Column, Integer, String, DateTime, ForeignKey, Text, Index
 from sqlalchemy.orm import relationship
@@ -61,6 +62,16 @@ class AuditLog(Base):
     def __repr__(self):
         return f"<AuditLog(id={self.id}, action={self.action}, resource={self.resource_type})>"
 
+    @staticmethod
+    def _timestamp_value(value) -> str:
+        if isinstance(value, datetime):
+            return value.isoformat()
+        if isinstance(value, str) and value.strip():
+            return value
+        if value is not None:
+            return str(value)
+        return utcnow().isoformat()
+
     def to_dict(self):
         metadata = {}
         if self.metadata_json:
@@ -75,7 +86,7 @@ class AuditLog(Base):
             "role": self.role,
             "action": self.action,
             "resource": self.resource,
-            "resource_type": self.resource_type,
+            "resource_type": self.resource_type or "system",
             "resource_id": self.resource_id,
             "old_value": self.old_value,
             "new_value": self.new_value,
@@ -86,13 +97,13 @@ class AuditLog(Base):
             "device_info": self.device_info,
             "metadata": metadata,
             "reason": self.reason,
-            "severity": self.severity,
-            "status": self.status,
+            "severity": self.severity or "info",
+            "status": self.status or "success",
             "error_message": self.reason,
             "request_id": self.request_id,
             "request_method": self.request_method,
             "request_path": self.request_path,
             "duration_ms": self.duration_ms,
-            "timestamp": self.created_at.isoformat() if self.created_at is not None else None,
-            "created_at": self.created_at.isoformat() if self.created_at is not None else None,
+            "timestamp": self._timestamp_value(self.created_at),
+            "created_at": self._timestamp_value(self.created_at),
         }

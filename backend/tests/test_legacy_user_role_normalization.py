@@ -142,3 +142,51 @@ def test_init_db_normalizes_legacy_roles_before_serializing_linked_accounts(db_s
     payload = response.json()
     assert payload["has_linked_account"] is True
     assert payload["linked_accounts"][0]["role"] == "pharmacist"
+
+
+def test_init_db_normalizes_legacy_roles_before_profile_updates(db_session):
+    admin = _load_seeded_admin(db_session)
+    legacy_linked_user_id = _insert_legacy_user(
+        email="legacy.profile@alera.health",
+        username="legacyprofile",
+        role="doctor",
+    )
+
+    with engine.begin() as conn:
+        conn.execute(
+            text(
+                """
+                INSERT INTO linked_accounts (
+                    primary_user_id,
+                    linked_user_id,
+                    link_type,
+                    created_at
+                ) VALUES (
+                    :primary_user_id,
+                    :linked_user_id,
+                    :link_type,
+                    :created_at
+                )
+                """
+            ),
+            {
+                "primary_user_id": admin.id,
+                "linked_user_id": legacy_linked_user_id,
+                "link_type": "same_person",
+                "created_at": utcnow(),
+            },
+        )
+
+    init_db()
+
+    client = TestClient(app)
+    response = client.put(
+        "/api/users/me",
+        headers={"Authorization": f"Bearer {_issue_token(admin)}"},
+        json={"first_name": "Manuel", "last_name": "Super Admin"},
+    )
+
+    assert response.status_code == 200
+    payload = response.json()
+    assert payload["first_name"] == "Manuel"
+    assert payload["linked_accounts"][0]["role"] == "provider"
