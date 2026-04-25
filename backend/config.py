@@ -64,6 +64,20 @@ def infer_frontend_url_default() -> str:
 
     return "http://localhost:5173"
 
+
+def _normalize_origin(value: str | None) -> str | None:
+    normalized = (value or "").strip().rstrip("/")
+    if not normalized:
+        return None
+    if normalized.startswith(("http://", "https://")):
+        return normalized
+    return f"https://{normalized}"
+
+
+def _is_local_origin(value: str | None) -> bool:
+    normalized = (value or "").strip().lower()
+    return normalized.startswith("http://localhost") or normalized.startswith("http://127.0.0.1")
+
 class Settings(BaseSettings):
     # Database
     DATABASE_URL: str = Field(default_factory=infer_database_url_default, description="Database connection URL")
@@ -283,8 +297,26 @@ class Settings(BaseSettings):
     def _is_sqlite_url(cls, value: str) -> bool:
         return value.startswith("sqlite")
 
+    @classmethod
+    def _best_frontend_origin(cls, frontend_url: str, cors_origins: List[str]) -> str:
+        explicit_frontend = _normalize_origin(frontend_url)
+        if explicit_frontend and not _is_local_origin(explicit_frontend):
+            return explicit_frontend
+
+        inferred_frontend = _normalize_origin(infer_frontend_url_default())
+        if inferred_frontend and not _is_local_origin(inferred_frontend):
+            return inferred_frontend
+
+        for origin in cors_origins:
+            normalized_origin = _normalize_origin(origin)
+            if normalized_origin and not _is_local_origin(normalized_origin):
+                return normalized_origin
+
+        return explicit_frontend or inferred_frontend or "http://localhost:5173"
+
     @model_validator(mode="after")
     def validate_production_requirements(self):
+        self.FRONTEND_URL = self._best_frontend_origin(self.FRONTEND_URL, self.CORS_ORIGINS)
         if self.ENVIRONMENT == "production":
             if self._is_placeholder_secret(self.SECRET_KEY):
                 raise ValueError("SECRET_KEY must be explicitly configured in production")
@@ -292,8 +324,6 @@ class Settings(BaseSettings):
                 raise ValueError("ENCRYPTION_KEY must be explicitly configured in production")
             if self._is_sqlite_url(self.DATABASE_URL):
                 raise ValueError("Production DATABASE_URL must use a persistent database, not SQLite")
-            if self.FRONTEND_URL.startswith("http://localhost"):
-                raise ValueError("FRONTEND_URL must be set to the production frontend origin")
         return self
 
 
