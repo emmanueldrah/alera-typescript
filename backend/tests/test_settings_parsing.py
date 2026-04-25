@@ -12,6 +12,7 @@ def test_settings_accept_comma_separated_cors_origins():
     )
 
     assert settings.CORS_ORIGINS == [
+        "https://example.com",
         "https://one.example.com",
         "https://two.example.com",
     ]
@@ -101,3 +102,43 @@ def test_settings_can_recover_frontend_origin_from_cors_in_production(monkeypatc
     )
 
     assert settings.FRONTEND_URL == "https://alera.health"
+
+
+def test_settings_infer_frontend_from_vercel_url_when_frontend_url_missing(monkeypatch):
+    monkeypatch.setenv("ENVIRONMENT", "production")
+    monkeypatch.setenv("VERCEL", "1")
+    monkeypatch.setenv("VERCEL_ENV", "production")
+    monkeypatch.setenv("VERCEL_URL", "alera-gamma.vercel.app")
+    monkeypatch.delenv("VERCEL_PROJECT_PRODUCTION_URL", raising=False)
+    monkeypatch.delenv("VERCEL_BRANCH_URL", raising=False)
+    monkeypatch.delenv("FRONTEND_URL", raising=False)
+
+    settings = Settings(
+        DATABASE_URL="postgresql://alera:secret@db.example.com:5432/alera",
+        SECRET_KEY="strong-secret-key",
+        ENCRYPTION_KEY="strong-encryption-key",
+        CORS_ORIGINS="",
+    )
+
+    assert settings.FRONTEND_URL == "https://alera-gamma.vercel.app"
+    assert "https://alera-gamma.vercel.app" in settings.CORS_ORIGINS
+
+
+def test_settings_prefer_production_url_over_preview_hosts(monkeypatch):
+    monkeypatch.setenv("ENVIRONMENT", "production")
+    monkeypatch.setenv("VERCEL", "1")
+    monkeypatch.setenv("VERCEL_ENV", "production")
+    monkeypatch.setenv("VERCEL_PROJECT_PRODUCTION_URL", "alera.health")
+    monkeypatch.setenv("VERCEL_BRANCH_URL", "alera-gamma.vercel.app")
+    monkeypatch.setenv("VERCEL_URL", "alera-gamma.vercel.app")
+    monkeypatch.delenv("FRONTEND_URL", raising=False)
+
+    settings = Settings(
+        DATABASE_URL="postgresql://alera:secret@db.example.com:5432/alera",
+        SECRET_KEY="strong-secret-key",
+        ENCRYPTION_KEY="strong-encryption-key",
+        CORS_ORIGINS="",
+    )
+
+    assert settings.FRONTEND_URL == "https://alera.health"
+    assert settings.CORS_ORIGINS[0] == "https://alera.health"

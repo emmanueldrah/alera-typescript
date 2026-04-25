@@ -78,6 +78,47 @@ def _is_local_origin(value: str | None) -> bool:
     normalized = (value or "").strip().lower()
     return normalized.startswith("http://localhost") or normalized.startswith("http://127.0.0.1")
 
+
+def _vercel_origin_candidates() -> list[str]:
+    vercel_environment = (os.environ.get("VERCEL_ENV") or "").strip().lower()
+    candidate_hosts: list[str] = []
+
+    if vercel_environment == "production":
+        candidate_hosts.extend(
+            [
+                os.environ.get("VERCEL_PROJECT_PRODUCTION_URL"),
+                os.environ.get("VERCEL_BRANCH_URL"),
+                os.environ.get("VERCEL_URL"),
+            ]
+        )
+    elif vercel_environment:
+        candidate_hosts.extend(
+            [
+                os.environ.get("VERCEL_BRANCH_URL"),
+                os.environ.get("VERCEL_URL"),
+                os.environ.get("VERCEL_PROJECT_PRODUCTION_URL"),
+            ]
+        )
+    elif os.environ.get("VERCEL") == "1":
+        candidate_hosts.extend(
+            [
+                os.environ.get("VERCEL_URL"),
+                os.environ.get("VERCEL_BRANCH_URL"),
+                os.environ.get("VERCEL_PROJECT_PRODUCTION_URL"),
+            ]
+        )
+
+    normalized_candidates: list[str] = []
+    seen: set[str] = set()
+    for host in candidate_hosts:
+        normalized = _normalize_origin(host)
+        if not normalized or normalized in seen:
+            continue
+        seen.add(normalized)
+        normalized_candidates.append(normalized)
+
+    return normalized_candidates
+
 class Settings(BaseSettings):
     # Database
     DATABASE_URL: str = Field(default_factory=infer_database_url_default, description="Database connection URL")
@@ -303,6 +344,10 @@ class Settings(BaseSettings):
         if explicit_frontend and not _is_local_origin(explicit_frontend):
             return explicit_frontend
 
+        for vercel_origin in _vercel_origin_candidates():
+            if not _is_local_origin(vercel_origin):
+                return vercel_origin
+
         inferred_frontend = _normalize_origin(infer_frontend_url_default())
         if inferred_frontend and not _is_local_origin(inferred_frontend):
             return inferred_frontend
@@ -317,6 +362,13 @@ class Settings(BaseSettings):
     @model_validator(mode="after")
     def validate_production_requirements(self):
         self.FRONTEND_URL = self._best_frontend_origin(self.FRONTEND_URL, self.CORS_ORIGINS)
+        normalized_frontend_origin = _normalize_origin(self.FRONTEND_URL)
+
+        if normalized_frontend_origin and normalized_frontend_origin not in {
+            _normalize_origin(origin) for origin in self.CORS_ORIGINS if origin
+        }:
+            self.CORS_ORIGINS = [normalized_frontend_origin, *self.CORS_ORIGINS]
+
         if self.ENVIRONMENT == "production":
             if self._is_placeholder_secret(self.SECRET_KEY):
                 raise ValueError("SECRET_KEY must be explicitly configured in production")
