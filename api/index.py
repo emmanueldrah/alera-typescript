@@ -87,6 +87,10 @@ class LazyBackendApp:
             return False, str(exc)
 
     async def __call__(self, scope, receive, send) -> None:
+        if scope["type"] == "lifespan":
+            await self._handle_lifespan(receive, send)
+            return
+
         backend_app = self.ensure_loaded()
         if backend_app is None:
             response = JSONResponse(
@@ -104,12 +108,25 @@ class LazyBackendApp:
 
         await backend_app(scope, receive, send)
 
+    async def _handle_lifespan(self, receive, send) -> None:
+        while True:
+            message = await receive()
+            if message["type"] == "lifespan.startup":
+                await send({"type": "lifespan.startup.complete"})
+            elif message["type"] == "lifespan.shutdown":
+                await send({"type": "lifespan.shutdown.complete"})
+                return
+
 
 backend_app = LazyBackendApp()
 
 
 class VercelApp:
     async def __call__(self, scope, receive, send) -> None:
+        if scope["type"] == "lifespan":
+            await self._handle_lifespan(receive, send)
+            return
+
         path = scope.get("path", "")
 
         if scope["type"] == "http" and path == "/api/health":
@@ -133,6 +150,15 @@ class VercelApp:
             return
 
         await backend_app(scope, receive, send)
+
+    async def _handle_lifespan(self, receive, send) -> None:
+        while True:
+            message = await receive()
+            if message["type"] == "lifespan.startup":
+                await send({"type": "lifespan.startup.complete"})
+            elif message["type"] == "lifespan.shutdown":
+                await send({"type": "lifespan.shutdown.complete"})
+                return
 
     async def health_check(self, scope, receive, send) -> None:
         database_ok, database_status = backend_app.database_status()
