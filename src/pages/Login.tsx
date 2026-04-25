@@ -94,6 +94,9 @@ const Login = () => {
               <p className="mt-5 max-w-lg text-base leading-7 text-slate-300 sm:text-lg">
                 From patient follow-up to lab coordination and imaging handoff, Alera keeps the whole care network moving inside one connected workspace.
               </p>
+              <div className="mt-6 rounded-2xl border border-white/10 bg-white/5 p-4 text-sm leading-6 text-slate-200">
+                If you are a doctor or another provider and also want to use Alera as a patient, create a separate patient account for your personal care.
+              </div>
             </motion.div>
           </div>
 
@@ -213,6 +216,9 @@ const Login = () => {
                 Create one
               </Link>
             </div>
+            <p className="mt-4 text-xs leading-5 text-slate-500">
+              Work account for treating patients. Separate patient account for receiving your own care.
+            </p>
           </motion.div>
         </section>
       </div>

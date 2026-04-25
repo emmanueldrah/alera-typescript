@@ -20,6 +20,7 @@ from .additional_features import (
 from .structured_record import StructuredRecord
 from .organization import Organization
 from .canonical_records import MedicalRecord, MedicalDocument, PatientPermission
+from .account_link import AccountLink
 
 __all__ = [
     "User",
@@ -52,6 +53,7 @@ __all__ = [
     "MedicalRecord",
     "MedicalDocument",
     "PatientPermission",
+    "AccountLink",
 ]
 
 import sys

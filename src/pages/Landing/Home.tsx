@@ -132,6 +132,12 @@ const proofMoments = [
   'Safer updates for prescriptions, tests, and scans',
 ];
 
+const accountNotes = [
+  'Use one account for work',
+  'Use a separate patient account for your own care',
+  'Keep personal care and work tasks clearly separate',
+];
+
 const Home = () => {
   return (
     <div className="min-h-screen bg-[#f6fafb] selection:bg-sky-100 selection:text-sky-900 font-body overflow-x-hidden">
@@ -186,6 +192,17 @@ const Home = () => {
                     {tag}
                   </span>
                 ))}
+              </motion.div>
+
+              <motion.div variants={fadeUp} className="mt-6 rounded-[1.5rem] border border-white/10 bg-white/[0.06] p-5 backdrop-blur">
+                <p className="text-sm font-semibold text-white">For providers who are also patients</p>
+                <div className="mt-3 grid gap-2 sm:grid-cols-3">
+                  {accountNotes.map((item) => (
+                    <div key={item} className="rounded-2xl bg-white/[0.06] px-3 py-3 text-sm text-slate-200">
+                      {item}
+                    </div>
+                  ))}
+                </div>
               </motion.div>
 
               <motion.div variants={fadeUp} className="mt-12 grid gap-3 sm:grid-cols-3">

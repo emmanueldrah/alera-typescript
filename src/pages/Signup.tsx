@@ -173,6 +173,9 @@ const Signup = () => {
               <p className="mt-5 text-base leading-7 text-slate-300 sm:text-lg">
                 Patients, clinicians, labs, imaging teams, pharmacies, hospitals, and emergency services all join the same network, with role-specific access from day one.
               </p>
+              <div className="mt-6 rounded-2xl border border-white/10 bg-white/5 p-4 text-sm leading-6 text-slate-200">
+                If you are a doctor and also want to use Alera as a patient, create a separate patient account with a different email for your personal care.
+              </div>
             </motion.div>
           </div>
 
@@ -223,6 +226,10 @@ const Signup = () => {
               <div className="rounded-2xl bg-slate-50 px-4 py-3 text-sm text-slate-600">
                 We send a verification email after sign-up.
               </div>
+            </div>
+
+            <div className="mt-6 rounded-2xl border border-sky-100 bg-sky-50 p-4 text-sm text-slate-700">
+              Use one account for your work role. If you also need care for yourself, make a separate patient account.
             </div>
 
             {error ? (

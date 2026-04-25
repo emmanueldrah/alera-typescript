@@ -87,6 +87,18 @@ class User(Base):
     notifications = relationship("Notification", back_populates="user")
     audit_logs = relationship("AuditLog", back_populates="user")
     organization = relationship("Organization", back_populates="members", foreign_keys=[organization_id])
+    primary_account_links = relationship(
+        "AccountLink",
+        foreign_keys="AccountLink.primary_user_id",
+        back_populates="primary_user",
+        cascade="all, delete-orphan",
+    )
+    secondary_account_links = relationship(
+        "AccountLink",
+        foreign_keys="AccountLink.linked_user_id",
+        back_populates="linked_user",
+        cascade="all, delete-orphan",
+    )
 
     # Indexes
     __table_args__ = (
@@ -103,6 +115,43 @@ class User(Base):
     def is_super_admin(self) -> bool:
         """Returns True only for super admin."""
         return self.role == UserRole.SUPER_ADMIN
+
+    @staticmethod
+    def _mask_email(email: str | None) -> str | None:
+        if not email or "@" not in email:
+            return email
+        local_part, domain = email.split("@", 1)
+        if len(local_part) <= 2:
+            masked_local = f"{local_part[0]}*" if local_part else "*"
+        else:
+            masked_local = f"{local_part[:2]}{'*' * max(2, len(local_part) - 2)}"
+        return f"{masked_local}@{domain}"
+
+    @property
+    def linked_accounts(self) -> list[dict[str, str | int | None]]:
+        account_summaries: list[dict[str, str | int | None]] = []
+        seen_user_ids: set[int] = set()
+
+        for relation in [*self.primary_account_links, *self.secondary_account_links]:
+            other_user = relation.linked_user if relation.primary_user_id == self.id else relation.primary_user
+            if other_user is None or other_user.id in seen_user_ids:
+                continue
+            seen_user_ids.add(other_user.id)
+            account_summaries.append(
+                {
+                    "id": other_user.id,
+                    "role": other_user.role.value if hasattr(other_user.role, "value") else str(other_user.role),
+                    "masked_email": self._mask_email(other_user.email),
+                    "created_at": relation.created_at.isoformat() if relation.created_at is not None else None,
+                    "link_type": relation.link_type,
+                }
+            )
+
+        return account_summaries
+
+    @property
+    def has_linked_account(self) -> bool:
+        return bool(self.primary_account_links or self.secondary_account_links)
 
     def __repr__(self):
         return f"<User(id={self.id}, email={self.email}, role={self.role})>"

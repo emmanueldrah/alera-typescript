@@ -30,6 +30,16 @@ export interface ApiUser {
   specialty?: string;
   organization_id?: number | null;
   postdicom_api_url?: string;
+  has_linked_account?: boolean;
+  linked_accounts?: ApiLinkedAccountSummary[];
+}
+
+export interface ApiLinkedAccountSummary {
+  id: number;
+  role: string;
+  masked_email?: string | null;
+  created_at?: string | null;
+  link_type?: string;
 }
 
 export interface ApiAuthResponse {
@@ -286,6 +296,19 @@ export interface AuditSummaryApiResponse {
   recent_suspicious: AuditLogEntry[];
 }
 
+export interface LinkedAccountSummaryResponse {
+  id: number;
+  role: string;
+  masked_email?: string | null;
+  created_at?: string | null;
+  link_type?: string;
+}
+
+export interface LinkedAccountListResponse {
+  has_linked_account: boolean;
+  linked_accounts: LinkedAccountSummaryResponse[];
+}
+
 // ============================================================================
 // AUTH ENDPOINTS
 // ============================================================================
@@ -445,6 +468,22 @@ export const usersApi = {
 
   getAccessibleUsers: async (skip: number = 0, limit: number = 100) => {
     const response = await apiClient.get<ApiUser[]>('/users/accessible', { params: { skip, limit } });
+    return response.data;
+  },
+};
+
+export const accountLinksApi = {
+  getMine: async () => {
+    const response = await apiClient.get<LinkedAccountListResponse>('/account-links/me');
+    return response.data;
+  },
+
+  create: async (payload: {
+    current_password: string;
+    linked_email: string;
+    linked_password: string;
+  }) => {
+    const response = await apiClient.post<LinkedAccountListResponse>('/account-links', payload);
     return response.data;
   },
 };
@@ -1313,6 +1352,7 @@ export const medicalRecordsApi = {
 export const api = {
   auth: authApi,
   users: usersApi,
+  accountLinks: accountLinksApi,
   appointments: appointmentsApi,
   prescriptions: prescriptionsApi,
   allergies: allergiesApi,

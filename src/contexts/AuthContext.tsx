@@ -1,7 +1,7 @@
 import React, { useState, useCallback, useEffect } from 'react';
 import { clearAleraStorage } from '@/lib/storageKeys';
 import { AuthContext } from './auth-context';
-import { authApi, usersApi, type ApiUser } from '@/lib/apiService';
+import { accountLinksApi, authApi, usersApi, type ApiLinkedAccountSummary, type ApiUser } from '@/lib/apiService';
 import { clearTokens, setGlobalLogoutCallback } from '@/lib/apiClient';
 
 export type UserRole =
@@ -36,6 +36,14 @@ export interface UserProfile {
   privacyPublicProfile: boolean;
 }
 
+export interface LinkedAccountSummary {
+  id: string;
+  role: UserRole;
+  maskedEmail?: string;
+  createdAt?: string | null;
+  linkType?: string;
+}
+
 export interface User {
   id: string;
   email: string;
@@ -50,6 +58,8 @@ export interface User {
   postdicomApiUrl?: string;
   createdAt?: string;
   lastLogin?: string;
+  hasLinkedAccount?: boolean;
+  linkedAccounts?: LinkedAccountSummary[];
 }
 
 const isApiUser = (data: unknown): data is ApiUser => {
@@ -60,35 +70,43 @@ const ACCESSIBLE_USERS_PAGE_SIZE = 100;
 
 type BackendRole = ApiUser['role'];
 
+const mapBackendRoleToUserRole = (role: BackendRole | string): UserRole => {
+  switch (role) {
+    case 'patient':
+      return 'patient';
+    case 'provider':
+      return 'doctor';
+    case 'pharmacist':
+      return 'pharmacy';
+    case 'hospital':
+      return 'hospital';
+    case 'laboratory':
+      return 'laboratory';
+    case 'imaging':
+      return 'imaging';
+    case 'ambulance':
+      return 'ambulance';
+    case 'physiotherapist':
+      return 'physiotherapist';
+    case 'admin':
+      return 'admin';
+    case 'super_admin':
+      return 'super_admin';
+    default:
+      return 'patient';
+  }
+};
+
+const mapLinkedAccount = (data: ApiLinkedAccountSummary): LinkedAccountSummary => ({
+  id: String(data.id),
+  role: mapBackendRoleToUserRole(data.role),
+  maskedEmail: data.masked_email ?? undefined,
+  createdAt: data.created_at ?? null,
+  linkType: data.link_type ?? 'same_person',
+});
+
 // Map backend user roles to frontend format
 const mapBackendUser = (data: ApiUser): User => {
-  const mapBackendRoleToUserRole = (role: BackendRole | string): UserRole => {
-    switch (role) {
-      case 'patient':
-        return 'patient';
-      case 'provider':
-        return 'doctor';
-      case 'pharmacist':
-        return 'pharmacy';
-      case 'hospital':
-        return 'hospital';
-      case 'laboratory':
-        return 'laboratory';
-      case 'imaging':
-        return 'imaging';
-      case 'ambulance':
-        return 'ambulance';
-      case 'physiotherapist':
-        return 'physiotherapist';
-      case 'admin':
-        return 'admin';
-      case 'super_admin':
-        return 'super_admin';
-      default:
-        return 'patient';
-    }
-  };
-
   const fullName = data.full_name?.trim() || [data.first_name, data.last_name].filter(Boolean).join(' ').trim();
   const [firstName = '', ...lastNameParts] = fullName.split(' ');
   return {
@@ -104,6 +122,8 @@ const mapBackendUser = (data: ApiUser): User => {
     postdicomApiUrl: data.postdicom_api_url,
     createdAt: data.created_at,
     lastLogin: data.last_login,
+    hasLinkedAccount: data.has_linked_account ?? false,
+    linkedAccounts: (data.linked_accounts || []).map(mapLinkedAccount),
     profile: {
       firstName,
       lastName: lastNameParts.join(' '),
@@ -362,6 +382,21 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     await authApi.deleteAccount(password);
   }, [user]);
 
+  const linkAccount = useCallback(async (currentPassword: string, linkedEmail: string, linkedPassword: string) => {
+    if (!user) throw new Error('No user logged in');
+
+    await accountLinksApi.create({
+      current_password: currentPassword,
+      linked_email: linkedEmail,
+      linked_password: linkedPassword,
+    });
+
+    const refreshedUser = await authApi.getCurrentUser();
+    if (isApiUser(refreshedUser)) {
+      setUser(mapBackendUser(refreshedUser));
+    }
+  }, [user]);
+
   const resendEmailVerification = useCallback(async () => {
     if (!user) throw new Error('No user logged in');
     if (user.role === 'admin' || user.emailVerified) return;
@@ -438,6 +473,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         updateNotificationPreferences,
         updatePrivacySettings,
         deleteAccount,
+        linkAccount,
         resendEmailVerification,
         clearCache
       }}>
@@ -462,6 +498,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       updateNotificationPreferences, 
       updatePrivacySettings, 
       deleteAccount, 
+      linkAccount,
       resendEmailVerification,
       clearCache 
     }}>

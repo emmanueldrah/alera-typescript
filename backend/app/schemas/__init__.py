@@ -79,6 +79,14 @@ class UserUpdate(BaseModel):
     privacy_public_profile: Optional[bool] = None
 
 
+class LinkedAccountSummary(BaseModel):
+    id: int
+    role: str
+    masked_email: Optional[str] = None
+    created_at: Optional[str] = None
+    link_type: str = "same_person"
+
+
 class UserResponse(BaseModel):
     id: int
     email: str
@@ -110,8 +118,21 @@ class UserResponse(BaseModel):
     license_state: Optional[str] = None
     organization_id: Optional[int] = None
     postdicom_api_url: Optional[str] = None
+    has_linked_account: bool = False
+    linked_accounts: list[LinkedAccountSummary] = Field(default_factory=list)
     
     model_config = ConfigDict(from_attributes=True)
+
+
+class AccountLinkCreateRequest(BaseModel):
+    current_password: str
+    linked_email: EmailStr
+    linked_password: str
+
+
+class AccountLinkListResponse(BaseModel):
+    has_linked_account: bool
+    linked_accounts: list[LinkedAccountSummary]
 
 
 # Authentication Schemas

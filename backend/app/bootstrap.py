@@ -13,6 +13,7 @@ from fastapi.responses import JSONResponse
 from sqlalchemy import text
 
 from app.routes import (
+    account_links,
     admin,
     allergies,
     ambulance,
@@ -71,6 +72,7 @@ DEFAULT_TRUSTED_HOSTS = [
 
 ROUTERS = [
     auth.router,
+    account_links.router,
     users.router,
     appointments.router,
     prescriptions.router,

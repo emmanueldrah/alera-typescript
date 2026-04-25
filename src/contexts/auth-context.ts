@@ -29,6 +29,7 @@ export interface AuthContextType {
   updateNotificationPreferences: (email: boolean, sms: boolean) => Promise<void>;
   updatePrivacySettings: (publicProfile: boolean) => Promise<void>;
   deleteAccount: (password: string) => Promise<void>;
+  linkAccount: (currentPassword: string, linkedEmail: string, linkedPassword: string) => Promise<void>;
   resendEmailVerification: () => Promise<void>;
   clearCache: () => void;
 }

@@ -38,13 +38,30 @@ const FeatureWrapper = ({ page }: FeatureWrapperProps) => {
     </DashboardLayout>
   );
   if (!canAccessFeature(page, user?.role)) {
+    const patientOnlyWorkspaces = new Set([
+      'health-metrics',
+      'prescription-refills',
+      'consent',
+      'problem-list',
+      'medication-adherence',
+      'billing',
+    ]);
+    const shouldUsePatientAccountMessage =
+      user?.role &&
+      user.role !== 'patient' &&
+      patientOnlyWorkspaces.has(page);
+
     return (
       <DashboardLayout>
         <div className="flex min-h-[60vh] items-center justify-center">
           <div className="max-w-md rounded-3xl border border-border bg-card p-8 text-center shadow-sm">
             <ShieldAlert className="mx-auto mb-4 h-10 w-10 text-destructive" />
             <h1 className="text-2xl font-display font-bold text-foreground">Access restricted</h1>
-            <p className="mt-2 text-sm text-muted-foreground">Your current role does not have access to this workspace. Return to the dashboard to continue.</p>
+            <p className="mt-2 text-sm text-muted-foreground">
+              {shouldUsePatientAccountMessage
+                ? 'This workspace is for patient accounts. If you also use Alera as a patient, sign in with your separate patient account to continue.'
+                : 'Your current role does not have access to this workspace. Return to the dashboard to continue.'}
+            </p>
             <div className="mt-6 flex justify-center">
               <Link to="/dashboard" className="inline-flex items-center gap-2 rounded-xl bg-primary px-4 py-2 text-sm font-semibold text-primary-foreground hover:opacity-90">
                 <ArrowLeft className="h-4 w-4" />

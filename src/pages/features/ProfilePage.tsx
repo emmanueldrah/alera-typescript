@@ -18,7 +18,9 @@ const roleIcons: Record<string, React.ReactNode> = {
   imaging: <ScanLine className="w-5 h-5" />,
   pharmacy: <Pill className="w-5 h-5" />,
   ambulance: <Ambulance className="w-5 h-5" />,
+  physiotherapist: <Heart className="w-5 h-5" />,
   admin: <ShieldCheck className="w-5 h-5" />,
+  super_admin: <ShieldCheck className="w-5 h-5" />,
 };
 
 const roleLabels: Record<string, string> = {
@@ -29,7 +31,9 @@ const roleLabels: Record<string, string> = {
   imaging: 'Imaging Center',
   pharmacy: 'Pharmacy',
   ambulance: 'Ambulance',
+  physiotherapist: 'Physiotherapist',
   admin: 'Administrator',
+  super_admin: 'Super Admin',
 };
 
 const profileTabs = [
@@ -42,7 +46,7 @@ const profileTabs = [
 ] as const;
 
 const ProfilePage = () => {
-  const { user, updateProfile, updateBasicInfo, changePassword, updateNotificationPreferences, updatePrivacySettings, deleteAccount, resendEmailVerification, clearCache } = useAuth();
+  const { user, updateProfile, updateBasicInfo, changePassword, updateNotificationPreferences, updatePrivacySettings, deleteAccount, linkAccount, resendEmailVerification, clearCache } = useAuth();
   const [activeTab, setActiveTab] = useState<'basic' | 'contact' | 'security' | 'notifications' | 'privacy' | 'account'>('basic');
   const [isLoading, setIsLoading] = useState(false);
   const [success, setSuccess] = useState('');
@@ -101,6 +105,9 @@ const ProfilePage = () => {
   const [confirmDelete, setConfirmDelete] = useState(false);
   const [confirmClearCache, setConfirmClearCache] = useState(false);
   const [sendingVerification, setSendingVerification] = useState(false);
+  const [currentPasswordForLink, setCurrentPasswordForLink] = useState('');
+  const [linkedEmail, setLinkedEmail] = useState('');
+  const [linkedPassword, setLinkedPassword] = useState('');
   const professionalVerificationStatus = user
     ? getProfessionalVerificationStatus(user.isVerified, user.isActive ?? true)
     : 'pending';
@@ -258,6 +265,27 @@ const ProfilePage = () => {
       }, 800);
     } catch (err) {
       showMessage(err instanceof Error ? err.message : 'Failed to delete account', 'error');
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  const handleLinkAccount = async () => {
+    setError('');
+    if (!currentPasswordForLink || !linkedEmail.trim() || !linkedPassword) {
+      setError('Enter your password and the other account credentials to link accounts');
+      return;
+    }
+
+    setIsLoading(true);
+    try {
+      await linkAccount(currentPasswordForLink, linkedEmail.trim(), linkedPassword);
+      setCurrentPasswordForLink('');
+      setLinkedEmail('');
+      setLinkedPassword('');
+      showMessage('Accounts linked successfully', 'success');
+    } catch (err) {
+      showMessage(err instanceof Error ? err.message : 'Failed to link accounts', 'error');
     } finally {
       setIsLoading(false);
     }
@@ -679,6 +707,89 @@ const ProfilePage = () => {
                   <p className="text-foreground mt-1">{new Date(user.createdAt).toLocaleDateString()}</p>
                 </div>
               )}
+              <div>
+                <p className="text-xs font-semibold text-muted-foreground uppercase">Linked Account</p>
+                <p className="text-foreground mt-1">{user.hasLinkedAccount ? 'Connected' : 'Not linked yet'}</p>
+              </div>
+            </div>
+
+            <div className="border border-sky-100 bg-sky-50 rounded-xl p-4 text-sm text-slate-700">
+              If you use Alera for work and also want care for yourself, keep a separate patient account. This keeps your work role and your personal care clearly separate.
+            </div>
+
+            <div className="rounded-lg border border-border bg-secondary/30 p-4 space-y-4">
+              <div>
+                <p className="font-medium text-foreground">Linked accounts</p>
+                <p className="text-sm text-muted-foreground mt-1">
+                  Link a separate account that belongs to you, like a patient account for your own care.
+                </p>
+              </div>
+
+              {user.linkedAccounts && user.linkedAccounts.length > 0 ? (
+                <div className="space-y-3">
+                  {user.linkedAccounts.map((account) => (
+                    <div key={account.id} className="rounded-xl border border-border bg-card p-4">
+                      <div className="flex flex-wrap items-center gap-2">
+                        <div className="inline-flex items-center gap-2 rounded-full bg-primary/10 px-3 py-1 text-sm font-medium text-primary">
+                          {roleIcons[account.role] || <Users className="w-4 h-4" />}
+                          {roleLabels[account.role] || account.role}
+                        </div>
+                        <span className="text-sm text-muted-foreground">{account.maskedEmail || 'Linked account'}</span>
+                      </div>
+                      {account.createdAt ? (
+                        <p className="mt-2 text-xs text-muted-foreground">
+                          Linked on {new Date(account.createdAt).toLocaleDateString()}
+                        </p>
+                      ) : null}
+                    </div>
+                  ))}
+                </div>
+              ) : (
+                <div className="rounded-xl border border-dashed border-border bg-card/70 p-4 text-sm text-muted-foreground">
+                  No linked account yet.
+                </div>
+              )}
+
+              {!user.hasLinkedAccount ? (
+                <div className="grid gap-4 sm:grid-cols-2">
+                  <div className="sm:col-span-2">
+                    <label className="block text-sm font-medium text-foreground mb-2">Your current account password</label>
+                    <input
+                      type="password"
+                      value={currentPasswordForLink}
+                      onChange={e => setCurrentPasswordForLink(e.target.value)}
+                      className="w-full h-10 px-4 rounded-lg border border-input bg-card text-foreground focus:outline-none focus:ring-2 focus:ring-primary/30"
+                      placeholder="Enter your current password"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium text-foreground mb-2">Other account email</label>
+                    <input
+                      type="email"
+                      value={linkedEmail}
+                      onChange={e => setLinkedEmail(e.target.value)}
+                      className="w-full h-10 px-4 rounded-lg border border-input bg-card text-foreground focus:outline-none focus:ring-2 focus:ring-primary/30"
+                      placeholder="patient@example.com"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium text-foreground mb-2">Other account password</label>
+                    <input
+                      type="password"
+                      value={linkedPassword}
+                      onChange={e => setLinkedPassword(e.target.value)}
+                      className="w-full h-10 px-4 rounded-lg border border-input bg-card text-foreground focus:outline-none focus:ring-2 focus:ring-primary/30"
+                      placeholder="Enter the other account password"
+                    />
+                  </div>
+                  <div className="sm:col-span-2">
+                    <Button onClick={handleLinkAccount} disabled={isLoading} className="gap-2">
+                      {isLoading && <Loader className="w-4 h-4 animate-spin" />}
+                      Link My Separate Account
+                    </Button>
+                  </div>
+                </div>
+              ) : null}
             </div>
 
             {/* Clear Cache Section */}
