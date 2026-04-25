@@ -122,18 +122,16 @@ def request_origin_is_trusted(request: Request) -> bool:
 
 
 async def initialize_application_state(app: FastAPI) -> None:
-    if settings.ENVIRONMENT != "production" or not os.environ.get("VERCEL"):
-        try:
-            init_db()
-            app.state.startup_complete = True
-            app.state.startup_error = None
-        except Exception as exc:
-            app.state.startup_complete = False
-            app.state.startup_error = str(exc)
-            print(f"Error during startup database initialization: {exc}")
-    else:
+    try:
+        # Always run idempotent table creation/patches so existing deployments
+        # receive schema updates required by new features such as audit logging.
+        init_db()
         app.state.startup_complete = True
         app.state.startup_error = None
+    except Exception as exc:
+        app.state.startup_complete = False
+        app.state.startup_error = str(exc)
+        print(f"Error during startup database initialization: {exc}")
 
 
 def database_ready() -> tuple[bool, str]:

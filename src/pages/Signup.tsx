@@ -5,6 +5,7 @@ import { motion } from 'framer-motion';
 import {
   Activity,
   Ambulance,
+  ArrowLeft,
   ArrowRight,
   Building2,
   Eye,
@@ -137,15 +138,24 @@ const Signup = () => {
       <div className="mx-auto grid min-h-screen max-w-7xl gap-8 px-6 py-8 lg:grid-cols-[0.98fr_1.02fr] lg:px-8 lg:py-10">
         <section className="flex flex-col justify-between rounded-[2rem] border border-slate-200 bg-slate-950 p-8 text-white shadow-2xl shadow-slate-900/20 xl:p-10">
           <div>
-            <Link to="/" className="inline-flex items-center gap-3">
-              <div className="flex h-12 w-12 items-center justify-center rounded-2xl bg-white/10 ring-1 ring-white/15">
-                <HeartPulse className="h-6 w-6 text-emerald-300" />
-              </div>
-              <div>
-                <p className="text-lg font-semibold tracking-tight">ALERA</p>
-                <p className="text-xs text-slate-300">Unified healthcare operations</p>
-              </div>
-            </Link>
+            <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+              <Link to="/" className="inline-flex items-center gap-3">
+                <div className="flex h-12 w-12 items-center justify-center rounded-2xl bg-white/10 ring-1 ring-white/15">
+                  <HeartPulse className="h-6 w-6 text-emerald-300" />
+                </div>
+                <div>
+                  <p className="text-lg font-semibold tracking-tight">ALERA</p>
+                  <p className="text-xs text-slate-300">Unified healthcare operations</p>
+                </div>
+              </Link>
+              <Link
+                to="/"
+                className="inline-flex w-fit items-center gap-2 rounded-full border border-white/15 bg-white/10 px-4 py-2 text-sm font-semibold text-white transition hover:bg-white/15"
+              >
+                <ArrowLeft className="h-4 w-4" />
+                Back to home
+              </Link>
+            </div>
 
             <motion.div
               initial={{ opacity: 0, y: 18 }}

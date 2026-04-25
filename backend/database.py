@@ -358,6 +358,35 @@ def _patch_user_postdicom_columns():
             print(f"WARNING: Could not patch users.{column_name} column: {e}")
 
 
+def _patch_audit_log_columns():
+    """Add newer audit log fields when upgrading an existing database."""
+    try:
+        existing = {column["name"] for column in inspect(engine).get_columns("audit_logs")}
+    except Exception:
+        return
+
+    patches = {
+        "role": "VARCHAR(50)",
+        "resource": "VARCHAR(255)",
+        "status": "VARCHAR(50) NOT NULL DEFAULT 'success'",
+        "device_info": "TEXT",
+        "metadata_json": "TEXT",
+        "request_id": "VARCHAR(64)",
+        "request_method": "VARCHAR(16)",
+        "request_path": "VARCHAR(255)",
+        "duration_ms": "INTEGER",
+    }
+
+    for column_name, ddl in patches.items():
+        if column_name in existing:
+            continue
+        try:
+            with engine.begin() as conn:
+                conn.execute(text(f"ALTER TABLE audit_logs ADD COLUMN {column_name} {ddl}"))
+        except Exception as e:
+            print(f"WARNING: Could not patch audit_logs.{column_name} column: {e}")
+
+
 def _collect_sqlalchemy_enum_specs() -> dict[str, list[str]]:
     """Collect the desired persisted labels for every SQLAlchemy enum in metadata."""
 
@@ -583,6 +612,7 @@ def init_db():
         _patch_destination_routing_columns()
         _patch_imaging_result_asset_columns()
         _patch_user_postdicom_columns()
+        _patch_audit_log_columns()
         _patch_userrole_enum_values()
         _patch_postgres_enum_values()
         _patch_admin_accounts_email_verified()

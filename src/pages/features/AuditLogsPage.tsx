@@ -28,6 +28,11 @@ const severityStyles = {
   critical: 'bg-destructive/10 text-destructive border-destructive/20',
 };
 
+const normalizeSeverity = (severity?: string | null): keyof typeof severityStyles => {
+  if (severity === 'warning' || severity === 'critical') return severity;
+  return 'info';
+};
+
 const AuditLogsPage = () => {
   const { user } = useAuth();
   const [logs, setLogs] = useState<AuditLogEntry[]>([]);
@@ -37,6 +42,8 @@ const AuditLogsPage = () => {
   const [isLoading, setIsLoading] = useState(true);
   const [isRefreshing, setIsRefreshing] = useState(false);
   const [error, setError] = useState('');
+  const [warnings, setWarnings] = useState<string[]>([]);
+  const [lastUpdatedAt, setLastUpdatedAt] = useState<string | null>(null);
   const [search, setSearch] = useState('');
   const [userFilter, setUserFilter] = useState('all');
   const [roleFilter, setRoleFilter] = useState('all');
@@ -48,7 +55,7 @@ const AuditLogsPage = () => {
   const fetchAuditData = useCallback(async (silent = false) => {
     if (!silent) setIsRefreshing(true);
     try {
-      const [logData, summaryData, userData] = await Promise.all([
+      const results = await Promise.allSettled([
         api.audit.getLogs({
           skip: 0,
           limit: 200,
@@ -63,14 +70,41 @@ const AuditLogsPage = () => {
         api.audit.getSummary(7),
         api.admin.listAllUsers(0, 200),
       ]);
-      setLogs(logData.items || []);
-      setSummary(summaryData);
-      setUsers(userData || []);
-      setError('');
-    } catch (err) {
-      setError(handleApiError(err));
-      setLogs([]);
-      setSummary(null);
+
+      const [logResult, summaryResult, usersResult] = results;
+      const nextWarnings: string[] = [];
+
+      if (logResult.status === 'fulfilled') {
+        setLogs(logResult.value.items || []);
+        setError('');
+        setLastUpdatedAt(new Date().toISOString());
+      } else {
+        setLogs([]);
+        setError(handleApiError(logResult.reason, 'load audit logs'));
+      }
+
+      if (summaryResult.status === 'fulfilled') {
+        setSummary(summaryResult.value);
+      } else {
+        setSummary(null);
+        nextWarnings.push('Summary metrics are temporarily unavailable.');
+      }
+
+      if (usersResult.status === 'fulfilled') {
+        setUsers(usersResult.value || []);
+      } else {
+        setUsers([]);
+        nextWarnings.push('User directory lookup is temporarily unavailable, so some rows may show raw user IDs.');
+      }
+
+      setWarnings(nextWarnings);
+
+      if (logResult.status === 'fulfilled') {
+        setSelectedLog((previous) => {
+          if (!previous) return previous;
+          return (logResult.value.items || []).find((entry) => entry.id === previous.id) || null;
+        });
+      }
     } finally {
       setIsLoading(false);
       setIsRefreshing(false);
@@ -168,6 +202,18 @@ const AuditLogsPage = () => {
         </div>
       )}
 
+      {warnings.length > 0 && (
+        <div className="rounded-2xl border border-warning/30 bg-warning/10 p-4 text-sm text-warning">
+          <div className="flex items-center gap-2 font-semibold">
+            <AlertTriangle className="h-4 w-4" />
+            Partial live data
+          </div>
+          <p className="mt-2">
+            {warnings.join(' ')}
+          </p>
+        </div>
+      )}
+
       {summary && (
         <div className="grid gap-4 md:grid-cols-4">
           <div className="rounded-2xl border border-border bg-card p-4">
@@ -186,6 +232,12 @@ const AuditLogsPage = () => {
             <div className="text-xs font-semibold uppercase text-muted-foreground">Top Action</div>
             <div className="mt-2 text-sm font-semibold text-foreground">{summary.top_actions[0]?.action || '—'}</div>
           </div>
+        </div>
+      )}
+
+      {lastUpdatedAt && (
+        <div className="text-xs text-muted-foreground">
+          Live data last refreshed {new Date(lastUpdatedAt).toLocaleString()}
         </div>
       )}
 
@@ -290,10 +342,15 @@ const AuditLogsPage = () => {
                         <div className="text-xs text-muted-foreground mt-1 max-w-xs truncate">{log.device_info || log.user_agent || 'Unknown device'}</div>
                       </td>
                       <td className="px-5 py-4">
-                        <span className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-xs font-medium border ${severityStyles[log.severity]}`}>
-                          {severityIcons[log.severity]}
-                          {log.status || log.severity}
-                        </span>
+                        {(() => {
+                          const severity = normalizeSeverity(log.severity);
+                          return (
+                            <span className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-xs font-medium border ${severityStyles[severity]}`}>
+                              {severityIcons[severity]}
+                              {log.status || severity}
+                            </span>
+                          );
+                        })()}
                         {typeof log.duration_ms === 'number' && (
                           <div className="mt-1 text-xs text-muted-foreground">{log.duration_ms} ms</div>
                         )}
