@@ -8,6 +8,7 @@ from datetime import datetime
 from typing import Generator
 import sys
 import os
+import re
 
 database_url = settings.DATABASE_URL
 
@@ -43,22 +44,6 @@ AUDIT_STATUS_SEVERITY_MAP = {
     "failure": "critical",
     "critical": "critical",
 }
-
-# Handle production database settings
-if settings.ENVIRONMENT == "production":
-    # For SQLite in production, use /tmp
-    if database_url.startswith("sqlite"):
-        try:
-            # Ensure we use an absolute path in /tmp
-            db_name = database_url.split("///")[-1] if "///" in database_url else "alera.db"
-            database_url = f"sqlite:////tmp/{db_name}"
-            print(f"ℹ Using production SQLite database at: {database_url}")
-            
-            # Ensure /tmp exists (it should on Vercel)
-            if not os.path.exists("/tmp"):
-                print("WARNING: /tmp directory not found, SQLite might fail")
-        except Exception as e:
-            print(f"WARNING: Failed to reconfigure SQLite path: {e}")
 
 # Database engine configuration
 engine_kwargs = {
@@ -425,7 +410,7 @@ def _normalize_user_role_value(raw_role: str | None) -> str | None:
     if raw_role is None:
         return None
 
-    normalized = raw_role.strip().lower().replace("-", "_")
+    normalized = re.sub(r"[^a-z0-9]+", "_", raw_role.strip().lower()).strip("_")
     if not normalized:
         return None
     if normalized in CANONICAL_USER_ROLE_VALUES:

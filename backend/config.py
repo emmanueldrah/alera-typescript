@@ -5,9 +5,23 @@ import sys
 import os
 import json
 
-# Set default environment
-os.environ.setdefault('ENVIRONMENT', 'development')
 
+def infer_environment_default() -> str:
+    explicit_environment = os.environ.get("ENVIRONMENT")
+    vercel_environment = os.environ.get("VERCEL_ENV")
+    if vercel_environment:
+        normalized_vercel_environment = vercel_environment.strip().lower()
+        if explicit_environment and explicit_environment.strip().lower() not in {"", "development"}:
+            return explicit_environment
+        return normalized_vercel_environment
+
+    if explicit_environment:
+        return explicit_environment
+
+    if os.environ.get("VERCEL") == "1":
+        return "production"
+
+    return "development"
 
 class Settings(BaseSettings):
     # Database
@@ -38,7 +52,18 @@ class Settings(BaseSettings):
                 return True
             if normalized in {"0", "false", "no", "off"}:
                 return False
-        return os.environ.get("ENVIRONMENT", "development").strip().lower() in {"production", "staging"}
+        return infer_environment_default().strip().lower() in {"production", "staging"}
+
+    @field_validator("ENVIRONMENT", mode="before")
+    @classmethod
+    def normalize_environment(cls, value):
+        normalized = str(value).strip().lower() if value is not None else ""
+        vercel_environment = os.environ.get("VERCEL_ENV")
+        if vercel_environment:
+            normalized_vercel_environment = vercel_environment.strip().lower()
+            if normalized in {"", "development"}:
+                return normalized_vercel_environment
+        return normalized or infer_environment_default()
 
     JWT_EXPIRE_HOURS: int = 24
 
@@ -75,7 +100,7 @@ class Settings(BaseSettings):
     TWILIO_PHONE_NUMBER: str = ""
 
     # Environment
-    ENVIRONMENT: str = Field(default="production", description="Environment: development, staging, or production")
+    ENVIRONMENT: str = Field(default_factory=infer_environment_default, description="Environment: development, staging, or production")
     DEBUG: bool = Field(default=False, description="Debug mode flag")
 
     # WebRTC
@@ -94,6 +119,29 @@ class Settings(BaseSettings):
         case_sensitive=True,
         extra="allow",  # Allow extra fields from environment variables
     )
+
+    @classmethod
+    def settings_customise_sources(
+        cls,
+        settings_cls,
+        init_settings,
+        env_settings,
+        dotenv_settings,
+        file_secret_settings,
+    ):
+        if os.environ.get("VERCEL") == "1" or os.environ.get("VERCEL_ENV"):
+            return (
+                init_settings,
+                env_settings,
+                file_secret_settings,
+            )
+
+        return (
+            init_settings,
+            env_settings,
+            dotenv_settings,
+            file_secret_settings,
+        )
 
     @field_validator("CORS_ORIGINS", mode="before")
     @classmethod

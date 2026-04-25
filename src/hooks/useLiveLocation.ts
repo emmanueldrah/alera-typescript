@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 
 import { liveLocationApi } from '@/lib/apiService';
+import { normalizeUserRole } from '@/lib/roleUtils';
 import { buildSocketUrl } from '@/lib/socketUrl';
 
 export interface LocationData {
@@ -44,7 +45,7 @@ export const useLiveLocation = ({
   const isMounted = useRef(true);
 
   const setRoleLocation = useCallback((payload: LocationData) => {
-    const normalizedRole = payload.role === 'provider' ? 'doctor' : payload.role;
+    const normalizedRole = normalizeUserRole(payload.role) ?? payload.role;
     if (normalizedRole === 'patient') {
       setPatientLocation(payload);
     } else if (normalizedRole === 'ambulance') {
@@ -250,7 +251,7 @@ export const useLiveLocation = ({
   }, [connect, enabled, requestId, shouldShare, startSnapshotPolling, startTracking, stopTracking]);
 
   const peerLocation = useMemo(() => {
-    const normalizedRole = myRole === 'provider' ? 'doctor' : myRole;
+    const normalizedRole = normalizeUserRole(myRole) ?? myRole;
     return normalizedRole === 'patient' ? ambulanceLocation : patientLocation;
   }, [ambulanceLocation, myRole, patientLocation]);
 

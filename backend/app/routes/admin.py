@@ -1,3 +1,4 @@
+import logging
 from fastapi import APIRouter, Depends, HTTPException, status, Body
 from sqlalchemy import func
 from sqlalchemy.orm import Session
@@ -18,6 +19,7 @@ from pydantic import BaseModel, EmailStr, Field, model_validator
 from typing import Optional
 
 router = APIRouter(prefix="/api/admin", tags=["admin"])
+logger = logging.getLogger(__name__)
 
 
 # ─────────────────────────────────────────────────────────────────────────────
@@ -31,6 +33,28 @@ def _revoke_user_sessions(user: User) -> None:
 def _workforce_users_query(db: Session):
     role_text = normalized_enum_text(User.role)
     return db.query(User).filter(role_text.in_([role.value for role in WORKFORCE_ROLES]))
+
+
+def _log_dashboard_query_failure(label: str, exc: Exception) -> None:
+    logger.warning("Admin dashboard query failed for %s", label, exc_info=exc)
+
+
+def _dashboard_user_counts(db: Session) -> dict[str, int]:
+    counts = {role.value: 0 for role in UserRole}
+    role_text = normalized_enum_text(User.role)
+    rows = (
+        db.query(role_text.label("role"), func.count(User.id).label("count"))
+        .group_by(role_text)
+        .all()
+    )
+    for role, count in rows:
+        if role in counts:
+            counts[role] = count
+    return counts
+
+
+def _status_value(value):
+    return value.value if hasattr(value, "value") else value
 
 
 # ─────────────────────────────────────────────────────────────────────────────
@@ -121,13 +145,10 @@ async def get_dashboard_stats(
     active_emergencies = 0
 
     try:
-        role_text = normalized_enum_text(User.role)
-        for role in UserRole:
-            count = db.query(User).filter(role_text == role.value).count()
-            user_counts[role.value] = count
+        user_counts = _dashboard_user_counts(db)
         total_users = sum(user_counts.values())
-    except Exception as e:
-        print(f"Warning: Failed to fetch user counts: {e}")
+    except Exception as exc:
+        _log_dashboard_query_failure("users", exc)
 
     try:
         today = utcnow().date()
@@ -138,15 +159,15 @@ async def get_dashboard_stats(
             Appointment.scheduled_time >= start_of_today,
             Appointment.scheduled_time <= end_of_today
         ).count()
-    except Exception as e:
-        print(f"Warning: Failed to fetch appointment counts: {e}")
+    except Exception as exc:
+        _log_dashboard_query_failure("appointments", exc)
 
     try:
         active_prescriptions = db.query(Prescription).filter(
             Prescription.status == "active"
         ).count()
-    except Exception as e:
-        print(f"Warning: Failed to fetch prescription counts: {e}")
+    except Exception as exc:
+        _log_dashboard_query_failure("prescriptions", exc)
 
     try:
         pending_labs = db.query(LabTest).filter(
@@ -155,8 +176,8 @@ async def get_dashboard_stats(
         pending_imaging = db.query(ImagingScan).filter(
             ImagingScan.status != ImagingScanStatus.COMPLETED.value
         ).count()
-    except Exception as e:
-        print(f"Warning: Failed to fetch lab/imaging counts: {e}")
+    except Exception as exc:
+        _log_dashboard_query_failure("lab_imaging", exc)
 
     try:
         active_emergencies = db.query(AmbulanceRequest).filter(
@@ -164,8 +185,8 @@ async def get_dashboard_stats(
             AmbulanceRequest.status != AmbulanceRequestStatus.CANCELLED.value,
             AmbulanceRequest.priority == EmergencyPriority.CRITICAL.value
         ).count()
-    except Exception as e:
-        print(f"Warning: Failed to fetch emergency counts: {e}")
+    except Exception as exc:
+        _log_dashboard_query_failure("emergencies", exc)
 
     return {
         "timestamp": utcnow(),
@@ -759,6 +780,7 @@ async def get_ecosystem_activity(
 ):
     """Centralized feed of recent ecosystem events"""
 
+    limit = min(max(limit, 1), 100)
     activity = []
 
     try:
@@ -786,10 +808,10 @@ async def get_ecosystem_activity(
                 "type": "lab_test",
                 "time": l.ordered_at,
                 "description": f"Lab test requested: {l.test_name}",
-                "status": l.status.value if hasattr(l.status, 'value') else l.status
+                "status": _status_value(l.status)
             })
-    except Exception as e:
-        print(f"Activity feed warning: {e}")
+    except Exception as exc:
+        logger.warning("Failed to build ecosystem activity feed", exc_info=exc)
 
     activity.sort(key=lambda x: x["time"], reverse=True)
     return activity[:limit]
@@ -817,6 +839,6 @@ async def get_active_emergency_dispatch(
         ).order_by(AmbulanceRequest.requested_at.desc()).all()
 
         return [req.to_dict() for req in active_requests]
-    except Exception as e:
-        print(f"Emergency monitor error: {e}")
+    except Exception as exc:
+        logger.warning("Failed to load active emergency dispatch view", exc_info=exc)
         return []

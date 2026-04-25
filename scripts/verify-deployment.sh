@@ -109,13 +109,34 @@ else
     pass "No obvious hardcoded secrets found"
 fi
 
-# 8. Check for .env files
+# 8. Check for local env files
 echo ""
 echo "8️⃣  Checking .env files..."
-if [ -f ".env" ] || [ -f ".env.local" ]; then
-    warn ".env file found (ensure it's in .gitignore)"
+LOCAL_ENV_FILES=()
+for env_file in .env .env.local backend/.env; do
+    if [ -f "$env_file" ]; then
+        LOCAL_ENV_FILES+=("$env_file")
+    fi
+done
+
+if [ ${#LOCAL_ENV_FILES[@]} -gt 0 ]; then
+    warn "Local env files present: ${LOCAL_ENV_FILES[*]}"
+    echo "    They are fine for local development, but Vercel should rely on dashboard env vars only."
 else
-    pass "No .env files in repository (good)"
+    pass "No local env files found"
+fi
+
+TRACKED_ENV_FILES=()
+for env_file in .env .env.local backend/.env; do
+    if git ls-files --error-unmatch "$env_file" > /dev/null 2>&1; then
+        TRACKED_ENV_FILES+=("$env_file")
+    fi
+done
+
+if [ ${#TRACKED_ENV_FILES[@]} -gt 0 ]; then
+    fail "Tracked env files detected: ${TRACKED_ENV_FILES[*]}"
+else
+    pass "No env files are tracked by git"
 fi
 
 # 9. Check TypeScript
@@ -173,6 +194,16 @@ for env_var in "${REQUIRED_ENV_VARS[@]}"; do
     fi
 done
 
+if [ "${ENVIRONMENT}" = "development" ]; then
+    warn "ENVIRONMENT is set to development in the current shell. Do not use that value on Vercel."
+fi
+
+if [ -n "${VERCEL_ENV}" ]; then
+    pass "VERCEL_ENV is visible in the current shell: ${VERCEL_ENV}"
+else
+    warn "VERCEL_ENV is not set locally. On Vercel it should be preview or production."
+fi
+
 # 14. Summary
 echo ""
 echo "======================================"
@@ -190,5 +221,6 @@ echo "  [ ] Generate SECRET_KEY: python scripts/generate_keys.py"
 echo "  [ ] Generate ENCRYPTION_KEY (same script)"
 echo "  [ ] Add keys to Vercel Environment Variables"
 echo "  [ ] Configure DATABASE_URL for production"
+echo "  [ ] Confirm Vercel is not injecting ENVIRONMENT=development"
 echo "  [ ] Test deployment: https://alera-typescript.vercel.app"
 echo ""

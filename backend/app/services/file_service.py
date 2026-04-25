@@ -4,6 +4,7 @@ File management utilities and services for ALERA healthcare platform
 VERSION: 2026-04-02 21:25 - Force rebuild with no module-level filesystem ops
 """
 
+import logging
 import os
 import uuid
 from pathlib import Path
@@ -12,6 +13,7 @@ from fastapi import UploadFile, HTTPException
 from config import settings
 from app.utils.time import utcnow
 
+logger = logging.getLogger(__name__)
 
 # Configuration constants
 ALLOWED_EXTENSIONS = {
@@ -52,6 +54,15 @@ MAX_FILE_SIZE = 25 * 1024 * 1024  # 25 MB
 
 # Upload directory cache
 _UPLOAD_DIR_CACHE = None
+DEFAULT_UPLOAD_DIR = Path("uploads")
+SERVERLESS_UPLOAD_DIR = Path("/tmp/alera_uploads")
+
+
+def _configured_upload_dir() -> Path | None:
+    raw_value = str(getattr(settings, "UPLOAD_DIR", "") or "").strip()
+    if not raw_value:
+        return None
+    return Path(raw_value)
 
 def get_upload_dir():
     """
@@ -64,16 +75,18 @@ def get_upload_dir():
         return _UPLOAD_DIR_CACHE
     
     try:
+        configured_dir = _configured_upload_dir()
         is_vercel = os.path.exists('/var/task') or os.path.exists('/var/runtime')
-        is_production = settings.ENVIRONMENT == "production"
-        
-        if is_vercel or is_production:
-            _UPLOAD_DIR_CACHE = Path("/tmp/alera_uploads")
+
+        if configured_dir is not None:
+            _UPLOAD_DIR_CACHE = configured_dir
+        elif is_vercel:
+            _UPLOAD_DIR_CACHE = SERVERLESS_UPLOAD_DIR
         else:
-            _UPLOAD_DIR_CACHE = Path("uploads")
-    except Exception:
-        # Fallback to /tmp if any error occurs
-        _UPLOAD_DIR_CACHE = Path("/tmp/alera_uploads")
+            _UPLOAD_DIR_CACHE = DEFAULT_UPLOAD_DIR
+    except Exception as exc:
+        logger.warning("Failed to resolve upload directory, falling back to default path", exc_info=exc)
+        _UPLOAD_DIR_CACHE = DEFAULT_UPLOAD_DIR
     
     return _UPLOAD_DIR_CACHE
 
@@ -99,14 +112,23 @@ class FileStorageService:
     """Handle file uploads and storage"""
 
     @staticmethod
-    def ensure_upload_directory():
-        """Create upload directory if needed - called only when actually saving files"""
+    def ensure_upload_directory(path: Path | None = None) -> Path:
+        """Create and return the target upload directory."""
+        target = path or get_upload_dir()
         try:
-            # Never fails on read-only filesystem - just silently continues
-            get_upload_dir().mkdir(exist_ok=True, parents=True)
-        except Exception:
-            # Silently ignore all errors - we'll handle them when actually writing
-            pass
+            target.mkdir(exist_ok=True, parents=True)
+            return target
+        except Exception as exc:
+            logger.error("Upload storage is unavailable for path %s", target, exc_info=exc)
+            raise HTTPException(status_code=503, detail="Upload storage is unavailable") from exc
+
+    @staticmethod
+    def _cleanup_file(file_path: Path) -> None:
+        try:
+            if file_path.exists():
+                file_path.unlink()
+        except Exception as exc:
+            logger.warning("Failed to cleanup temporary upload file at %s", file_path, exc_info=exc)
 
     @staticmethod
     def validate_file(file: UploadFile) -> tuple[bool, str]:
@@ -161,15 +183,9 @@ class FileStorageService:
         if not file.filename or not isinstance(file.filename, str):
             raise HTTPException(status_code=400, detail="Invalid filename")
 
-        # Ensure upload directory exists
-        FileStorageService.ensure_upload_directory()
-
         # Create subfolder
-        save_dir = get_upload_dir() / _safe_subfolder_path(subfolder)
-        try:
-            save_dir.mkdir(parents=True, exist_ok=True)
-        except Exception:
-            pass
+        base_upload_dir = FileStorageService.ensure_upload_directory()
+        save_dir = FileStorageService.ensure_upload_directory(base_upload_dir / _safe_subfolder_path(subfolder))
 
         # Generate unique filename
         filename = Path(file.filename).name if file.filename else "unknown"
@@ -204,18 +220,11 @@ class FileStorageService:
                 "upload_time": utcnow().isoformat(),
             }
         except HTTPException:
-            try:
-                if file_path.exists():
-                    file_path.unlink()
-            except Exception:
-                pass
+            FileStorageService._cleanup_file(file_path)
             raise
-        except Exception as e:
-            try:
-                if file_path.exists():
-                    file_path.unlink()
-            except Exception:
-                pass
+        except Exception as exc:
+            logger.error("Failed to save uploaded file %s", filename, exc_info=exc)
+            FileStorageService._cleanup_file(file_path)
             raise HTTPException(status_code=500, detail="Failed to save file")
 
     @staticmethod
@@ -231,8 +240,8 @@ class FileStorageService:
             for file_path in save_dir.glob(f"{file_id}.*"):
                 if file_path.is_file():
                     return file_path
-        except Exception:
-            pass
+        except Exception as exc:
+            logger.warning("Failed to resolve file path for file_id=%s in %s", file_id, save_dir, exc_info=exc)
         
         return None
 
@@ -247,7 +256,8 @@ class FileStorageService:
             try:
                 file_path.unlink()
                 return True
-            except Exception:
+            except Exception as exc:
+                logger.warning("Failed to delete file %s", file_path, exc_info=exc)
                 return False
         return False
 
@@ -261,7 +271,8 @@ class FileStorageService:
         if file_path and file_path.exists():
             try:
                 return file_path.stat().st_size
-            except Exception:
+            except Exception as exc:
+                logger.warning("Failed to read file size for %s", file_path, exc_info=exc)
                 return 0
         return 0
 

@@ -42,3 +42,21 @@ def test_save_file_sanitizes_original_filename_metadata():
 
     assert result["filename"] == "report.pdf"
     assert result["file_path"].endswith(".pdf")
+
+
+def test_save_file_returns_503_when_upload_storage_is_unavailable(monkeypatch):
+    upload = UploadFile(
+        file=BytesIO(b"%PDF-1.4\nok"),
+        filename="report.pdf",
+        headers=Headers({"content-type": "application/pdf"}),
+    )
+
+    def fail_mkdir(self, *args, **kwargs):
+        raise OSError("read-only filesystem")
+
+    monkeypatch.setattr(file_service_module.Path, "mkdir", fail_mkdir, raising=False)
+
+    with pytest.raises(HTTPException) as exc_info:
+        asyncio.run(FileStorageService.save_file(upload, subfolder="documents"))
+
+    assert exc_info.value.status_code == 503

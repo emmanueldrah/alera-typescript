@@ -8,7 +8,7 @@ Set these environment variables in your hosting platform before deployment:
 
 | Variable | Required | Notes |
 | --- | --- | --- |
-| `ENVIRONMENT` | Yes | Must be `production` |
+| `ENVIRONMENT` | Optional | Leave unset on Vercel unless you need an explicit override. Never set it to `development`. |
 | `DATABASE_URL` | Yes | Use managed PostgreSQL, not SQLite |
 | `SECRET_KEY` | Yes | Strong random value for JWT signing |
 | `ENCRYPTION_KEY` | Yes | Strong random value for protected data |
@@ -46,6 +46,7 @@ Expected outcome:
 2. Confirm the production database is reachable.
 3. Deploy the current main branch.
 4. Wait for the frontend build and Python API deployment to finish.
+5. Confirm `/api/health` does not report `environment: development`.
 
 ## 4. Post-Deploy Verification
 
@@ -60,6 +61,7 @@ Expected results:
 - `/api/health` returns `200`
 - `/api/ready` returns `200`
 - response payload reports healthy/ready status
+- response payload reports `environment` as `preview` or `production`
 
 Manual smoke checks:
 
@@ -79,12 +81,15 @@ Rollback immediately if any of the following occur:
 - production DB writes fail
 - repeated 500s appear in Vercel logs
 - dashboard routes fail to load required chunks
+- `/api/health` reports `environment: development` on a Vercel deployment
 
 ## 6. Operational Notes
 
 - ALERA now splits frontend routes into separate chunks, so watch for chunk-load failures in browser logs after deploy.
 - API responses include request IDs and security headers; use request IDs when tracing production issues.
 - Default admin seeding is blocked in production unless explicit credentials are configured.
+- Vercel deployments should rely on dashboard environment variables, not local `.env` files.
+- On Vercel, ALERA now prefers `VERCEL_ENV` over a mistaken `ENVIRONMENT=development` value, but the dashboard value should still be corrected.
 
 ## 7. Recommended Follow-Up Integrations
 

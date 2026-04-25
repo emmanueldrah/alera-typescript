@@ -841,6 +841,29 @@ def test_email_verification_flow_and_resend(db_session, monkeypatch):
     assert user.email_verification_expires_at is None
 
 
+def test_registration_rolls_back_when_verification_email_delivery_fails(db_session, monkeypatch):
+    async def failing_send_verification_email(*args, **kwargs):
+        raise RuntimeError("mail provider unavailable")
+
+    monkeypatch.setattr("app.routes.auth.EmailService.send_verification_email", failing_send_verification_email)
+
+    with pytest.raises(HTTPException) as exc_info:
+        run(register(
+            UserCreate(
+                email="cannotverify@example.com",
+                username="cannotverify",
+                first_name="Cannot",
+                last_name="Verify",
+                password="password123",
+                role="patient",
+            ),
+            db_session,
+        ))
+
+    assert exc_info.value.status_code == 503
+    assert db_session.query(User).filter(User.email == "cannotverify@example.com").first() is None
+
+
 def test_admin_resend_verification_is_a_noop(db_session):
     admin = load_user(db_session, ADMIN_EMAIL)
     admin.email_verified = False
@@ -902,6 +925,36 @@ def test_password_reset_flow_revokes_sessions_and_allows_new_login(db_session, m
 
     new_login = run(login(LoginRequest(email="resetme@example.com", password="newpassword123"), db_session))
     assert new_login["user"].email == "resetme@example.com"
+
+
+def test_password_reset_request_rolls_back_token_when_email_delivery_fails(db_session, monkeypatch):
+    async def noop_send_verification_email(*args, **kwargs):
+        return None
+
+    async def failing_send_password_reset(*args, **kwargs):
+        raise RuntimeError("mail provider unavailable")
+
+    monkeypatch.setattr("app.routes.auth.EmailService.send_verification_email", noop_send_verification_email)
+    monkeypatch.setattr("app.routes.auth.EmailService.send_password_reset", failing_send_password_reset)
+
+    run(register(
+        UserCreate(
+            email="resetfail@example.com",
+            username="resetfail",
+            first_name="Reset",
+            last_name="Fail",
+            password="password123",
+            role="patient",
+        ),
+        db_session,
+    ))
+
+    result = run(request_password_reset(PasswordResetRequest(email="resetfail@example.com"), db_session))
+    assert "reset link has been sent" in result["message"].lower()
+
+    user = load_user(db_session, "resetfail@example.com")
+    assert user.password_reset_token_hash is None
+    assert user.password_reset_expires_at is None
 
 
 def test_imaging_center_can_upload_report_and_multiple_scan_files(db_session, monkeypatch):

@@ -1,3 +1,4 @@
+import logging
 from fastapi import APIRouter, Depends, HTTPException, status, Response, Request
 from sqlalchemy.orm import Session
 from datetime import datetime, timedelta
@@ -33,6 +34,7 @@ from app.services.audit_service import client_ip_from_request, summarize_device_
 import sys
 
 router = APIRouter(prefix="/api/auth", tags=["auth"])
+logger = logging.getLogger(__name__)
 
 
 class RefreshTokenRequest(BaseModel):
@@ -47,14 +49,14 @@ def _frontend_link(path: str, token: str) -> str:
     return f"{settings.FRONTEND_URL.rstrip('/')}{path}?token={token}"
 
 
-def _issue_email_verification_token(user: User, db: Session) -> str:
+def _issue_email_verification_token(user: User) -> str:
     token = generate_secure_token()
     user.email_verification_token_hash = hash_token(token)
     user.email_verification_expires_at = utcnow() + timedelta(hours=24)
     return token
 
 
-def _issue_password_reset_token(user: User, db: Session) -> str:
+def _issue_password_reset_token(user: User) -> str:
     token = generate_secure_token()
     user.password_reset_token_hash = hash_token(token)
     user.password_reset_expires_at = utcnow() + timedelta(hours=24)
@@ -74,6 +76,14 @@ def _build_token_pair(user: User) -> tuple[str, str]:
 
 def _serialize_user(user: User) -> UserResponse:
     return UserResponse.model_validate(user)
+
+
+def _commit_or_rollback(db: Session) -> None:
+    try:
+        db.commit()
+    except Exception:
+        db.rollback()
+        raise
 
 
 @router.post("/register", status_code=status.HTTP_201_CREATED)
@@ -136,23 +146,21 @@ async def register(
     db.flush()
 
     if not db_user.email_verified:
-        verification_token = _issue_email_verification_token(db_user, db)
-        try:
-            from app.utils.notification_utils import NotificationManager
-            await NotificationManager.send_verification_email(
-                user=db_user,
-                verification_link=_frontend_link("/verify-email", verification_token),
-            )
-        except HTTPException:
+        verification_token = _issue_email_verification_token(db_user)
+        from app.utils.notification_utils import NotificationManager
+        email_sent = await NotificationManager.send_verification_email(
+            user=db_user,
+            verification_link=_frontend_link("/verify-email", verification_token),
+        )
+        if not email_sent:
             db.rollback()
-            raise
+            raise HTTPException(
+                status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+                detail="Unable to deliver verification email right now. Please try again shortly.",
+            )
 
-    try:
-        db.commit()
-        db.refresh(db_user)
-    except Exception:
-        db.rollback()
-        raise
+    _commit_or_rollback(db)
+    db.refresh(db_user)
 
     access_token, refresh_token = _build_token_pair(db_user)
 
@@ -282,22 +290,21 @@ async def request_password_reset(
     if not user or not user.is_active:
         return {"message": "If an account with that email exists, a reset link has been sent."}
 
-    reset_token = _issue_password_reset_token(user, db)
-    try:
-        from app.utils.notification_utils import NotificationManager
-        await NotificationManager.send_password_reset_email(
-            user=user,
-            reset_link=_frontend_link("/reset-password", reset_token),
+    reset_token = _issue_password_reset_token(user)
+    from app.utils.notification_utils import NotificationManager
+    email_sent = await NotificationManager.send_password_reset_email(
+        user=user,
+        reset_link=_frontend_link("/reset-password", reset_token),
+    )
+    if not email_sent:
+        db.rollback()
+        logger.warning(
+            "Password reset email could not be delivered for user_id=%s",
+            user.id,
         )
-    except HTTPException:
-        db.rollback()
-        raise
+        return {"message": "If an account with that email exists, a reset link has been sent."}
 
-    try:
-        db.commit()
-    except Exception:
-        db.rollback()
-        raise
+    _commit_or_rollback(db)
     return {"message": "If an account with that email exists, a reset link has been sent."}
 
 
@@ -333,11 +340,7 @@ async def reset_password(
     user.password_reset_token_hash = None
     user.password_reset_expires_at = None
     user.session_version = int(user.session_version or 0) + 1
-    try:
-        db.commit()
-    except Exception:
-        db.rollback()
-        raise
+    _commit_or_rollback(db)
 
     await log_action(
         db=db,
@@ -378,7 +381,7 @@ async def verify_email(
     user.email_verified_at = utcnow()
     user.email_verification_token_hash = None
     user.email_verification_expires_at = None
-    db.commit()
+    _commit_or_rollback(db)
 
     await log_action(
         db=db,
@@ -405,18 +408,20 @@ async def resend_email_verification(
     if current_user.role in (UserRole.ADMIN, UserRole.SUPER_ADMIN) or current_user.email_verified:
         return {"message": "Email is already verified"}
 
-    verification_token = _issue_email_verification_token(current_user, db)
-    try:
-        from app.utils.notification_utils import NotificationManager
-        await NotificationManager.send_verification_email(
-            user=current_user,
-            verification_link=_frontend_link("/verify-email", verification_token),
-        )
-    except HTTPException:
+    verification_token = _issue_email_verification_token(current_user)
+    from app.utils.notification_utils import NotificationManager
+    email_sent = await NotificationManager.send_verification_email(
+        user=current_user,
+        verification_link=_frontend_link("/verify-email", verification_token),
+    )
+    if not email_sent:
         db.rollback()
-        raise
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail="Unable to deliver verification email right now. Please try again shortly.",
+        )
 
-    db.commit()
+    _commit_or_rollback(db)
 
     await log_action(
         db=db,
@@ -527,7 +532,7 @@ async def change_password(
     # Hash and update password
     current_user.hashed_password = hash_password(request.new_password)
     current_user.session_version = int(current_user.session_version or 0) + 1
-    db.commit()
+    _commit_or_rollback(db)
     db.refresh(current_user)
 
     await log_action(
@@ -553,7 +558,7 @@ async def logout(
     """Logout user by revoking the current session version and clearing cookies."""
 
     current_user.session_version = int(current_user.session_version or 0) + 1
-    db.commit()
+    _commit_or_rollback(db)
 
     if response is not None:
         clear_auth_cookies(response)
@@ -596,7 +601,7 @@ async def delete_account(
 
     current_user.is_active = False
     current_user.session_version = int(current_user.session_version or 0) + 1
-    db.commit()
+    _commit_or_rollback(db)
 
     await log_action(
         db=db,

@@ -3,6 +3,7 @@ import { clearAleraStorage } from '@/lib/storageKeys';
 import { AuthContext } from './auth-context';
 import { accountLinksApi, authApi, usersApi, type ApiLinkedAccountSummary, type ApiUser } from '@/lib/apiService';
 import { clearTokens, setGlobalLogoutCallback } from '@/lib/apiClient';
+import { normalizeUserRole } from '@/lib/roleUtils';
 
 export type UserRole =
   | 'patient'
@@ -71,30 +72,7 @@ const ACCESSIBLE_USERS_PAGE_SIZE = 100;
 type BackendRole = ApiUser['role'];
 
 const mapBackendRoleToUserRole = (role: BackendRole | string): UserRole => {
-  switch (role) {
-    case 'patient':
-      return 'patient';
-    case 'provider':
-      return 'doctor';
-    case 'pharmacist':
-      return 'pharmacy';
-    case 'hospital':
-      return 'hospital';
-    case 'laboratory':
-      return 'laboratory';
-    case 'imaging':
-      return 'imaging';
-    case 'ambulance':
-      return 'ambulance';
-    case 'physiotherapist':
-      return 'physiotherapist';
-    case 'admin':
-      return 'admin';
-    case 'super_admin':
-      return 'super_admin';
-    default:
-      return 'patient';
-  }
+  return normalizeUserRole(role) ?? 'patient';
 };
 
 const mapLinkedAccount = (data: ApiLinkedAccountSummary): LinkedAccountSummary => ({

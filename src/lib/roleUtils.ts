@@ -11,10 +11,11 @@ const allowedRoles: UserRole[] = ['patient', 'doctor', 'hospital', 'laboratory',
 export const normalizeUserRole = (role: unknown): UserRole | undefined => {
   if (typeof role !== 'string') return undefined;
 
+  const normalized = role.trim().toLowerCase().replace(/[\s-]+/g, '_');
   const mapped =
-    role === 'provider' ? 'doctor' :
-    role === 'pharmacist' ? 'pharmacy' :
-    role;
+    normalized === 'provider' ? 'doctor' :
+    normalized === 'pharmacist' ? 'pharmacy' :
+    normalized;
 
   return allowedRoles.includes(mapped as UserRole) ? (mapped as UserRole) : undefined;
 };

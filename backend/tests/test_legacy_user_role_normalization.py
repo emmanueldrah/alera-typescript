@@ -86,8 +86,8 @@ def _insert_legacy_user(*, email: str, username: str, role: str) -> int:
 
 def test_init_db_normalizes_legacy_role_aliases_for_admin_user_listing(db_session):
     admin = _load_seeded_admin(db_session)
-    _insert_legacy_user(email="legacy.doctor@alera.health", username="legacydoctor", role="doctor")
-    _insert_legacy_user(email="legacy.pharmacy@alera.health", username="legacypharmacy", role="pharmacy")
+    _insert_legacy_user(email="legacy.doctor@alera.health", username="legacydoctor", role="Doctor")
+    _insert_legacy_user(email="legacy.pharmacy@alera.health", username="legacypharmacy", role="PHARMACY")
 
     init_db()
 
