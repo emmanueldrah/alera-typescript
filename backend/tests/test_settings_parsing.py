@@ -20,10 +20,10 @@ def test_settings_accept_comma_separated_cors_origins():
 
 def test_settings_infer_vercel_preview_environment(monkeypatch):
     monkeypatch.delenv("ENVIRONMENT", raising=False)
+    monkeypatch.delenv("DATABASE_URL", raising=False)
     monkeypatch.setenv("VERCEL_ENV", "preview")
 
     settings = Settings(
-        DATABASE_URL="sqlite:///test.db",
         SECRET_KEY="strong-secret-key",
         ENCRYPTION_KEY="strong-encryption-key",
         FRONTEND_URL="https://preview.example.com",
@@ -31,6 +31,7 @@ def test_settings_infer_vercel_preview_environment(monkeypatch):
     )
 
     assert settings.ENVIRONMENT == "preview"
+    assert settings.DATABASE_URL == "sqlite:////tmp/alera.db"
 
 
 def test_settings_ignore_development_override_on_vercel(monkeypatch):
@@ -50,10 +51,10 @@ def test_settings_ignore_development_override_on_vercel(monkeypatch):
 
 def test_settings_do_not_force_preview_deployments_into_production(monkeypatch):
     monkeypatch.setenv("ENVIRONMENT", "production")
+    monkeypatch.delenv("DATABASE_URL", raising=False)
     monkeypatch.setenv("VERCEL_ENV", "preview")
 
     settings = Settings(
-        DATABASE_URL="sqlite:///test.db",
         SECRET_KEY="strong-secret-key",
         ENCRYPTION_KEY="strong-encryption-key",
         FRONTEND_URL="https://preview.example.com",
@@ -61,3 +62,4 @@ def test_settings_do_not_force_preview_deployments_into_production(monkeypatch):
     )
 
     assert settings.ENVIRONMENT == "preview"
+    assert settings.DATABASE_URL == "sqlite:////tmp/alera.db"

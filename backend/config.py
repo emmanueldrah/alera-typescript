@@ -20,9 +20,15 @@ def infer_environment_default() -> str:
 
     return "development"
 
+
+def infer_database_url_default() -> str:
+    if os.environ.get("VERCEL") == "1" or os.environ.get("VERCEL_ENV"):
+        return "sqlite:////tmp/alera.db"
+    return "sqlite:///alera.db"
+
 class Settings(BaseSettings):
     # Database
-    DATABASE_URL: str = Field(default="sqlite:///alera.db", description="Database connection URL")
+    DATABASE_URL: str = Field(default_factory=infer_database_url_default, description="Database connection URL")
     DATABASE_ECHO: bool = False
 
     # Redis
@@ -214,7 +220,10 @@ class Settings(BaseSettings):
     @field_validator("DATABASE_URL")
     @classmethod
     def validate_database_url(cls, value: str):
-        if not value:
+        if not value or not value.strip():
+            fallback = infer_database_url_default()
+            if fallback:
+                return fallback
             raise ValueError("DATABASE_URL is required")
         return value
 
