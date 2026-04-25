@@ -7,6 +7,7 @@ import traceback
 from pathlib import Path
 from threading import Lock
 
+from fastapi import FastAPI
 from fastapi.responses import JSONResponse
 
 
@@ -119,89 +120,64 @@ class LazyBackendApp:
 
 
 backend_app = LazyBackendApp()
+app = FastAPI(title="ALERA Healthcare API", version="serverless")
 
 
-class VercelApp:
-    async def __call__(self, scope, receive, send) -> None:
-        if scope["type"] == "lifespan":
-            await self._handle_lifespan(receive, send)
-            return
+@app.get("/api/health")
+async def health_check():
+    database_ok, database_status = backend_app.database_status()
+    backend_status = backend_app.backend_status()
 
-        path = scope.get("path", "")
+    payload = {
+        "status": "healthy" if database_ok and backend_status == "ok" else "degraded",
+        "service": "ALERA Healthcare API",
+        "environment": _runtime_environment(),
+        "checks": {
+            "backend": backend_status,
+            "database": database_status,
+        },
+        "path": "/api/health",
+    }
+    if backend_app.startup_error:
+        payload["startup_error"] = backend_app.startup_error
 
-        if scope["type"] == "http" and path == "/api/health":
-            await self.health_check(scope, receive, send)
-            return
-
-        if scope["type"] == "http" and path == "/api/ready":
-            await self.readiness_check(scope, receive, send)
-            return
-
-        if scope["type"] == "http" and path == "/api":
-            response = JSONResponse(
-                status_code=200,
-                content={
-                    "message": "Welcome to ALERA Healthcare API",
-                    "health": "/api/health",
-                    "readiness": "/api/ready",
-                },
-            )
-            await response(scope, receive, send)
-            return
-
-        await backend_app(scope, receive, send)
-
-    async def _handle_lifespan(self, receive, send) -> None:
-        while True:
-            message = await receive()
-            if message["type"] == "lifespan.startup":
-                await send({"type": "lifespan.startup.complete"})
-            elif message["type"] == "lifespan.shutdown":
-                await send({"type": "lifespan.shutdown.complete"})
-                return
-
-    async def health_check(self, scope, receive, send) -> None:
-        database_ok, database_status = backend_app.database_status()
-        backend_status = backend_app.backend_status()
-
-        payload = {
-            "status": "healthy" if database_ok and backend_status == "ok" else "degraded",
-            "service": "ALERA Healthcare API",
-            "environment": _runtime_environment(),
-            "checks": {
-                "backend": backend_status,
-                "database": database_status,
-            },
-            "path": scope.get("path", ""),
-        }
-        if backend_app.startup_error:
-            payload["startup_error"] = backend_app.startup_error
-
-        response = JSONResponse(status_code=200, content=payload)
-        await response(scope, receive, send)
-
-    async def readiness_check(self, scope, receive, send) -> None:
-        database_ok, database_status = backend_app.database_status()
-        backend_status = backend_app.backend_status()
-        is_ready = backend_status == "ok" and database_ok
-
-        payload = {
-            "status": "ready" if is_ready else "not_ready",
-            "service": "ALERA Healthcare API",
-            "environment": _runtime_environment(),
-            "checks": {
-                "backend": backend_status,
-                "database": database_status,
-            },
-            "path": scope.get("path", ""),
-        }
-        if backend_app.startup_error:
-            payload["startup_error"] = backend_app.startup_error
-
-        response = JSONResponse(status_code=200 if is_ready else 503, content=payload)
-        await response(scope, receive, send)
+    return JSONResponse(status_code=200, content=payload)
 
 
-app = VercelApp()
+@app.get("/api/ready")
+async def readiness_check():
+    database_ok, database_status = backend_app.database_status()
+    backend_status = backend_app.backend_status()
+    is_ready = backend_status == "ok" and database_ok
+
+    payload = {
+        "status": "ready" if is_ready else "not_ready",
+        "service": "ALERA Healthcare API",
+        "environment": _runtime_environment(),
+        "checks": {
+            "backend": backend_status,
+            "database": database_status,
+        },
+        "path": "/api/ready",
+    }
+    if backend_app.startup_error:
+        payload["startup_error"] = backend_app.startup_error
+
+    return JSONResponse(status_code=200 if is_ready else 503, content=payload)
+
+
+@app.get("/api")
+async def api_root():
+    return JSONResponse(
+        status_code=200,
+        content={
+            "message": "Welcome to ALERA Healthcare API",
+            "health": "/api/health",
+            "readiness": "/api/ready",
+        },
+    )
+
+
+app.mount("/", backend_app)
 
 __all__ = ["app"]
