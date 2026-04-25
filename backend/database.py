@@ -11,6 +11,25 @@ import os
 
 database_url = settings.DATABASE_URL
 
+CANONICAL_USER_ROLE_VALUES = {
+    "patient",
+    "provider",
+    "pharmacist",
+    "admin",
+    "super_admin",
+    "hospital",
+    "laboratory",
+    "imaging",
+    "ambulance",
+    "physiotherapist",
+}
+
+LEGACY_USER_ROLE_ALIASES = {
+    "doctor": "provider",
+    "pharmacy": "pharmacist",
+    "superadmin": "super_admin",
+}
+
 # Handle production database settings
 if settings.ENVIRONMENT == "production":
     # For SQLite in production, use /tmp
@@ -387,6 +406,18 @@ def _patch_audit_log_columns():
             print(f"WARNING: Could not patch audit_logs.{column_name} column: {e}")
 
 
+def _normalize_user_role_value(raw_role: str | None) -> str | None:
+    if raw_role is None:
+        return None
+
+    normalized = raw_role.strip().lower().replace("-", "_")
+    if not normalized:
+        return None
+    if normalized in CANONICAL_USER_ROLE_VALUES:
+        return normalized
+    return LEGACY_USER_ROLE_ALIASES.get(normalized)
+
+
 def _collect_sqlalchemy_enum_specs() -> dict[str, list[str]]:
     """Collect the desired persisted labels for every SQLAlchemy enum in metadata."""
 
@@ -467,8 +498,8 @@ def _patch_userrole_enum_values():
     """Add missing user role enum values and rename uppercase to lowercase for PostgreSQL userrole type."""
     if not str(database_url).startswith("postgresql"):
         # SQLite uses VARCHAR, so no enum alteration needed
-        # But we still need to normalize any existing uppercase values
-        _normalize_uppercase_roles_sqlite()
+        # But we still need to normalize any existing legacy values.
+        _normalize_legacy_roles_sqlite()
         return
 
     try:
@@ -495,55 +526,59 @@ def _patch_userrole_enum_values():
                 else:
                     labels = [labels] if labels else []
                 
-                # First, update any existing data to use lowercase
-                renames = {
-                    "PATIENT": "patient",
-                    "PROVIDER": "provider", 
-                    "PHARMACIST": "pharmacist",
-                    "ADMIN": "admin",
-                    "SUPER_ADMIN": "super_admin",
-                    "HOSPITAL": "hospital",
-                    "LABORATORY": "laboratory",
-                    "IMAGING": "imaging",
-                    "AMBULANCE": "ambulance"
-                }
-                
-                # Update data to lowercase first
-                for old_value, new_value in renames.items():
-                    try:
-                        result = conn.execute(text(f"UPDATE users SET role = '{new_value}' WHERE role = '{old_value}'"))
-                        updated = result.rowcount
-                        if updated > 0:
-                            print(f"DEBUG: Updated {updated} users from {old_value} to {new_value}")
-                    except Exception as e:
-                        print(f"WARNING: Could not update role {old_value} to {new_value}: {e}")
-                
-                # Rename enum labels
-                rename_count = 0
-                for old_label, new_label in renames.items():
-                    if old_label in labels:
+                normalized_labels = list(labels)
+                normalized_label_set = set(normalized_labels)
+                renamed_labels = 0
+                updated_rows = 0
+
+                for old_label in list(labels):
+                    new_label = _normalize_user_role_value(old_label)
+                    if not new_label or old_label == new_label:
+                        continue
+
+                    if new_label not in normalized_label_set:
                         try:
-                            conn.execute(text(f"ALTER TYPE {schema_name}.userrole RENAME VALUE '{old_label}' TO '{new_label}'"))
-                            rename_count += 1
+                            conn.execute(
+                                text(f"ALTER TYPE {schema_name}.userrole RENAME VALUE '{old_label}' TO '{new_label}'")
+                            )
+                            normalized_label_set.discard(old_label)
+                            normalized_label_set.add(new_label)
+                            normalized_labels = [new_label if label == old_label else label for label in normalized_labels]
+                            renamed_labels += 1
                             print(f"DEBUG: Renamed enum value {old_label} to {new_label}")
+                            continue
                         except Exception as e:
                             print(f"WARNING: Could not rename {old_label} to {new_label}: {e}")
-                
-                if rename_count > 0:
-                    print(f"✓ Renamed {rename_count} PostgreSQL userrole enum label(s) to lowercase")
-                
-                # Add missing values
-                all_desired = set(renames.values())
-                normalized_labels = {renames.get(value, value) for value in labels}
-                missing_values = [value for value in ("admin", "super_admin") if value not in normalized_labels]
+
+                    try:
+                        result = conn.execute(
+                            text("UPDATE users SET role = :new_role WHERE role = :old_role"),
+                            {"new_role": new_label, "old_role": old_label},
+                        )
+                        if result.rowcount:
+                            updated_rows += result.rowcount
+                            print(f"DEBUG: Updated {result.rowcount} users from {old_label} to {new_label}")
+                    except Exception as e:
+                        print(f"WARNING: Could not update role {old_label} to {new_label}: {e}")
+
+                if renamed_labels > 0:
+                    print(f"✓ Normalized {renamed_labels} PostgreSQL userrole enum label(s)")
+                if updated_rows > 0:
+                    print(f"✓ Rewrote {updated_rows} user row(s) to canonical role values")
+
+                missing_values = [
+                    value for value in CANONICAL_USER_ROLE_VALUES
+                    if value not in normalized_label_set
+                ]
+                for value in missing_values:
+                    try:
+                        conn.execute(text(f"ALTER TYPE {schema_name}.userrole ADD VALUE IF NOT EXISTS '{value}'"))
+                        print(f"DEBUG: Added {value} to userrole enum")
+                    except Exception as e:
+                        print(f"WARNING: Could not add {value} to userrole enum: {e}")
+
                 if missing_values:
-                    for value in missing_values:
-                        try:
-                            conn.execute(text(f"ALTER TYPE {schema_name}.userrole ADD VALUE IF NOT EXISTS '{value}'"))
-                            print(f"DEBUG: Added {value} to userrole enum")
-                        except Exception as e:
-                            print(f"WARNING: Could not add {value} to userrole enum: {e}")
-                    print(f"✓ Added {', '.join(missing_values)} to PostgreSQL userrole enum")
+                    print(f"✓ Added {', '.join(sorted(missing_values))} to PostgreSQL userrole enum")
             else:
                 print("WARNING: userrole enum not found in database via raw SQL")
                 
@@ -553,24 +588,12 @@ def _patch_userrole_enum_values():
         print(f"DEBUG: Exception traceback: {traceback.format_exc()}")
 
 
-def _normalize_uppercase_roles_sqlite():
-    """Normalize any uppercase role values in SQLite to lowercase."""
+def _normalize_legacy_roles_sqlite():
+    """Normalize legacy SQLite role values to the backend's canonical enum values."""
     if not str(database_url).startswith("sqlite"):
         return
 
     try:
-        uppercase_roles = {
-            "PATIENT": "patient",
-            "PROVIDER": "provider",
-            "PHARMACIST": "pharmacist",
-            "ADMIN": "admin",
-            "SUPER_ADMIN": "super_admin",
-            "HOSPITAL": "hospital",
-            "LABORATORY": "laboratory",
-            "IMAGING": "imaging",
-            "AMBULANCE": "ambulance"
-        }
-        
         with engine.begin() as conn:
             # Check if users table exists
             try:
@@ -580,19 +603,27 @@ def _normalize_uppercase_roles_sqlite():
                 # Table doesn't exist yet
                 return
             
-            # Update each uppercase role to lowercase
             update_count = 0
-            for old_role, new_role in uppercase_roles.items():
-                result = conn.execute(text(f"UPDATE users SET role = '{new_role}' WHERE role = '{old_role}'"))
-                updated = result.rowcount
-                if updated > 0:
-                    print(f"DEBUG: Updated {updated} users from {old_role} to {new_role}")
-                    update_count += updated
+            rows = conn.execute(text("SELECT id, role FROM users WHERE role IS NOT NULL")).fetchall()
+            for row in rows:
+                user_id = row[0]
+                raw_role = row[1]
+                new_role = _normalize_user_role_value(raw_role)
+                if not new_role or raw_role == new_role:
+                    continue
+
+                result = conn.execute(
+                    text("UPDATE users SET role = :new_role WHERE id = :user_id"),
+                    {"new_role": new_role, "user_id": user_id},
+                )
+                if result.rowcount > 0:
+                    print(f"DEBUG: Updated user {user_id} role from {raw_role} to {new_role}")
+                    update_count += result.rowcount
             
             if update_count > 0:
-                print(f"✓ Normalized {update_count} role value(s) to lowercase in SQLite")
+                print(f"✓ Normalized {update_count} SQLite user role value(s)")
     except Exception as e:
-        print(f"WARNING: Could not normalize uppercase roles in SQLite: {e}")
+        print(f"WARNING: Could not normalize legacy roles in SQLite: {e}")
 
 
 
