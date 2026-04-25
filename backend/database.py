@@ -60,6 +60,9 @@ elif database_url.startswith("postgresql"):
     # PostgreSQL: Use NullPool for serverless (no connection pooling)
     # Vercel uses ephemeral connections
     engine_kwargs["poolclass"] = NullPool
+    engine_kwargs["connect_args"] = {
+        "connect_timeout": max(1, int(os.environ.get("DATABASE_CONNECT_TIMEOUT_SECONDS", "5"))),
+    }
 else:
     # Default: No pooling for other database types
     if settings.ENVIRONMENT == "production":

@@ -1,11 +1,12 @@
 """Vercel serverless API entry point for ALERA Healthcare."""
 
 import logging
+import os
 import sys
 import traceback
 from pathlib import Path
+from threading import Lock
 
-from fastapi import FastAPI, Request
 from fastapi.responses import JSONResponse
 
 
@@ -18,45 +19,163 @@ sys.path.insert(0, str(_backend))
 sys.path.insert(0, str(_root))
 
 
-def _build_fallback_app(startup_error: str) -> FastAPI:
-    """Return a minimal app so misconfigured deploys report JSON instead of crashing."""
-    fallback_app = FastAPI(title="ALERA Healthcare API", version="startup-error")
+def _runtime_environment() -> str:
+    vercel_environment = (os.environ.get("VERCEL_ENV") or "").strip().lower()
+    if vercel_environment:
+        return vercel_environment
 
-    async def respond_unavailable(request: Request) -> JSONResponse:
+    explicit_environment = (os.environ.get("ENVIRONMENT") or "").strip().lower()
+    if explicit_environment:
+        return explicit_environment
+
+    if os.environ.get("VERCEL") == "1":
+        return "production"
+
+    return "development"
+
+
+class LazyBackendApp:
+    """Load the backend app only when a request actually needs it."""
+
+    def __init__(self) -> None:
+        self._app = None
+        self._startup_error = None
+        self._startup_traceback = None
+        self._lock = Lock()
+
+    def ensure_loaded(self):
+        if self._app is not None or self._startup_error is not None:
+            return self._app
+
+        with self._lock:
+            if self._app is not None or self._startup_error is not None:
+                return self._app
+
+            try:
+                from main import app as imported_app
+
+                if imported_app is None:
+                    raise RuntimeError("FastAPI app is None")
+                self._app = imported_app
+            except Exception as exc:
+                self._startup_error = str(exc)
+                self._startup_traceback = traceback.format_exc()
+                logger.error("ALERA API bootstrap failed on Vercel\n%s", self._startup_traceback)
+
+        return self._app
+
+    def backend_status(self) -> str:
+        if self._app is not None:
+            return "ok"
+        if self._startup_error is not None:
+            return "error"
+        return "pending"
+
+    @property
+    def startup_error(self) -> str | None:
+        return self._startup_error
+
+    def database_status(self) -> tuple[bool, str]:
+        if self.ensure_loaded() is None:
+            return False, self._startup_error or "Backend startup failed"
+
+        try:
+            from app.bootstrap import database_ready
+
+            return database_ready()
+        except Exception as exc:
+            return False, str(exc)
+
+    async def __call__(self, scope, receive, send) -> None:
+        backend_app = self.ensure_loaded()
+        if backend_app is None:
+            response = JSONResponse(
+                status_code=503,
+                content={
+                    "service": "ALERA Healthcare API",
+                    "status": "error",
+                    "message": "API startup failed",
+                    "startup_error": self._startup_error,
+                    "path": scope.get("path", ""),
+                },
+            )
+            await response(scope, receive, send)
+            return
+
+        await backend_app(scope, receive, send)
+
+
+backend_app = LazyBackendApp()
+
+
+class VercelApp:
+    async def __call__(self, scope, receive, send) -> None:
+        path = scope.get("path", "")
+
+        if scope["type"] == "http" and path == "/api/health":
+            await self.health_check(scope, receive, send)
+            return
+
+        if scope["type"] == "http" and path == "/api/ready":
+            await self.readiness_check(scope, receive, send)
+            return
+
+        if scope["type"] == "http" and path == "/api":
+            response = JSONResponse(
+                status_code=200,
+                content={
+                    "message": "Welcome to ALERA Healthcare API",
+                    "health": "/api/health",
+                    "readiness": "/api/ready",
+                },
+            )
+            await response(scope, receive, send)
+            return
+
+        await backend_app(scope, receive, send)
+
+    async def health_check(self, scope, receive, send) -> None:
+        database_ok, database_status = backend_app.database_status()
+        backend_status = backend_app.backend_status()
+
         payload = {
+            "status": "healthy" if database_ok and backend_status == "ok" else "degraded",
             "service": "ALERA Healthcare API",
-            "status": "error",
-            "message": "API startup failed",
-            "startup_error": startup_error,
-            "path": request.url.path,
+            "environment": _runtime_environment(),
+            "checks": {
+                "backend": backend_status,
+                "database": database_status,
+            },
+            "path": scope.get("path", ""),
         }
-        status_code = 503 if request.url.path in {"/api/health", "/api/ready"} else 500
-        return JSONResponse(status_code=status_code, content=payload)
+        if backend_app.startup_error:
+            payload["startup_error"] = backend_app.startup_error
 
-    for method in ("GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS", "HEAD"):
-        fallback_app.add_api_route("/{path:path}", respond_unavailable, methods=[method])
+        response = JSONResponse(status_code=200, content=payload)
+        await response(scope, receive, send)
 
-    return fallback_app
+    async def readiness_check(self, scope, receive, send) -> None:
+        database_ok, database_status = backend_app.database_status()
+        backend_status = backend_app.backend_status()
+        is_ready = backend_status == "ok" and database_ok
+
+        payload = {
+            "status": "ready" if is_ready else "not_ready",
+            "service": "ALERA Healthcare API",
+            "environment": _runtime_environment(),
+            "checks": {
+                "backend": backend_status,
+                "database": database_status,
+            },
+            "path": scope.get("path", ""),
+        }
+        if backend_app.startup_error:
+            payload["startup_error"] = backend_app.startup_error
+
+        response = JSONResponse(status_code=200 if is_ready else 503, content=payload)
+        await response(scope, receive, send)
 
 
-try:
-    # Import FastAPI app from backend.
-    from main import app as imported_app
-    from database import init_db
-
-    app = imported_app
-    assert app is not None, "FastAPI app is None"
-
-    try:
-        init_db()
-    except Exception as exc:
-        logger.exception("Database initialization failed during Vercel bootstrap")
-        if hasattr(app, "state"):
-            app.state.startup_complete = False
-            app.state.startup_error = str(exc)
-except Exception as exc:
-    startup_traceback = traceback.format_exc()
-    logger.error("ALERA API bootstrap failed on Vercel\n%s", startup_traceback)
-    app = _build_fallback_app(str(exc))
+app = VercelApp()
 
 __all__ = ["app"]
