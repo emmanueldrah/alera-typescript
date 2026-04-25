@@ -1,7 +1,14 @@
 {
+  "$schema": "https://openapi.vercel.sh/vercel.json",
   "version": 2,
   "env": {
     "VITE_APP_ENV": "production"
+  },
+  "functions": {
+    "api/**/*.py": {
+      "includeFiles": "{backend/**,requirements.txt}",
+      "excludeFiles": "{backend/tests/**,tests/**,docs/**,src/test/**,.github/**,.vscode/**,.cursor/**}"
+    }
   },
   "builds": [
     {

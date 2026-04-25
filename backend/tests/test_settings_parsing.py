@@ -46,3 +46,18 @@ def test_settings_ignore_development_override_on_vercel(monkeypatch):
     )
 
     assert settings.ENVIRONMENT == "production"
+
+
+def test_settings_do_not_force_preview_deployments_into_production(monkeypatch):
+    monkeypatch.setenv("ENVIRONMENT", "production")
+    monkeypatch.setenv("VERCEL_ENV", "preview")
+
+    settings = Settings(
+        DATABASE_URL="sqlite:///test.db",
+        SECRET_KEY="strong-secret-key",
+        ENCRYPTION_KEY="strong-encryption-key",
+        FRONTEND_URL="https://preview.example.com",
+        CORS_ORIGINS="https://preview.example.com",
+    )
+
+    assert settings.ENVIRONMENT == "preview"

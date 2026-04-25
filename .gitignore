@@ -64,11 +64,12 @@ uploads/*
 # Local development
 .local/
 .codex/
+.cursor/
 
 # Test coverage
 coverage/
 .nyc_output/
+.pytest_cache/
 
 # Vercel
 .vercel
-

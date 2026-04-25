@@ -10,10 +10,7 @@ def infer_environment_default() -> str:
     explicit_environment = os.environ.get("ENVIRONMENT")
     vercel_environment = os.environ.get("VERCEL_ENV")
     if vercel_environment:
-        normalized_vercel_environment = vercel_environment.strip().lower()
-        if explicit_environment and explicit_environment.strip().lower() not in {"", "development"}:
-            return explicit_environment
-        return normalized_vercel_environment
+        return vercel_environment.strip().lower()
 
     if explicit_environment:
         return explicit_environment
@@ -61,7 +58,9 @@ class Settings(BaseSettings):
         vercel_environment = os.environ.get("VERCEL_ENV")
         if vercel_environment:
             normalized_vercel_environment = vercel_environment.strip().lower()
-            if normalized in {"", "development"}:
+            if normalized_vercel_environment in {"preview", "development"}:
+                return normalized_vercel_environment
+            if normalized in {"", "development", "preview"}:
                 return normalized_vercel_environment
         return normalized or infer_environment_default()
 

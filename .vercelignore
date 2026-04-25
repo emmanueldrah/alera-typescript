@@ -1,4 +1,4 @@
-# Vercel - ignore cache files that cause stale builds
+# Vercel - ship only runtime/build inputs
 __pycache__/
 *.pyc
 *.pyo
@@ -7,6 +7,21 @@ __pycache__/
 .venv/
 venv/
 node_modules/
-.env.local
+.env*
 .DS_Store
-# Rebuilt: Yaw 02 E-O 2026 21:50:54 GMT
+.cursor/
+.github/
+.vscode/
+dist/
+docs/
+tests/
+backend/tests/
+src/test/
+ALERA.desktop
+DEPLOY.sh
+PRODUCTION_RUNBOOK.md
+VERCEL_SETUP.md
+playwright.config.ts
+playwright-fixture.ts
+test-health.sh
+vitest.config.ts
