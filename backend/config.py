@@ -26,6 +26,44 @@ def infer_database_url_default() -> str:
         return "sqlite:////tmp/alera.db"
     return "sqlite:///alera.db"
 
+
+def infer_frontend_url_default() -> str:
+    vercel_environment = (os.environ.get("VERCEL_ENV") or "").strip().lower()
+
+    candidate_hosts: list[str] = []
+    if vercel_environment == "production":
+        candidate_hosts.extend(
+            [
+                os.environ.get("VERCEL_PROJECT_PRODUCTION_URL"),
+                os.environ.get("VERCEL_URL"),
+            ]
+        )
+    elif vercel_environment:
+        candidate_hosts.extend(
+            [
+                os.environ.get("VERCEL_BRANCH_URL"),
+                os.environ.get("VERCEL_URL"),
+                os.environ.get("VERCEL_PROJECT_PRODUCTION_URL"),
+            ]
+        )
+    elif os.environ.get("VERCEL") == "1":
+        candidate_hosts.extend(
+            [
+                os.environ.get("VERCEL_URL"),
+                os.environ.get("VERCEL_PROJECT_PRODUCTION_URL"),
+            ]
+        )
+
+    for host in candidate_hosts:
+        normalized_host = (host or "").strip().strip("/")
+        if not normalized_host:
+            continue
+        if normalized_host.startswith(("http://", "https://")):
+            return normalized_host.rstrip("/")
+        return f"https://{normalized_host}"
+
+    return "http://localhost:5173"
+
 class Settings(BaseSettings):
     # Database
     DATABASE_URL: str = Field(default_factory=infer_database_url_default, description="Database connection URL")
@@ -97,7 +135,7 @@ class Settings(BaseSettings):
     SMTP_PASSWORD: str = ""
     SMTP_USE_TLS: bool = True
     SMTP_USE_SSL: bool = False
-    FRONTEND_URL: str = Field(default="http://localhost:5173", description="Frontend application base URL")
+    FRONTEND_URL: str = Field(default_factory=infer_frontend_url_default, description="Frontend application base URL")
 
     # SMS
     TWILIO_ACCOUNT_SID: str = ""
@@ -230,7 +268,10 @@ class Settings(BaseSettings):
     @field_validator("FRONTEND_URL")
     @classmethod
     def validate_frontend_url(cls, value: str):
-        if not value:
+        if not value or not value.strip():
+            fallback = infer_frontend_url_default()
+            if fallback:
+                return fallback.rstrip("/")
             raise ValueError("FRONTEND_URL is required")
         return value.rstrip("/")
 
