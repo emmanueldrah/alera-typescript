@@ -74,6 +74,15 @@ def _normalize_origin(value: str | None) -> str | None:
     return f"https://{normalized}"
 
 
+def _normalize_optional_string(value: object) -> str | None:
+    if value is None:
+        return None
+    if isinstance(value, str):
+        normalized = value.strip()
+        return normalized or None
+    return str(value).strip() or None
+
+
 def _is_local_origin(value: str | None) -> bool:
     normalized = (value or "").strip().lower()
     return normalized.startswith("http://localhost") or normalized.startswith("http://127.0.0.1")
@@ -310,25 +319,27 @@ class Settings(BaseSettings):
             raise ValueError("ENCRYPTION_KEY must be set to a strong value")
         return value
 
-    @field_validator("DATABASE_URL")
+    @field_validator("DATABASE_URL", mode="before")
     @classmethod
-    def validate_database_url(cls, value: str):
-        if not value or not value.strip():
+    def validate_database_url(cls, value: object):
+        normalized = _normalize_optional_string(value)
+        if normalized is None:
             fallback = infer_database_url_default()
             if fallback:
                 return fallback
             raise ValueError("DATABASE_URL is required")
-        return value
+        return normalized
 
-    @field_validator("FRONTEND_URL")
+    @field_validator("FRONTEND_URL", mode="before")
     @classmethod
-    def validate_frontend_url(cls, value: str):
-        if not value or not value.strip():
+    def validate_frontend_url(cls, value: object):
+        normalized = _normalize_optional_string(value)
+        if normalized is None:
             fallback = infer_frontend_url_default()
             if fallback:
                 return fallback.rstrip("/")
             raise ValueError("FRONTEND_URL is required")
-        return value.rstrip("/")
+        return normalized.rstrip("/")
 
     @classmethod
     def _is_placeholder_secret(cls, value: str) -> bool:

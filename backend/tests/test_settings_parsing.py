@@ -144,6 +144,26 @@ def test_settings_infer_frontend_from_vercel_url_when_frontend_url_missing(monke
     assert "https://alera-gamma.vercel.app" in settings.CORS_ORIGINS
 
 
+def test_settings_infer_frontend_from_vercel_url_when_frontend_url_blank(monkeypatch):
+    monkeypatch.setenv("ENVIRONMENT", "production")
+    monkeypatch.setenv("VERCEL", "1")
+    monkeypatch.setenv("VERCEL_ENV", "production")
+    monkeypatch.setenv("VERCEL_URL", "alera-gamma.vercel.app")
+    monkeypatch.delenv("VERCEL_PROJECT_PRODUCTION_URL", raising=False)
+    monkeypatch.delenv("VERCEL_BRANCH_URL", raising=False)
+    monkeypatch.setenv("FRONTEND_URL", "   ")
+
+    settings = Settings(
+        DATABASE_URL="postgresql://alera:secret@db.example.com:5432/alera",
+        SECRET_KEY="strong-secret-key",
+        ENCRYPTION_KEY="strong-encryption-key",
+        CORS_ORIGINS="",
+    )
+
+    assert settings.FRONTEND_URL == "https://alera-gamma.vercel.app"
+    assert "https://alera-gamma.vercel.app" in settings.CORS_ORIGINS
+
+
 def test_settings_prefer_production_url_over_preview_hosts(monkeypatch):
     monkeypatch.setenv("ENVIRONMENT", "production")
     monkeypatch.setenv("VERCEL", "1")
