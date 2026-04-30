@@ -548,3 +548,27 @@ class EmergencyTrackingResponse(BaseModel):
     assigned_ambulance_id: Optional[int] = None
     patient_location: Optional[LiveLocationResponse] = None
     ambulance_location: Optional[LiveLocationResponse] = None
+
+
+# System Settings Schemas
+class SystemSettingsBase(BaseModel):
+    is_maintenance_mode: bool
+    maintenance_message: str
+    notification_banner_active: bool
+    notification_banner_message: str
+    notification_banner_type: str
+
+
+class SystemSettingsUpdate(BaseModel):
+    is_maintenance_mode: Optional[bool] = None
+    maintenance_message: Optional[str] = None
+    notification_banner_active: Optional[bool] = None
+    notification_banner_message: Optional[str] = None
+    notification_banner_type: Optional[str] = None
+
+
+class SystemSettingsResponse(SystemSettingsBase):
+    id: int
+    updated_at: datetime
+    
+    model_config = ConfigDict(from_attributes=True)

@@ -43,7 +43,8 @@ from app.utils.csrf import validate_csrf_token
 from app.utils.auth import decode_token, get_user_id_from_payload, get_token_from_request
 from app.services.audit_service import append_response_background_task, build_request_audit_payload, write_audit_log
 from config import settings
-from database import engine, init_db
+from database import engine, init_db, SessionLocal
+from app.models.system import SystemSettings
 
 logger = logging.getLogger(__name__)
 
@@ -158,6 +159,42 @@ def register_middlewares(app: FastAPI) -> None:
         TrustedHostMiddleware,
         allowed_hosts=get_allowed_hosts(),
     )
+
+    @app.middleware("http")
+    async def maintenance_middleware(request: Request, call_next):
+        path = request.url.path
+
+        # Always allowed paths
+        if any(path.startswith(p) for p in [
+            "/api/health", 
+            "/api/ready", 
+            "/api/admin",  # Admins must be able to access their tools
+            "/api/auth/login", 
+            "/api/auth/logout"
+        ]):
+            return await call_next(request)
+
+        # Check maintenance mode
+        db = SessionLocal()
+        try:
+            # Simple query to minimize overhead
+            settings_row = db.query(SystemSettings).first()
+            if settings_row and settings_row.is_maintenance_mode:
+                return JSONResponse(
+                    status_code=503,
+                    content={
+                        "detail": settings_row.maintenance_message,
+                        "maintenance": True
+                    }
+                )
+        except Exception as exc:
+            # Fallback: if settings cannot be read, assume system is up
+            logger.error("Error checking maintenance mode: %s", exc)
+        finally:
+            db.close()
+
+        return await call_next(request)
+
 
     @app.middleware("http")
     async def csrf_protection_middleware(request: Request, call_next):
@@ -288,6 +325,33 @@ def register_system_routes(app: FastAPI) -> None:
         if app.state.startup_error:
             payload["startup_error"] = app.state.startup_error
         return JSONResponse(status_code=status_code, content=payload)
+
+    @app.get("/api/system/status")
+    async def get_system_status():
+        """Public endpoint to check system status and maintenance mode"""
+        from database import SessionLocal
+        from app.models.system import SystemSettings
+        
+        db = SessionLocal()
+        try:
+            settings_row = db.query(SystemSettings).first()
+            if not settings_row:
+                return {
+                    "is_maintenance_mode": False,
+                    "maintenance_message": "",
+                    "notification_banner_active": False,
+                    "notification_banner_message": "",
+                    "notification_banner_type": "info"
+                }
+            return {
+                "is_maintenance_mode": settings_row.is_maintenance_mode,
+                "maintenance_message": settings_row.maintenance_message,
+                "notification_banner_active": settings_row.notification_banner_active,
+                "notification_banner_message": settings_row.notification_banner_message,
+                "notification_banner_type": settings_row.notification_banner_type
+            }
+        finally:
+            db.close()
 
     @app.get("/api")
     async def root():

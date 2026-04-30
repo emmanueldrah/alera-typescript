@@ -1,6 +1,7 @@
 import { useState } from 'react';
-import { useNavigate, Link } from 'react-router-dom';
+import { useNavigate, Link, useLocation } from 'react-router-dom';
 import { useAuth } from '@/contexts/useAuth';
+import { GoogleLogin } from '@react-oauth/google';
 import { motion } from 'framer-motion';
 import {
   Activity,
@@ -52,8 +53,13 @@ const providerRoles = new Set<SignupRole>([
 ]);
 
 const Signup = () => {
-  const [name, setName] = useState('');
-  const [email, setEmail] = useState('');
+  const location = useLocation();
+  const locationState = location.state as { isGoogleSignup?: boolean; googleData?: any } | null;
+  const isGoogleSignupMode = locationState?.isGoogleSignup || false;
+  const googleData = locationState?.googleData;
+
+  const [name, setName] = useState(googleData ? `${googleData.first_name} ${googleData.last_name}` : '');
+  const [email, setEmail] = useState(googleData?.email || '');
   const [password, setPassword] = useState('');
   const [showPassword, setShowPassword] = useState(false);
   const [selectedRole, setSelectedRole] = useState<SignupRole | null>(null);
@@ -67,7 +73,10 @@ const Signup = () => {
   const [specialty, setSpecialty] = useState('');
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const { signup } = useAuth();
+  const [isGoogleSignup, setIsGoogleSignup] = useState(isGoogleSignupMode);
+  const [googleCredential, setGoogleCredential] = useState(googleData?.credential || '');
+
+  const { signup, loginWithGoogle, registerWithGoogle } = useAuth();
   const navigate = useNavigate();
 
   const isProviderRole = selectedRole ? providerRoles.has(selectedRole) : false;
@@ -78,8 +87,12 @@ const Signup = () => {
       setError('Please select a role');
       return;
     }
-    if (!name.trim() || !email.trim() || !password.trim()) {
-      setError('All fields are required');
+    if (!name.trim() || !email.trim()) {
+      setError('Name and email are required');
+      return;
+    }
+    if (!isGoogleSignup && !password.trim()) {
+      setError('Password is required');
       return;
     }
 
@@ -89,13 +102,15 @@ const Signup = () => {
       return;
     }
 
-    if (password.trim().length < 8) {
-      setError('Password must be at least 8 characters.');
-      return;
-    }
-    if (!/(?=.*[a-z])(?=.*[A-Z])(?=.*\d)/.test(password)) {
-      setError('Password must contain at least one uppercase letter, one lowercase letter, and one number');
-      return;
+    if (!isGoogleSignup) {
+      if (password.trim().length < 8) {
+        setError('Password must be at least 8 characters.');
+        return;
+      }
+      if (!/(?=.*[a-z])(?=.*[A-Z])(?=.*\d)/.test(password)) {
+        setError('Password must contain at least one uppercase letter, one lowercase letter, and one number');
+        return;
+      }
     }
 
     if (phone.trim() && !/^\+?[\d\s\-()]{10,}$/.test(phone.trim())) {
@@ -111,20 +126,35 @@ const Signup = () => {
     setLoading(true);
     setError('');
     try {
-      await signup(
-        name,
-        email,
-        password,
-        selectedRole,
-        selectedRole === 'patient' ? undefined : licenseNumber.trim(),
-        selectedRole === 'patient' ? undefined : licenseState.trim(),
-        selectedRole === 'patient' ? undefined : specialty.trim() || undefined,
-        phone.trim() || undefined,
-        address.trim() || undefined,
-        city.trim() || undefined,
-        state.trim() || undefined,
-        zipCode.trim() || undefined,
-      );
+      if (isGoogleSignup) {
+        await registerWithGoogle(
+          googleCredential,
+          selectedRole,
+          selectedRole === 'patient' ? undefined : licenseNumber.trim(),
+          selectedRole === 'patient' ? undefined : licenseState.trim(),
+          selectedRole === 'patient' ? undefined : specialty.trim() || undefined,
+          phone.trim() || undefined,
+          address.trim() || undefined,
+          city.trim() || undefined,
+          state.trim() || undefined,
+          zipCode.trim() || undefined,
+        );
+      } else {
+        await signup(
+          name,
+          email,
+          password,
+          selectedRole,
+          selectedRole === 'patient' ? undefined : licenseNumber.trim(),
+          selectedRole === 'patient' ? undefined : licenseState.trim(),
+          selectedRole === 'patient' ? undefined : specialty.trim() || undefined,
+          phone.trim() || undefined,
+          address.trim() || undefined,
+          city.trim() || undefined,
+          state.trim() || undefined,
+          zipCode.trim() || undefined,
+        );
+      }
       navigate('/dashboard');
     } catch (signupError) {
       setError(handleApiError(signupError));
@@ -281,7 +311,8 @@ const Signup = () => {
                     value={name}
                     onChange={(e) => setName(e.target.value)}
                     placeholder="Enter your full name"
-                    className="h-12 w-full rounded-2xl border border-slate-200 bg-white px-4 text-slate-950 placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-primary/30"
+                    disabled={isGoogleSignup}
+                    className="h-12 w-full rounded-2xl border border-slate-200 bg-white px-4 text-slate-950 placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-primary/30 disabled:opacity-70 disabled:bg-slate-50"
                   />
                 </div>
                 <div>
@@ -291,28 +322,31 @@ const Signup = () => {
                     value={email}
                     onChange={(e) => setEmail(e.target.value)}
                     placeholder="you@example.com"
-                    className="h-12 w-full rounded-2xl border border-slate-200 bg-white px-4 text-slate-950 placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-primary/30"
+                    disabled={isGoogleSignup}
+                    className="h-12 w-full rounded-2xl border border-slate-200 bg-white px-4 text-slate-950 placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-primary/30 disabled:opacity-70 disabled:bg-slate-50"
                   />
                 </div>
-                <div>
+                {!isGoogleSignup && (
+                  <div>
                   <label className="mb-2 block text-sm font-medium text-slate-800">Password</label>
-                  <div className="relative">
-                    <input
-                      type={showPassword ? 'text' : 'password'}
-                      value={password}
-                      onChange={(e) => setPassword(e.target.value)}
-                      placeholder="••••••••"
-                      className="h-12 w-full rounded-2xl border border-slate-200 bg-white pl-4 pr-12 text-slate-950 placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-primary/30"
-                    />
-                    <button
-                      type="button"
-                      onClick={() => setShowPassword(!showPassword)}
-                      className="absolute right-3 top-1/2 -translate-y-1/2 rounded-xl p-1 text-slate-500 transition hover:bg-slate-100 hover:text-slate-900"
-                    >
-                      {showPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
-                    </button>
+                    <div className="relative">
+                      <input
+                        type={showPassword ? 'text' : 'password'}
+                        value={password}
+                        onChange={(e) => setPassword(e.target.value)}
+                        placeholder="••••••••"
+                        className="h-12 w-full rounded-2xl border border-slate-200 bg-white pl-4 pr-12 text-slate-950 placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-primary/30"
+                      />
+                      <button
+                        type="button"
+                        onClick={() => setShowPassword(!showPassword)}
+                        className="absolute right-3 top-1/2 -translate-y-1/2 rounded-xl p-1 text-slate-500 transition hover:bg-slate-100 hover:text-slate-900"
+                      >
+                        {showPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+                      </button>
+                    </div>
                   </div>
-                </div>
+                )}
                 <div>
                   <label className="mb-2 block text-sm font-medium text-slate-800">
                     Phone Number <span className="text-slate-400">(optional)</span>
@@ -429,10 +463,59 @@ const Signup = () => {
                 disabled={loading}
                 className="flex h-12 w-full items-center justify-center gap-2 rounded-2xl bg-slate-950 text-sm font-semibold text-white transition hover:-translate-y-0.5 hover:bg-slate-900 disabled:opacity-50"
               >
-                {loading ? 'Creating account...' : <><span>Create Account</span><ArrowRight className="h-4 w-4" /></>}
+                {loading ? (isGoogleSignup ? 'Completing sign up...' : 'Creating account...') : <><span>{isGoogleSignup ? 'Complete Sign Up' : 'Create Account'}</span><ArrowRight className="h-4 w-4" /></>}
               </button>
 
-              <p className="text-center text-xs leading-6 text-slate-500">
+              {!isGoogleSignup && (
+                <>
+                  <div className="relative my-6">
+                    <div className="absolute inset-0 flex items-center">
+                      <div className="w-full border-t border-slate-200" />
+                    </div>
+                    <div className="relative flex justify-center text-sm font-medium">
+                      <span className="bg-white px-4 text-slate-500">Or sign up with</span>
+                    </div>
+                  </div>
+
+                  <div className="flex justify-center">
+                    <GoogleLogin
+                      onSuccess={async (credentialResponse) => {
+                        if (credentialResponse.credential) {
+                          setLoading(true);
+                          setError('');
+                          try {
+                            const result = await loginWithGoogle(credentialResponse.credential);
+                            if (result?.needsRegistration) {
+                              setIsGoogleSignup(true);
+                              setGoogleCredential(credentialResponse.credential);
+                              setName(`${result.googleData.first_name} ${result.googleData.last_name}`);
+                              setEmail(result.googleData.email);
+                              window.scrollTo({ top: 0, behavior: 'smooth' });
+                            } else {
+                              navigate('/dashboard');
+                            }
+                          } catch (err) {
+                            setError(handleApiError(err, 'Google sign up'));
+                          } finally {
+                            setLoading(false);
+                          }
+                        }
+                      }}
+                      onError={() => {
+                        setError('Google sign up failed. Please try again.');
+                      }}
+                      useOneTap
+                      theme="outline"
+                      size="large"
+                      text="signup_with"
+                      shape="pill"
+                      width="100%"
+                    />
+                  </div>
+                </>
+              )}
+
+              <p className="mt-6 text-center text-xs leading-6 text-slate-500">
                 We will send a verification email after sign-up so you can confirm your account and recover access later.
               </p>
             </form>

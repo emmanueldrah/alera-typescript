@@ -6,10 +6,11 @@ from database import get_db
 from app.models import (
     User, UserRole, Appointment, AppointmentStatus, Prescription,
     LabTest, LabTestStatus, ImagingScan, ImagingScanStatus,
-    AmbulanceRequest, AmbulanceRequestStatus, EmergencyPriority
+    AmbulanceRequest, AmbulanceRequestStatus, EmergencyPriority,
+    SystemSettings, Notification
 )
 from app.utils.dependencies import get_current_admin, get_current_super_admin
-from app.schemas import UserResponse
+from app.schemas import UserResponse, SystemSettingsResponse, SystemSettingsUpdate
 from app.schemas.additional_features import AuditLogResponse
 from app.utils.access import WORKFORCE_ROLES, normalized_enum_text
 from app.utils.time import utcnow
@@ -798,22 +799,150 @@ async def get_ecosystem_activity(
             activity.append({
                 "type": "prescription",
                 "time": s.created_at,
+                "description": f"New prescription for {s.medication_name}",
+                "status": s.status
+            })
+
+    except Exception as exc:
+        logger.error("Failed to build activity feed: %s", exc)
+
+    activity.sort(key=lambda x: x["time"], reverse=True)
+    return activity[:limit]
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# System Settings & Maintenance
+# ─────────────────────────────────────────────────────────────────────────────
+
+def _get_or_create_system_settings(db: Session) -> SystemSettings:
+    settings = db.query(SystemSettings).first()
+    if not settings:
+        settings = SystemSettings()
+        db.add(settings)
+        db.commit()
+        db.refresh(settings)
+    return settings
+
+
+@router.get("/system/settings", response_model=SystemSettingsResponse)
+async def get_system_settings(
+    current_user: User = Depends(get_current_admin),
+    db: Session = Depends(get_db)
+):
+    """Get global system settings including maintenance mode status"""
+    return _get_or_create_system_settings(db)
+
+
+@router.put("/system/settings", response_model=SystemSettingsResponse)
+async def update_system_settings(
+    payload: SystemSettingsUpdate,
+    current_user: User = Depends(get_current_super_admin),
+    db: Session = Depends(get_db)
+):
+    """Update global system settings (SUPER_ADMIN only)"""
+    settings = _get_or_create_system_settings(db)
+    
+    update_data = payload.model_dump(exclude_unset=True)
+    for key, value in update_data.items():
+        setattr(settings, key, value)
+    
+    settings.updated_by_id = current_user.id
+    db.commit()
+    db.refresh(settings)
+    
+    from app.routes.audit import log_action
+    await log_action(
+        db=db, user_id=current_user.id, action="admin.update_system_settings",
+        resource_type="system_settings", resource_id=settings.id,
+        description=f"Updated system settings. Maintenance={settings.is_maintenance_mode}",
+        status="warning" if settings.is_maintenance_mode else "info",
+    )
+    
+    return settings
+
+
+class GlobalNotificationRequest(BaseModel):
+    title: str
+    message: str
+    notification_type: str = "alert"
+    action_url: Optional[str] = None
+
+
+@router.post("/system/notify-all")
+async def notify_all_users(
+    payload: GlobalNotificationRequest,
+    current_user: User = Depends(get_current_super_admin),
+    db: Session = Depends(get_db)
+):
+    """Send a notification to all active users in the system (SUPER_ADMIN only)"""
+    
+    # Get all active users
+    active_users = db.query(User).filter(User.is_active == True).all()
+    
+    notifications = []
+    for user in active_users:
+        notifications.append(Notification(
+            user_id=user.id,
+            title=payload.title,
+            message=payload.message,
+            notification_type=payload.notification_type,
+            action_url=payload.action_url
+        ))
+    
+    db.add_all(notifications)
+    db.commit()
+    
+    from app.routes.audit import log_action
+    await log_action(
+        db=db, user_id=current_user.id, action="admin.notify_all",
+        resource_type="system", resource_id=0,
+        description=f"Sent global notification to {len(active_users)} users: {payload.title}",
+        status="info",
+    )
+    
+    return {"message": f"Notification sent to {len(active_users)} users"}
+
+
+@router.get("/ecosystem-activity", response_model=list)
+async def get_ecosystem_activity(
+    limit: int = 20,
+    current_user: User = Depends(get_current_admin),
+    db: Session = Depends(get_db)
+):
+    """Get a unified feed of the most recent critical activities across the ecosystem"""
+    activity = []
+    
+    try:
+        appointments = db.query(Appointment).order_by(Appointment.created_at.desc()).limit(limit).all()
+        for a in appointments:
+            activity.append({
+                "type": "appointment",
+                "time": a.created_at,
+                "description": f"Appointment scheduled: {a.title}",
+                "status": a.status
+            })
+
+        scripts = db.query(Prescription).order_by(Prescription.created_at.desc()).limit(limit).all()
+        for s in scripts:
+            activity.append({
+                "type": "prescription",
+                "time": s.created_at,
                 "description": f"New prescription issued: {s.medication_name}",
                 "status": s.status
             })
 
-        labs = db.query(LabTest).order_by(LabTest.ordered_at.desc()).limit(10).all()
+        labs = db.query(LabTest).order_by(LabTest.ordered_at.desc()).limit(limit).all()
         for l in labs:
             activity.append({
                 "type": "lab_test",
                 "time": l.ordered_at,
                 "description": f"Lab test requested: {l.test_name}",
-                "status": _status_value(l.status)
+                "status": l.status
             })
     except Exception as exc:
         logger.warning("Failed to build ecosystem activity feed", exc_info=exc)
 
-    activity.sort(key=lambda x: x["time"], reverse=True)
+    activity.sort(key=lambda x: x.get("time") or "", reverse=True)
     return activity[:limit]
 
 

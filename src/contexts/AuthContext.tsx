@@ -185,6 +185,19 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     void loadAccessibleUsers();
   }, [loadAccessibleUsers]);
 
+  const loginWithGoogle = useCallback(async (credential: string) => {
+    const response = await authApi.loginWithGoogle(credential);
+    if (response.needs_registration) {
+      return { needsRegistration: true, googleData: response.google_data };
+    }
+    if (!isApiUser(response.user)) {
+      throw new Error('Login response did not include a valid user');
+    }
+    setUser(mapBackendUser(response.user));
+    void loadAccessibleUsers();
+    return {};
+  }, [loadAccessibleUsers]);
+
   const signup = useCallback(async (
     name: string,
     email: string,
@@ -239,6 +252,52 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     if (isApiUser(response.user)) {
       setUser(mapBackendUser(response.user));
       void loadAccessibleUsers();
+    }
+  }, [loadAccessibleUsers]);
+
+  const registerWithGoogle = useCallback(async (
+    credential: string,
+    role: SignupRole,
+    licenseNumber?: string,
+    licenseState?: string,
+    specialty?: string,
+    phone?: string,
+    address?: string,
+    city?: string,
+    state?: string,
+    zipCode?: string,
+  ) => {
+    // Map frontend roles to backend roles
+    const roleMap: Record<SignupRole, AuthRegisterRole> = {
+      patient: 'patient',
+      doctor: 'provider',
+      hospital: 'hospital',
+      laboratory: 'laboratory',
+      imaging: 'imaging',
+      pharmacy: 'pharmacist',
+      ambulance: 'ambulance',
+      physiotherapist: 'physiotherapist',
+    };
+    const backendRole = roleMap[role] || 'patient';
+
+    const response = await authApi.registerWithGoogle({
+      credential,
+      role: backendRole,
+      phone: phone || undefined,
+      address: address || undefined,
+      city: city || undefined,
+      state: state || undefined,
+      zip_code: zipCode || undefined,
+      license_number: role === 'patient' ? undefined : licenseNumber,
+      license_state: role === 'patient' ? undefined : licenseState,
+      specialty: role === 'patient' ? undefined : specialty,
+    });
+
+    if (isApiUser(response.user)) {
+      setUser(mapBackendUser(response.user));
+      void loadAccessibleUsers();
+    } else {
+      throw new Error('Registration response did not include a valid user');
     }
   }, [loadAccessibleUsers]);
 
@@ -441,6 +500,8 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         isAuthenticated: true,
         isLoading,
         login,
+        loginWithGoogle,
+        registerWithGoogle,
         signup,
         logout,
         addUser,
@@ -466,6 +527,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       isAuthenticated: !!user, 
       isLoading,
       login, 
+      loginWithGoogle,
       signup, 
       logout, 
       addUser, 

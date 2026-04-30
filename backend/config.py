@@ -210,6 +210,9 @@ class Settings(BaseSettings):
     ENVIRONMENT: str = Field(default_factory=infer_environment_default, description="Environment: development, staging, or production")
     DEBUG: bool = Field(default=False, description="Debug mode flag")
 
+    # OAuth
+    GOOGLE_CLIENT_ID: str = ""
+
     # WebRTC
     AGORA_APP_ID: str = ""
     AGORA_APP_CERTIFICATE: str = ""

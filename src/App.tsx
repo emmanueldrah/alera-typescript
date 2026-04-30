@@ -8,6 +8,7 @@ import { AuthProvider } from "@/contexts/AuthContext";
 import { AppDataProvider } from "@/contexts/AppDataContext";
 import { NotificationProvider } from "@/contexts/NotificationContext";
 import { ChatProvider } from "@/contexts/ChatContext";
+import { SystemProvider, useSystem } from "@/contexts/SystemContext";
 import { useAuth } from "@/contexts/useAuth";
 import ProtectedRoute from "@/components/ProtectedRoute";
 import ErrorBoundary from "./components/ErrorBoundary";
@@ -27,10 +28,11 @@ const Login = lazy(() => import("./pages/Login"));
 const Signup = lazy(() => import("./pages/Signup"));
 const ForgotPassword = lazy(() => import("./pages/ForgotPassword"));
 const ResetPassword = lazy(() => import("./pages/ResetPassword"));
-const VerifyEmail = lazy(() => import("./pages/VerifyEmail"));
-const DashboardHome = lazy(() => import("./pages/DashboardHome"));
 const FeatureWrapper = lazy(() => import("./pages/FeatureWrapper"));
+const Maintenance = lazy(() => import("./pages/Maintenance"));
+const SystemManagement = lazy(() => import("./pages/admin/SystemManagement"));
 const NotFound = lazy(() => import("./pages/NotFound"));
+import MaintenanceBanner from "@/components/MaintenanceBanner";
 
 const queryClient = new QueryClient({
   defaultOptions: {
@@ -59,6 +61,40 @@ const AuthRedirect = ({ children }: { children: React.ReactNode }) => {
   return <>{children}</>;
 };
 
+const MaintenanceGuard = ({ children }: { children: React.ReactNode }) => {
+  const { isMaintenanceMode, settings, bannerVisible, closeBanner } = useSystem();
+  const { user } = useAuth();
+  const location = useLocation();
+
+  const isAdmin = user?.role === 'admin' || user?.role === 'super_admin';
+  const isMaintenancePage = location.pathname === '/maintenance';
+  const isLoginPage = location.pathname === '/login';
+
+  // Allow admins to bypass maintenance mode
+  // Also allow access to login page so admins can log in
+  if (isMaintenanceMode && !isAdmin && !isMaintenancePage && !isLoginPage) {
+    return <Navigate to="/maintenance" replace />;
+  }
+
+  // If system is NOT in maintenance mode but user is on maintenance page, redirect to dashboard/home
+  if (!isMaintenanceMode && isMaintenancePage) {
+    return <Navigate to="/" replace />;
+  }
+
+  return (
+    <>
+      {bannerVisible && settings?.notification_banner_message && (
+        <MaintenanceBanner 
+          message={settings.notification_banner_message} 
+          type={settings.notification_banner_type as any}
+          onClose={closeBanner}
+        />
+      )}
+      {children}
+    </>
+  );
+};
+
 const App = () => {
   try {
     return (
@@ -68,37 +104,43 @@ const App = () => {
           <AppDataProvider>
             <NotificationProvider>
               <ChatProvider>
-                <TooltipProvider>
-                  <Toaster />
-                  <Sonner />
-                  <BrowserRouter future={{ v7_startTransition: true, v7_relativeSplatPath: true }}>
-                    <Suspense fallback={<RouteLoader />}>
-                      <Routes>
-                        <Route element={<AuthRedirect><MainLayout /></AuthRedirect>}>
-                          <Route path="/" element={<LandingHome />} />
-                          <Route path="/how-it-works" element={<LandingHowItWorks />} />
-                          <Route path="/features" element={<LandingFeatures />} />
-                          <Route path="/trust" element={<LandingTrust />} />
-                          <Route path="/who-we-serve" element={<LandingWhoWeServe />} />
-                          <Route path="/why-alera" element={<LandingWhyAlera />} />
-                          <Route path="/privacy-policy" element={<PrivacyPolicy />} />
-                          <Route path="/terms" element={<TermsOfService />} />
-                          <Route path="/cookies" element={<PrivacyPolicy />} />
-                        </Route>
-                        <Route path="/login" element={<Login />} />
-                        <Route path="/signup" element={<Signup />} />
-                        <Route path="/forgot-password" element={<ForgotPassword />} />
-                        <Route path="/reset-password" element={<ResetPassword />} />
-                        <Route path="/verify-email" element={<VerifyEmail />} />
-                        <Route path="/dashboard" element={<ProtectedRoute><DashboardHome /></ProtectedRoute>} />
-                        {featureRouteKeys.map(page => (
-                          <Route key={page} path={`/dashboard/${page}`} element={<ProtectedRoute><FeatureWrapper page={page} /></ProtectedRoute>} />
-                        ))}
-                        <Route path="*" element={<NotFound />} />
-                      </Routes>
-                    </Suspense>
-                  </BrowserRouter>
-                </TooltipProvider>
+                <SystemProvider>
+                  <TooltipProvider>
+                    <Toaster />
+                    <Sonner />
+                    <BrowserRouter future={{ v7_startTransition: true, v7_relativeSplatPath: true }}>
+                      <MaintenanceGuard>
+                        <Suspense fallback={<RouteLoader />}>
+                          <Routes>
+                            <Route element={<AuthRedirect><MainLayout /></AuthRedirect>}>
+                              <Route path="/" element={<LandingHome />} />
+                              <Route path="/how-it-works" element={<LandingHowItWorks />} />
+                              <Route path="/features" element={<LandingFeatures />} />
+                              <Route path="/trust" element={<LandingTrust />} />
+                              <Route path="/who-we-serve" element={<LandingWhoWeServe />} />
+                              <Route path="/why-alera" element={<LandingWhyAlera />} />
+                              <Route path="/privacy-policy" element={<PrivacyPolicy />} />
+                              <Route path="/terms" element={<TermsOfService />} />
+                              <Route path="/cookies" element={<PrivacyPolicy />} />
+                            </Route>
+                            <Route path="/login" element={<Login />} />
+                            <Route path="/signup" element={<Signup />} />
+                            <Route path="/forgot-password" element={<ForgotPassword />} />
+                            <Route path="/reset-password" element={<ResetPassword />} />
+                            <Route path="/verify-email" element={<VerifyEmail />} />
+                            <Route path="/maintenance" element={<Maintenance />} />
+                            <Route path="/dashboard" element={<ProtectedRoute><DashboardHome /></ProtectedRoute>} />
+                            <Route path="/dashboard/admin/system" element={<ProtectedRoute><SystemManagement /></ProtectedRoute>} />
+                            {featureRouteKeys.map(page => (
+                              <Route key={page} path={`/dashboard/${page}`} element={<ProtectedRoute><FeatureWrapper page={page} /></ProtectedRoute>} />
+                            ))}
+                            <Route path="*" element={<NotFound />} />
+                          </Routes>
+                        </Suspense>
+                      </MaintenanceGuard>
+                    </BrowserRouter>
+                  </TooltipProvider>
+                </SystemProvider>
               </ChatProvider>
             </NotificationProvider>
           </AppDataProvider>

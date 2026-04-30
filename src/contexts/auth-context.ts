@@ -6,6 +6,19 @@ export interface AuthContextType {
   isAuthenticated: boolean;
   isLoading: boolean;
   login: (email: string, password: string) => Promise<void>;
+  loginWithGoogle: (credential: string) => Promise<{ needsRegistration?: boolean; googleData?: any }>;
+  registerWithGoogle: (
+    credential: string,
+    role: SignupRole,
+    licenseNumber?: string,
+    licenseState?: string,
+    specialty?: string,
+    phone?: string,
+    address?: string,
+    city?: string,
+    state?: string,
+    zipCode?: string,
+  ) => Promise<void>;
   signup: (
     name: string,
     email: string,

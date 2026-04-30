@@ -2,7 +2,8 @@ import logging
 from fastapi import APIRouter, Depends, HTTPException, status, Response, Request
 from sqlalchemy.orm import Session
 from datetime import datetime, timedelta
-from pydantic import BaseModel
+from typing import Optional
+from pydantic import BaseModel, model_validator
 from database import get_db
 from app.schemas import (
     LoginRequest,
@@ -33,6 +34,13 @@ from config import settings
 from app.services.audit_service import client_ip_from_request, summarize_device_info, log_action
 import sys
 
+try:
+    from google.oauth2 import id_token as google_id_token
+    from google.auth.transport import requests as google_requests
+    HAS_GOOGLE_AUTH = True
+except ImportError:
+    HAS_GOOGLE_AUTH = False
+
 router = APIRouter(prefix="/api/auth", tags=["auth"])
 logger = logging.getLogger(__name__)
 
@@ -43,6 +51,30 @@ class RefreshTokenRequest(BaseModel):
 
 class DeleteAccountRequest(BaseModel):
     password: str
+
+
+class OAuthRequest(BaseModel):
+    credential: str
+
+
+class OAuthRegisterRequest(BaseModel):
+    credential: str
+    role: UserRole
+    phone: Optional[str] = None
+    address: Optional[str] = None
+    city: Optional[str] = None
+    state: Optional[str] = None
+    zip_code: Optional[str] = None
+    license_number: Optional[str] = None
+    license_state: Optional[str] = None
+    specialty: Optional[str] = None
+
+    @model_validator(mode="after")
+    def validate_role_specific_fields(self):
+        if self.role != UserRole.PATIENT:
+            if not self.license_number or not self.license_state:
+                raise ValueError("license_number and license_state are required for professional accounts")
+        return self
 
 
 def _frontend_link(path: str, token: str) -> str:
@@ -275,6 +307,193 @@ async def login(
         "user": _serialize_user(user),
         "csrf_token": csrf_token,
     }
+
+
+@router.post("/oauth/google")
+async def oauth_google(
+    payload: OAuthRequest,
+    db: Session = Depends(get_db),
+    response: Response = None,
+    request: Request = None,
+):
+    """Authenticate or register user via Google OAuth"""
+    enforce_rate_limit(request=request, scope="auth:oauth", limit=10, window_seconds=60)
+    
+    if not HAS_GOOGLE_AUTH:
+        raise HTTPException(status_code=500, detail="google-auth library is not installed")
+        
+    if not settings.GOOGLE_CLIENT_ID:
+        raise HTTPException(status_code=500, detail="Google Auth is not configured on the server")
+        
+    try:
+        # Verify the token
+        idinfo = google_id_token.verify_oauth2_token(
+            payload.credential, google_requests.Request(), settings.GOOGLE_CLIENT_ID
+        )
+        
+        email = idinfo.get("email")
+        if not email:
+            raise HTTPException(status_code=400, detail="No email provided by Google")
+            
+        # Find user
+        user = db.query(User).filter(User.email == email).first()
+        
+        if not user:
+            # User doesn't exist, return needs_registration
+            first_name = idinfo.get("given_name", "")
+            last_name = idinfo.get("family_name", "")
+            
+            return {
+                "message": "User not found. Please complete registration.",
+                "needs_registration": True,
+                "google_data": {
+                    "email": email,
+                    "first_name": first_name,
+                    "last_name": last_name,
+                    "credential": payload.credential,
+                }
+            }
+            
+        elif not user.is_active:
+            raise HTTPException(status_code=403, detail="User account is disabled")
+            
+        user.last_login = utcnow()
+        _commit_or_rollback(db)
+        
+        # Create tokens
+        access_token, refresh_token = _build_token_pair(user)
+        csrf_token = generate_csrf_token()
+        
+        if response is not None:
+            set_auth_cookies(response, access_token, refresh_token)
+            set_csrf_token(response, csrf_token)
+            
+        await log_action(
+            db=db,
+            user_id=user.id,
+            role=user.role.value if hasattr(user.role, "value") else str(user.role),
+            action="auth.oauth_login",
+            resource="auth/session",
+            resource_type="auth",
+            resource_id=user.id,
+            description="Successful Google OAuth login",
+            status="success",
+            ip_address=client_ip_from_request(request),
+            user_agent=request.headers.get("user-agent") if request else None,
+            device_info=summarize_device_info(request.headers.get("user-agent")) if request else None,
+            metadata={"provider": "google"},
+        )
+        
+        return {
+            "message": "Login successful",
+            "user": _serialize_user(user),
+            "csrf_token": csrf_token,
+        }
+        
+    except ValueError:
+        # Invalid token
+        raise HTTPException(status_code=401, detail="Invalid Google token")
+
+
+@router.post("/oauth/google/register")
+async def oauth_google_register(
+    payload: OAuthRegisterRequest,
+    db: Session = Depends(get_db),
+    response: Response = None,
+    request: Request = None,
+):
+    """Register a new user via Google OAuth with additional details"""
+    enforce_rate_limit(request=request, scope="auth:oauth_register", limit=5, window_seconds=60)
+    
+    if not HAS_GOOGLE_AUTH:
+        raise HTTPException(status_code=500, detail="google-auth library is not installed")
+        
+    if not settings.GOOGLE_CLIENT_ID:
+        raise HTTPException(status_code=500, detail="Google Auth is not configured on the server")
+        
+    try:
+        # Verify the token
+        idinfo = google_id_token.verify_oauth2_token(
+            payload.credential, google_requests.Request(), settings.GOOGLE_CLIENT_ID
+        )
+        
+        email = idinfo.get("email")
+        if not email:
+            raise HTTPException(status_code=400, detail="No email provided by Google")
+            
+        # Check if user already exists
+        user = db.query(User).filter(User.email == email).first()
+        
+        if user:
+            raise HTTPException(status_code=400, detail="User already exists with this email")
+            
+        # Register new user
+        first_name = idinfo.get("given_name", "")
+        last_name = idinfo.get("family_name", "")
+        
+        # Generate a random strong password for the user since they are using OAuth
+        hashed_password = hash_password(generate_secure_token() + "Aa1!")
+        
+        is_verified = payload.role == UserRole.PATIENT
+        
+        user = User(
+            email=email,
+            username=email.split("@")[0], # basic default username
+            hashed_password=hashed_password,
+            first_name=first_name,
+            last_name=last_name,
+            phone=payload.phone,
+            address=payload.address,
+            city=payload.city,
+            state=payload.state,
+            zip_code=payload.zip_code,
+            license_number=payload.license_number,
+            license_state=payload.license_state,
+            specialty=payload.specialty,
+            role=payload.role,
+            is_verified=is_verified,
+            email_verified=True,
+            email_verified_at=utcnow(),
+            is_active=True,
+            session_version=0,
+            notification_email=True,
+            notification_sms=False,
+            privacy_public_profile=False,
+        )
+        db.add(user)
+        _commit_or_rollback(db)
+        db.refresh(user)
+        
+        await log_action(
+            db=db,
+            user_id=user.id,
+            action="auth.oauth_register",
+            resource_type="user",
+            resource_id=user.id,
+            description=f"Registered account via Google with role {user.role.value}",
+            status="created",
+        )
+        
+        user.last_login = utcnow()
+        _commit_or_rollback(db)
+        
+        # Create tokens
+        access_token, refresh_token = _build_token_pair(user)
+        csrf_token = generate_csrf_token()
+        
+        if response is not None:
+            set_auth_cookies(response, access_token, refresh_token)
+            set_csrf_token(response, csrf_token)
+            
+        return {
+            "message": "Registration and login successful",
+            "user": _serialize_user(user),
+            "csrf_token": csrf_token,
+        }
+        
+    except ValueError:
+        # Invalid token
+        raise HTTPException(status_code=401, detail="Invalid Google token")
 
 
 @router.post("/request-password-reset")

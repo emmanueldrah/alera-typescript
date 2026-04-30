@@ -44,8 +44,15 @@ export interface ApiLinkedAccountSummary {
 
 export interface ApiAuthResponse {
   message: string;
-  csrf_token: string;
-  user: ApiUser;
+  csrf_token?: string;
+  user?: ApiUser;
+  needs_registration?: boolean;
+  google_data?: {
+    email: string;
+    first_name: string;
+    last_name: string;
+    credential: string;
+  };
 }
 
 export interface ApiListResponse<T> {
@@ -65,6 +72,34 @@ export interface StructuredRecordResponse<T = Record<string, unknown>> {
   updated_at: string;
 }
 
+export interface SystemSettings {
+  id: number;
+  is_maintenance_mode: boolean;
+  maintenance_message: string;
+  notification_banner_active: boolean;
+  notification_banner_message: string;
+  notification_banner_type: string;
+  updated_at: string;
+}
+
+export interface SystemSettingsUpdate {
+  is_maintenance_mode?: boolean;
+  maintenance_message?: string;
+  notification_banner_active?: boolean;
+  notification_banner_message?: string;
+  notification_banner_type?: string;
+}
+
+export interface GlobalNotificationRequest {
+  title: string;
+  message: string;
+  notification_type?: string;
+  action_url?: string;
+}
+
+/**
+ * Authentication & Account API
+ */
 export interface SynchronizedHistoryParticipant {
   user_id: number;
   role: string;
@@ -336,6 +371,27 @@ export const authApi = {
 
   login: async (email: string, password: string) => {
     const response = await apiClient.post<ApiAuthResponse>('/auth/login', { email, password });
+    return response.data;
+  },
+
+  loginWithGoogle: async (credential: string) => {
+    const response = await apiClient.post<ApiAuthResponse>('/auth/oauth/google', { credential });
+    return response.data;
+  },
+
+  registerWithGoogle: async (userData: {
+    credential: string;
+    role: 'patient' | 'provider' | 'pharmacist' | 'hospital' | 'laboratory' | 'imaging' | 'ambulance' | 'physiotherapist';
+    phone?: string;
+    address?: string;
+    city?: string;
+    state?: string;
+    zip_code?: string;
+    license_number?: string;
+    license_state?: string;
+    specialty?: string;
+  }) => {
+    const response = await apiClient.post<ApiAuthResponse>('/auth/oauth/google/register', userData);
     return response.data;
   },
 
@@ -1107,6 +1163,21 @@ export const auditApi = {
     const response = await apiClient.post('/audit/export', body, { responseType: 'blob' });
     return response.data as Blob;
   },
+
+  getSystemSettings: async (): Promise<SystemSettings> => {
+    const response = await apiClient.get<SystemSettings>("/admin/system/settings");
+    return response.data;
+  },
+
+  updateSystemSettings: async (settings: SystemSettingsUpdate): Promise<SystemSettings> => {
+    const response = await apiClient.put<SystemSettings>("/admin/system/settings", settings);
+    return response.data;
+  },
+
+  notifyAllUsers: async (payload: GlobalNotificationRequest): Promise<{ message: string }> => {
+    const response = await apiClient.post<{ message: string }>("/admin/system/notify-all", payload);
+    return response.data;
+  },
 };
 
 // ============================================================================
@@ -1371,4 +1442,8 @@ export const api = {
   organizations: organizationsApi,
   patientPermissions: patientPermissionsApi,
   medicalRecords: medicalRecordsApi,
+  getSystemStatus: async (): Promise<Partial<SystemSettings>> => {
+    const response = await apiClient.get<Partial<SystemSettings>>("/system/status");
+    return response.data;
+  },
 };

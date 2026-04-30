@@ -18,6 +18,7 @@ import {
   FileText,
   Clock,
   Heart,
+  ShieldAlert,
 } from 'lucide-react';
 import { useAuth } from '@/contexts/useAuth';
 import { api } from '@/lib/apiService';
@@ -261,6 +262,15 @@ const SuperAdminDashboard = () => {
                 Admin Billing
               </div>
               <Download className="w-4 h-4 text-muted-foreground group-hover:text-info" />
+            </Link>
+            <Link to="/dashboard/admin/system" className="flex items-center justify-between p-3 rounded-xl hover:bg-secondary transition-colors border border-border/50 group">
+              <div className="flex items-center gap-3 text-sm font-medium">
+                <div className="w-8 h-8 rounded-lg bg-blue-100 flex items-center justify-center text-blue-600">
+                  <ShieldAlert className="w-4 h-4" />
+                </div>
+                System Controls
+              </div>
+              <Activity className="w-4 h-4 text-muted-foreground group-hover:text-blue-600" />
             </Link>
           </div>
         </motion.div>
