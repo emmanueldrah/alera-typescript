@@ -760,6 +760,12 @@ def _should_seed_default_admin_accounts() -> bool:
     if settings.ENVIRONMENT != "production":
         return True
 
+    # SQLite is always ephemeral in serverless environments (e.g. Vercel /tmp/).
+    # The database is wiped on every cold start, so we must re-seed on every
+    # startup regardless of whether explicit env vars are present.
+    if settings.DATABASE_URL.startswith("sqlite"):
+        return True
+
     if _production_seed_credentials_are_configured():
         return True
 

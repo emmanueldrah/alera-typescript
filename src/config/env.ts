@@ -27,7 +27,7 @@ const rawApiBaseUrl = (
 export const frontendEnv = {
   appEnv: import.meta.env.VITE_APP_ENV?.trim() || (import.meta.env.PROD ? 'production' : 'development'),
   apiBaseUrl: trimTrailingSlash(rawApiBaseUrl),
-  apiTimeoutMs: parseNumber(import.meta.env.VITE_API_TIMEOUT, 10000),
+  apiTimeoutMs: parseNumber(import.meta.env.VITE_API_TIMEOUT, 30000),
   enableAnalytics: parseBoolean(import.meta.env.VITE_ENABLE_ANALYTICS, false),
   enableErrorReporting: parseBoolean(import.meta.env.VITE_ENABLE_ERROR_REPORTING, false),
   enableSourceMaps: parseBoolean(import.meta.env.VITE_SOURCEMAP, !import.meta.env.PROD),
