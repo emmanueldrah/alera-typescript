@@ -170,7 +170,8 @@ def register_middlewares(app: FastAPI) -> None:
             "/api/ready", 
             "/api/admin",  # Admins must be able to access their tools
             "/api/auth/login", 
-            "/api/auth/logout"
+            "/api/auth/logout",
+            "/api/system/status"  # Frontend needs to fetch status
         ]):
             return await call_next(request)
 
