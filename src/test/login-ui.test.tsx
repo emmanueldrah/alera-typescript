@@ -5,10 +5,12 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 import Login from '@/pages/Login';
 
 const loginMock = vi.fn();
+const loginWithGoogleMock = vi.fn();
 
 vi.mock('@/contexts/useAuth', () => ({
   useAuth: () => ({
     login: loginMock,
+    loginWithGoogle: loginWithGoogleMock,
   }),
 }));
 
@@ -21,6 +23,7 @@ vi.mock('framer-motion', () => ({
 describe('Login page', () => {
   beforeEach(() => {
     loginMock.mockReset();
+    loginWithGoogleMock.mockReset();
   });
 
   it('surfaces backend authorization detail in the login error message', async () => {

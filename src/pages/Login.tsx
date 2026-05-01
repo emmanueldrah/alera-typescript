@@ -1,7 +1,6 @@
 import { useState } from 'react';
 import { useNavigate, Link } from 'react-router-dom';
 import { useAuth } from '@/contexts/useAuth';
-import { GoogleLogin } from '@react-oauth/google';
 import { motion } from 'framer-motion';
 import {
   ArrowLeft,
@@ -14,6 +13,8 @@ import {
   Workflow,
 } from 'lucide-react';
 import { handleApiError } from '@/lib/errorHandler';
+import { GoogleAuthSection } from '@/components/auth/GoogleAuthSection';
+import { frontendEnv } from '@/config/env';
 
 const credibilityPoints = [
   'Role-based access for patients, doctors, labs, imaging, and emergency teams',
@@ -29,6 +30,7 @@ const Login = () => {
   const [error, setError] = useState('');
   const { login, loginWithGoogle } = useAuth();
   const navigate = useNavigate();
+  const googleAuthAvailable = Boolean(frontendEnv.googleClientId);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -50,6 +52,31 @@ const Login = () => {
       navigate('/dashboard');
     } catch (err) {
       setError(handleApiError(err, 'sign in'));
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleGoogleSignIn = async (credential: string) => {
+    setLoading(true);
+    setError('');
+    try {
+      const result = await loginWithGoogle(credential);
+      if (result?.needsRegistration) {
+        navigate('/signup', {
+          state: {
+            isGoogleSignup: true,
+            googleData: {
+              ...result.googleData,
+              credential,
+            },
+          },
+        });
+        return;
+      }
+      navigate('/dashboard');
+    } catch (err) {
+      setError(handleApiError(err, 'Google sign in'));
     } finally {
       setLoading(false);
     }
@@ -160,6 +187,16 @@ const Login = () => {
               </div>
             ) : null}
 
+            <div className="mt-8">
+              <GoogleAuthSection
+                mode="signin"
+                disabled={loading}
+                isAvailable={googleAuthAvailable}
+                onSuccess={handleGoogleSignIn}
+                onError={() => setError('Google sign in failed. Please try again.')}
+              />
+            </div>
+
             <form onSubmit={handleSubmit} className="mt-8 space-y-5">
               <div>
                 <label className="mb-2 block text-sm font-medium text-slate-800">Email</label>
@@ -209,56 +246,6 @@ const Login = () => {
               >
                 {loading ? 'Signing in...' : <><span>Sign In</span><ArrowRight className="h-4 w-4" /></>}
               </button>
-
-              <div className="relative my-6">
-                <div className="absolute inset-0 flex items-center">
-                  <div className="w-full border-t border-slate-200" />
-                </div>
-                <div className="relative flex justify-center text-sm font-medium">
-                  <span className="bg-white/88 px-4 text-slate-500">Or continue with</span>
-                </div>
-              </div>
-
-              <div className="flex justify-center">
-                <GoogleLogin
-                  onSuccess={async (credentialResponse) => {
-                    if (credentialResponse.credential) {
-                      setLoading(true);
-                      setError('');
-                      try {
-                        const result = await loginWithGoogle(credentialResponse.credential);
-                        if (result?.needsRegistration) {
-                          // Redirect to signup with the google data
-                          navigate('/signup', { 
-                            state: { 
-                              isGoogleSignup: true, 
-                              googleData: {
-                                ...result.googleData,
-                                credential: credentialResponse.credential
-                              } 
-                            } 
-                          });
-                        } else {
-                          navigate('/dashboard');
-                        }
-                      } catch (err) {
-                        setError(handleApiError(err, 'Google sign in'));
-                      } finally {
-                        setLoading(false);
-                      }
-                    }
-                  }}
-                  onError={() => {
-                    setError('Google sign in failed. Please try again.');
-                  }}
-                  useOneTap
-                  theme="outline"
-                  size="large"
-                  text="signin_with"
-                  shape="pill"
-                  width="100%"
-                />
-              </div>
             </form>
 
             <div className="mt-8 rounded-2xl bg-slate-50 px-4 py-4 text-sm text-slate-600">

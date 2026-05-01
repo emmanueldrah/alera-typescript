@@ -1,7 +1,6 @@
 import { useState } from 'react';
 import { useNavigate, Link, useLocation } from 'react-router-dom';
 import { useAuth } from '@/contexts/useAuth';
-import { GoogleLogin } from '@react-oauth/google';
 import { motion } from 'framer-motion';
 import {
   Activity,
@@ -20,6 +19,8 @@ import {
   User,
 } from 'lucide-react';
 import { handleApiError } from '@/lib/errorHandler';
+import { GoogleAuthSection } from '@/components/auth/GoogleAuthSection';
+import { frontendEnv } from '@/config/env';
 
 type SignupRole =
   | 'patient'
@@ -78,6 +79,7 @@ const Signup = () => {
 
   const { signup, loginWithGoogle, registerWithGoogle } = useAuth();
   const navigate = useNavigate();
+  const googleAuthAvailable = Boolean(frontendEnv.googleClientId);
 
   const isProviderRole = selectedRole ? providerRoles.has(selectedRole) : false;
 
@@ -158,6 +160,27 @@ const Signup = () => {
       navigate('/dashboard');
     } catch (signupError) {
       setError(handleApiError(signupError));
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleGoogleSignupStart = async (credential: string) => {
+    setLoading(true);
+    setError('');
+    try {
+      const result = await loginWithGoogle(credential);
+      if (result?.needsRegistration) {
+        setIsGoogleSignup(true);
+        setGoogleCredential(credential);
+        setName(`${result.googleData.first_name} ${result.googleData.last_name}`);
+        setEmail(result.googleData.email);
+        window.scrollTo({ top: 0, behavior: 'smooth' });
+        return;
+      }
+      navigate('/dashboard');
+    } catch (err) {
+      setError(handleApiError(err, 'Google sign up'));
     } finally {
       setLoading(false);
     }
@@ -267,6 +290,18 @@ const Signup = () => {
                 {error}
               </div>
             ) : null}
+
+            {!isGoogleSignup && (
+              <div className="mt-6">
+                <GoogleAuthSection
+                  mode="signup"
+                  disabled={loading}
+                  isAvailable={googleAuthAvailable}
+                  onSuccess={handleGoogleSignupStart}
+                  onError={() => setError('Google sign up failed. Please try again.')}
+                />
+              </div>
+            )}
 
             <form onSubmit={handleSubmit} className="mt-6 space-y-6">
               <div>
@@ -465,56 +500,6 @@ const Signup = () => {
               >
                 {loading ? (isGoogleSignup ? 'Completing sign up...' : 'Creating account...') : <><span>{isGoogleSignup ? 'Complete Sign Up' : 'Create Account'}</span><ArrowRight className="h-4 w-4" /></>}
               </button>
-
-              {!isGoogleSignup && (
-                <>
-                  <div className="relative my-6">
-                    <div className="absolute inset-0 flex items-center">
-                      <div className="w-full border-t border-slate-200" />
-                    </div>
-                    <div className="relative flex justify-center text-sm font-medium">
-                      <span className="bg-white px-4 text-slate-500">Or sign up with</span>
-                    </div>
-                  </div>
-
-                  <div className="flex justify-center">
-                    <GoogleLogin
-                      onSuccess={async (credentialResponse) => {
-                        if (credentialResponse.credential) {
-                          setLoading(true);
-                          setError('');
-                          try {
-                            const result = await loginWithGoogle(credentialResponse.credential);
-                            if (result?.needsRegistration) {
-                              setIsGoogleSignup(true);
-                              setGoogleCredential(credentialResponse.credential);
-                              setName(`${result.googleData.first_name} ${result.googleData.last_name}`);
-                              setEmail(result.googleData.email);
-                              window.scrollTo({ top: 0, behavior: 'smooth' });
-                            } else {
-                              navigate('/dashboard');
-                            }
-                          } catch (err) {
-                            setError(handleApiError(err, 'Google sign up'));
-                          } finally {
-                            setLoading(false);
-                          }
-                        }
-                      }}
-                      onError={() => {
-                        setError('Google sign up failed. Please try again.');
-                      }}
-                      useOneTap
-                      theme="outline"
-                      size="large"
-                      text="signup_with"
-                      shape="pill"
-                      width="100%"
-                    />
-                  </div>
-                </>
-              )}
-
               <p className="mt-6 text-center text-xs leading-6 text-slate-500">
                 We will send a verification email after sign-up so you can confirm your account and recover access later.
               </p>
