@@ -146,6 +146,12 @@ class Settings(BaseSettings):
     REFRESH_TOKEN_EXPIRE_DAYS: int = 7
     COOKIE_SECURE: bool = Field(default=True, description="Use secure cookies (HTTPS only) in production")
 
+    # Default Admin Accounts (used for initial seeding)
+    ADMIN_EMAIL: str = Field(default="admin@alera.health", description="Default admin email")
+    ADMIN_PASSWORD: str = Field(default="admin_alera_2026!", description="Default admin password")
+    SUPER_ADMIN_EMAIL: str = Field(default="superadmin@alera.health", description="Default super admin email")
+    SUPER_ADMIN_PASSWORD: str = Field(default="superadmin_alera_2026!", description="Default super admin password")
+
     @field_validator("COOKIE_SECURE", mode="before")
     @classmethod
     def set_cookie_secure(cls, value):

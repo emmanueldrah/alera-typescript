@@ -13,12 +13,13 @@ from redis.exceptions import RedisError
 from config import settings
 
 
+from app.utils.redis import get_redis_client, reset_redis_client as reset_redis_utility_client
+
 logger = logging.getLogger(__name__)
 
 
 _RATE_LIMIT_BUCKETS: dict[str, Deque[float]] = {}
 _RATE_LIMIT_LOCK = Lock()
-_REDIS_CLIENT: Redis | None | bool = None
 _REDIS_KEY_PREFIX = "rate_limit"
 
 
@@ -36,38 +37,8 @@ def _client_identifier(request: Request | None) -> str:
     return "unknown"
 
 
-def _mark_redis_unavailable() -> None:
-    global _REDIS_CLIENT
-    _REDIS_CLIENT = False
-
-
 def _get_redis_client() -> Redis | None:
-    global _REDIS_CLIENT
-
-    if _REDIS_CLIENT is False:
-        return None
-
-    if isinstance(_REDIS_CLIENT, Redis):
-        return _REDIS_CLIENT
-
-    try:
-        client = Redis.from_url(
-            settings.REDIS_URL,
-            decode_responses=True,
-            socket_connect_timeout=0.2,
-            socket_timeout=0.2,
-            health_check_interval=30,
-        )
-        client.ping()
-        _REDIS_CLIENT = client
-        return client
-    except Exception as exc:
-        logger.warning(
-            "Redis-backed rate limiting unavailable, falling back to in-memory buckets",
-            exc_info=exc,
-        )
-        _mark_redis_unavailable()
-        return None
+    return get_redis_client()
 
 
 def _enforce_in_memory_rate_limit(*, bucket_key: str, limit: int, window_seconds: int) -> None:
@@ -119,7 +90,6 @@ def _enforce_redis_rate_limit(*, bucket_key: str, limit: int, window_seconds: in
             "Redis-backed rate limiting failed during request, falling back to in-memory buckets",
             exc_info=exc,
         )
-        _mark_redis_unavailable()
         return False
 
 
@@ -142,7 +112,6 @@ def enforce_rate_limit(
 
 
 def reset_rate_limit_state() -> None:
-    global _REDIS_CLIENT
     with _RATE_LIMIT_LOCK:
         _RATE_LIMIT_BUCKETS.clear()
-    _REDIS_CLIENT = None
+    reset_redis_utility_client()

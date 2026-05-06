@@ -1,4 +1,6 @@
 import logging
+import json
+from app.utils.redis import redis_get, redis_set, redis_delete
 from fastapi import APIRouter, Depends, HTTPException, status, Body
 from sqlalchemy import func
 from sqlalchemy.orm import Session
@@ -29,6 +31,8 @@ logger = logging.getLogger(__name__)
 
 def _revoke_user_sessions(user: User) -> None:
     user.session_version = int(user.session_version or 0) + 1
+    # Invalidate status cache
+    redis_delete(f"user:{user.id}:status")
 
 
 def _workforce_users_query(db: Session):
@@ -134,7 +138,20 @@ async def get_dashboard_stats(
     current_user: User = Depends(get_current_admin),
     db: Session = Depends(get_db)
 ):
-    """Get admin dashboard statistics with resilient integration"""
+    """Get admin dashboard statistics with Redis caching"""
+    
+    cache_key = "admin:dashboard:stats"
+    cached_data = redis_get(cache_key)
+    
+    if cached_data:
+        try:
+            stats = json.loads(cached_data)
+            # Add non-cacheable info
+            stats["current_admin_role"] = current_user.role.value
+            stats["cached"] = True
+            return stats
+        except Exception as e:
+            logger.warning("Failed to parse cached dashboard stats: %s", e)
 
     user_counts = {role.value: 0 for role in UserRole}
     total_users = 0
@@ -189,8 +206,8 @@ async def get_dashboard_stats(
     except Exception as exc:
         _log_dashboard_query_failure("emergencies", exc)
 
-    return {
-        "timestamp": utcnow(),
+    stats_response = {
+        "timestamp": utcnow().isoformat() if hasattr(utcnow(), "isoformat") else str(utcnow()),
         "users": {"total": total_users, "by_role": user_counts},
         "appointments": {"total": total_appointments, "today": today_appointments},
         "prescriptions": {"active": active_prescriptions},
@@ -198,8 +215,17 @@ async def get_dashboard_stats(
         "imaging": {"pending": pending_imaging},
         "emergencies": {"active": active_emergencies},
         "system": {"db_status": "partially_online" if total_users == 0 else "operational"},
-        "current_admin_role": current_user.role.value,
     }
+
+    # Cache for 60 seconds
+    try:
+        redis_set(cache_key, json.dumps(stats_response), ex=60)
+    except Exception as e:
+        logger.warning("Failed to cache dashboard stats: %s", e)
+
+    # Add final per-request info
+    stats_response["current_admin_role"] = current_user.role.value
+    return stats_response
 
 
 # ─────────────────────────────────────────────────────────────────────────────
@@ -294,6 +320,8 @@ async def reactivate_user(
         )
 
     user.is_active = True
+    # Invalidate status cache
+    redis_delete(f"user:{user.id}:status")
     db.commit()
 
     from app.routes.audit import log_action
@@ -849,6 +877,12 @@ async def update_system_settings(
     settings.updated_by_id = current_user.id
     db.commit()
     db.refresh(settings)
+    
+    # Invalidate caches to reflect changes immediately
+    from app.utils.redis import redis_delete
+    redis_delete("system:maintenance_mode")
+    redis_delete("system:maintenance_message")
+    redis_delete("system:status_blob")
     
     from app.routes.audit import log_action
     await log_action(

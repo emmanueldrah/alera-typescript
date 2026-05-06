@@ -246,6 +246,7 @@ def test_missing_postgres_enum_labels_detects_new_roles():
 
 def test_production_skips_default_admin_seeding_without_explicit_credentials(monkeypatch):
     monkeypatch.setattr("database.settings.ENVIRONMENT", "production")
+    monkeypatch.setattr("database.settings.DATABASE_URL", "postgresql://localhost/db")
     monkeypatch.delenv("ADMIN_EMAIL", raising=False)
     monkeypatch.delenv("ADMIN_PASSWORD", raising=False)
     monkeypatch.delenv("SUPER_ADMIN_EMAIL", raising=False)

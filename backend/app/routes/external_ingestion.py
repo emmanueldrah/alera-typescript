@@ -39,7 +39,13 @@ async def ingest_external_medical_record(
     else:
         require_medical_record_access(db, current_user, patient_id)
 
-    parsed_event_time = datetime.fromisoformat(event_time) if event_time else None
+    try:
+        parsed_event_time = datetime.fromisoformat(event_time) if event_time else None
+    except ValueError:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Invalid event_time format. Use ISO 8601 (e.g., YYYY-MM-DDTHH:MM:SSZ)"
+        )
     payload = {
         "provider_name": provider_name,
         "notes": notes,

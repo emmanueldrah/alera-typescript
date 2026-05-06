@@ -106,6 +106,8 @@ class User(Base):
         Index('idx_user_username', 'username'),
         Index('idx_user_role', 'role'),
         Index('idx_user_created_at', 'created_at'),
+        Index('idx_user_is_active', 'is_active'),
+        Index('idx_user_is_verified', 'is_verified'),
     )
 
     def is_admin_or_super(self) -> bool:

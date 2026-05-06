@@ -3,6 +3,7 @@ import logging
 import traceback
 from urllib.parse import urlparse
 from contextlib import asynccontextmanager
+import asyncio
 from uuid import uuid4
 from time import perf_counter
 
@@ -175,24 +176,43 @@ def register_middlewares(app: FastAPI) -> None:
         ]):
             return await call_next(request)
 
-        # Check maintenance mode
-        db = SessionLocal()
-        try:
-            # Simple query to minimize overhead
-            settings_row = db.query(SystemSettings).first()
-            if settings_row and settings_row.is_maintenance_mode:
-                return JSONResponse(
-                    status_code=503,
-                    content={
-                        "detail": settings_row.maintenance_message,
-                        "maintenance": True
-                    }
-                )
-        except Exception as exc:
-            # Fallback: if settings cannot be read, assume system is up
-            logger.error("Error checking maintenance mode: %s", exc)
-        finally:
-            db.close()
+        # Check maintenance mode with caching
+        from app.utils.redis import redis_get, redis_set
+        
+        cache_key = "system:maintenance_mode"
+        is_maintenance = redis_get(cache_key)
+        maintenance_msg = ""
+
+        if is_maintenance is None:
+            # Cache miss or Redis down, check DB
+            db = SessionLocal()
+            try:
+                settings_row = db.query(SystemSettings).first()
+                if settings_row:
+                    is_maintenance = "1" if settings_row.is_maintenance_mode else "0"
+                    maintenance_msg = settings_row.maintenance_message
+                    # Cache for 30 seconds
+                    redis_set(cache_key, is_maintenance, ex=30)
+                    if maintenance_msg:
+                        redis_set("system:maintenance_message", maintenance_msg, ex=30)
+                else:
+                    is_maintenance = "0"
+            except Exception as exc:
+                logger.error("Error checking maintenance mode: %s", exc)
+                is_maintenance = "0" # Fallback to up
+            finally:
+                db.close()
+        
+        if is_maintenance == "1":
+            if not maintenance_msg:
+                maintenance_msg = redis_get("system:maintenance_message") or "ALERA is currently undergoing scheduled maintenance."
+            return JSONResponse(
+                status_code=503,
+                content={
+                    "detail": maintenance_msg,
+                    "maintenance": True
+                }
+            )
 
         return await call_next(request)
 
@@ -252,7 +272,15 @@ def register_middlewares(app: FastAPI) -> None:
             raise
 
         duration_ms = int((perf_counter() - started_at) * 1000)
+        
+        # Log slow requests (> 500ms) for observability
+        if duration_ms > 500:
+            logger.warning(
+                f"SLOW REQUEST: {request.method} {request.url.path} took {duration_ms}ms (RID: {request_id})"
+            )
+
         response.headers["X-Request-ID"] = request_id
+        response.headers["X-Process-Time-Ms"] = str(duration_ms)
         response.headers.setdefault("X-Content-Type-Options", "nosniff")
         response.headers.setdefault("Referrer-Policy", "strict-origin-when-cross-origin")
         response.headers.setdefault("X-Frame-Options", "DENY")
@@ -330,6 +358,13 @@ def register_system_routes(app: FastAPI) -> None:
     @app.get("/api/system/status")
     async def get_system_status():
         """Public endpoint to check system status and maintenance mode"""
+        from app.utils.redis import redis_get_json, redis_set_json
+        
+        cache_key = "system:status_blob"
+        cached_status = redis_get_json(cache_key)
+        if cached_status:
+            return cached_status
+
         from database import SessionLocal
         from app.models.system import SystemSettings
         
@@ -337,20 +372,25 @@ def register_system_routes(app: FastAPI) -> None:
         try:
             settings_row = db.query(SystemSettings).first()
             if not settings_row:
-                return {
+                status_blob = {
                     "is_maintenance_mode": False,
                     "maintenance_message": "",
                     "notification_banner_active": False,
                     "notification_banner_message": "",
                     "notification_banner_type": "info"
                 }
-            return {
-                "is_maintenance_mode": settings_row.is_maintenance_mode,
-                "maintenance_message": settings_row.maintenance_message,
-                "notification_banner_active": settings_row.notification_banner_active,
-                "notification_banner_message": settings_row.notification_banner_message,
-                "notification_banner_type": settings_row.notification_banner_type
-            }
+            else:
+                status_blob = {
+                    "is_maintenance_mode": settings_row.is_maintenance_mode,
+                    "maintenance_message": settings_row.maintenance_message,
+                    "notification_banner_active": settings_row.notification_banner_active,
+                    "notification_banner_message": settings_row.notification_banner_message,
+                    "notification_banner_type": settings_row.notification_banner_type
+                }
+            
+            # Cache for 60 seconds
+            redis_set_json(cache_key, status_blob, ex=60)
+            return status_blob
         finally:
             db.close()
 
@@ -365,8 +405,36 @@ def register_system_routes(app: FastAPI) -> None:
 
 
 def register_exception_handlers(app: FastAPI) -> None:
+    from fastapi.exceptions import RequestValidationError
+    from starlette.exceptions import HTTPException as StarletteHTTPException
+
+    @app.exception_handler(StarletteHTTPException)
+    async def http_exception_handler(request: Request, exc: StarletteHTTPException):
+        request_id = getattr(request.state, "request_id", None) or request.headers.get("X-Request-ID")
+        return JSONResponse(
+            status_code=exc.status_code,
+            content={
+                "detail": exc.detail,
+                "status": "error",
+                "request_id": request_id,
+            },
+        )
+
+    @app.exception_handler(RequestValidationError)
+    async def validation_exception_handler(request: Request, exc: RequestValidationError):
+        request_id = getattr(request.state, "request_id", None) or request.headers.get("X-Request-ID")
+        return JSONResponse(
+            status_code=422,
+            content={
+                "detail": "Validation failed",
+                "errors": exc.errors(),
+                "status": "error",
+                "request_id": request_id,
+            },
+        )
+
     @app.exception_handler(Exception)
-    async def global_exception_handler(request, exc):
+    async def global_exception_handler(request: Request, exc: Exception):
         request_id = getattr(request.state, "request_id", None) or request.headers.get("X-Request-ID")
         logger.exception("Unhandled exception for request %s", request_id, exc_info=exc)
 
@@ -384,7 +452,20 @@ def create_application() -> FastAPI:
     @asynccontextmanager
     async def lifespan(app: FastAPI):
         await initialize_application_state(app)
+        
+        # Start distributed WebSocket listener
+        from app.utils.websocket_manager import manager
+        manager.redis_listener_task = asyncio.create_task(manager.start_redis_listener())
+        
         yield
+        
+        # Cleanup
+        if manager.redis_listener_task:
+            manager.redis_listener_task.cancel()
+            try:
+                await manager.redis_listener_task
+            except asyncio.CancelledError:
+                pass
 
     app = FastAPI(
         title="ALERA Healthcare API",

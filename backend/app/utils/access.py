@@ -31,11 +31,14 @@ SHARED_HISTORY_CONSENT_TYPES = {
 }
 
 
+_WORKFORCE_ROLE_VALUES = {member.value for member in WORKFORCE_ROLES}
+
+
 def is_workforce_role(role: UserRole | str | None) -> bool:
     if role is None:
         return False
     value = role.value if hasattr(role, "value") else str(role)
-    return value in {member.value for member in WORKFORCE_ROLES}
+    return value in _WORKFORCE_ROLE_VALUES
 
 
 def normalized_enum_text(column):

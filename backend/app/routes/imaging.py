@@ -389,21 +389,25 @@ async def upload_imaging_results(
             db_imaging_scan.report_url = _report_download_url(scan_id)
 
         if normalized_images:
-            saved_images: list[dict] = []
-            for image_file in normalized_images:
+            import asyncio
+            
+            async def save_image_task(image_file):
                 image_info = await FileStorageService.save_file(image_file, subfolder=subfolder, prefix="image")
-                saved_images.append(
-                    {
-                        "file_id": image_info["file_id"],
-                        "filename": image_info["filename"],
-                        "mime_type": image_info["mime_type"],
-                        "file_size": image_info["file_size"],
-                        "upload_time": image_info["upload_time"],
-                        "download_url": _image_download_url(scan_id, image_info["file_id"]),
-                    }
-                )
-            db_imaging_scan.image_files = saved_images
-            db_imaging_scan.image_url = saved_images[0]["download_url"]
+                return {
+                    "file_id": image_info["file_id"],
+                    "filename": image_info["filename"],
+                    "mime_type": image_info["mime_type"],
+                    "file_size": image_info["file_size"],
+                    "upload_time": image_info["upload_time"],
+                    "download_url": _image_download_url(scan_id, image_info["file_id"]),
+                }
+            
+            # Save all images in parallel
+            saved_images = await asyncio.gather(*[save_image_task(img) for img in normalized_images])
+            
+            db_imaging_scan.image_files = list(saved_images)
+            if saved_images:
+                db_imaging_scan.image_url = saved_images[0]["download_url"]
 
     if findings is not None:
         db_imaging_scan.findings = findings

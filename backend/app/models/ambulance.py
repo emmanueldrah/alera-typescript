@@ -2,7 +2,7 @@
 Ambulance and Emergency Request models
 """
 
-from sqlalchemy import Column, String, DateTime, Integer, Text, ForeignKey, Enum as SQLEnum, Float
+from sqlalchemy import Column, String, DateTime, Integer, Text, ForeignKey, Enum as SQLEnum, Float, Index
 from sqlalchemy.orm import relationship
 from datetime import datetime
 import enum
@@ -56,6 +56,12 @@ class AmbulanceRequest(Base):
     # Relationships
     patient = relationship("User", foreign_keys=[patient_id])
     assigned_ambulance = relationship("User", foreign_keys=[assigned_ambulance_id])
+    
+    # Indexes
+    __table_args__ = (
+        Index('idx_ambulance_request_status', 'status'),
+        Index('idx_ambulance_request_requested_at', 'requested_at'),
+    )
 
     def to_dict(self):
         return {

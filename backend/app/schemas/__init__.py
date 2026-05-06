@@ -43,12 +43,8 @@ class UserCreate(UserBase):
     @field_validator("password")
     @classmethod
     def validate_password(cls, v: str) -> str:
-        """Validate password complexity with at least one letter and one digit."""
-        if not any(c.isalpha() for c in v):
-            raise ValueError("Password must contain at least one letter")
-        if not any(c.isdigit() for c in v):
-            raise ValueError("Password must contain at least one digit")
-        return v
+        """Validate password complexity using the centralized utility."""
+        return validate_password_strength(v)
 
     @model_validator(mode="after")
     def validate_role_specific_fields(self):

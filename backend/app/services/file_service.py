@@ -207,9 +207,13 @@ class FileStorageService:
             if not _matches_expected_signature(file_ext, contents):
                 raise HTTPException(status_code=400, detail="Uploaded file content does not match the declared file type")
 
-            # Write file
-            with open(file_path, "wb") as f:
-                f.write(contents)
+            # Write file in a thread pool to avoid blocking the event loop
+            import asyncio
+            def write_sync():
+                with open(file_path, "wb") as f:
+                    f.write(contents)
+            
+            await asyncio.to_thread(write_sync)
 
             return {
                 "file_id": file_id,

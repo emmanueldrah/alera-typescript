@@ -712,12 +712,35 @@ def _normalize_legacy_roles_sqlite():
         print(f"WARNING: Could not normalize legacy roles in SQLite: {e}")
 
 
+def run_migrations():
+    """Run Alembic migrations programmatically."""
+    from alembic.config import Config
+    from alembic import command
+    import os
+
+    # Path to alembic.ini relative to this file
+    base_dir = os.path.dirname(os.path.abspath(__file__))
+    ini_path = os.path.join(base_dir, "alembic.ini")
+    
+    cfg = Config(ini_path)
+    # Ensure the script location is correct if we're running from a different CWD
+    cfg.set_main_option("script_location", os.path.join(base_dir, "alembic"))
+    
+    try:
+        command.upgrade(cfg, "head")
+        print("✓ Database migrations applied successfully")
+    except Exception as e:
+        print(f"WARNING: Could not apply database migrations: {e}")
 
 def init_db():
     """Initialize database - create all tables and seed default admin"""
     try:
         import app.models  # noqa: F401
 
+        # 1. Run Alembic migrations first
+        run_migrations()
+
+        # 2. Legacy create_all (idempotent, won't hurt if migrations already created tables)
         Base.metadata.create_all(bind=engine)
         _patch_referrals_referral_type_column()
         _patch_users_session_version_column()
@@ -753,7 +776,11 @@ def _production_seed_credentials_are_configured() -> bool:
         "SUPER_ADMIN_EMAIL",
         "SUPER_ADMIN_PASSWORD",
     )
-    return all(os.environ.get(key) for key in required_keys)
+    # If they are different from defaults, consider them configured
+    return all(
+        os.environ.get(key) and os.environ.get(key) != getattr(settings, key)
+        for key in required_keys
+    )
 
 
 def _should_seed_default_admin_accounts() -> bool:
@@ -784,8 +811,8 @@ def _seed_admin():
     db = SessionLocal()
     try:
         # ── regular admin ──────────────────────────────────────────────────
-        admin_email = os.environ.get("ADMIN_EMAIL", "admin@alera.health")
-        admin_password = os.environ.get("ADMIN_PASSWORD", "admin_alera_2026!")
+        admin_email = settings.ADMIN_EMAIL
+        admin_password = settings.ADMIN_PASSWORD
 
         if not db.query(User).filter(User.email == admin_email).first():
             admin = User(
@@ -809,8 +836,8 @@ def _seed_admin():
             print(f"✓ Default admin seeded: {admin_email}")
 
         # ── super admin ────────────────────────────────────────────────────
-        super_email = os.environ.get("SUPER_ADMIN_EMAIL", "superadmin@alera.health")
-        super_password = os.environ.get("SUPER_ADMIN_PASSWORD", "superadmin_alera_2026!")
+        super_email = settings.SUPER_ADMIN_EMAIL
+        super_password = settings.SUPER_ADMIN_PASSWORD
 
         if not db.query(User).filter(User.email == super_email).first():
             super_admin = User(

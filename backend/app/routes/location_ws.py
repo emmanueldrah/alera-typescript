@@ -109,12 +109,29 @@ async def location_websocket(
                     if lat is None or lng is None:
                         continue
 
+                    # Update user object in memory for broadcasting
                     user.live_location_sharing_enabled = True
                     user.live_latitude = float(lat)
                     user.live_longitude = float(lng)
                     user.live_location_updated_at = utcnow()
-                    db.add(user)
-                    db.commit()
+
+                    # Throttled Database Persistence
+                    from app.utils.redis import redis_get, redis_set
+                    throttle_key = f"location_throttle:{user.id}"
+                    
+                    if not redis_get(throttle_key):
+                        # Not throttled, update DB
+                        db.add(user)
+                        db.commit()
+                        # Set throttle for 10 seconds
+                        redis_set(throttle_key, "1", ex=10)
+                    else:
+                        # Throttled, just update Redis for fast recovery/snapshotting
+                        redis_set(f"user:location:{user.id}", json.dumps({
+                            "lat": user.live_latitude,
+                            "lng": user.live_longitude,
+                            "ts": user.live_location_updated_at.isoformat()
+                        }), ex=60)
 
                     # Add sender info
                     message["user_id"] = user.id
@@ -128,6 +145,13 @@ async def location_websocket(
                     await websocket.send_json({"type": "pong"})
 
         except WebSocketDisconnect:
+            # Final persistence on disconnect
+            try:
+                db.add(user)
+                db.commit()
+            except Exception:
+                pass
+            
             manager.disconnect(websocket, request_id)
             logger.info(f"User {user_id} disconnected from tracking room {request_id}")
             
