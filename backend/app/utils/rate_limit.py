@@ -68,26 +68,43 @@ def _enforce_redis_rate_limit(*, bucket_key: str, limit: int, window_seconds: in
     redis_key = f"{_REDIS_KEY_PREFIX}:{bucket_key}"
 
     try:
+        # Use a pipeline or Lua script for atomicity if needed, 
+        # but for simple rate limiting, this multi-step approach is usually fine 
+        # if we handle the TTL correctly.
         current_count = client.incr(redis_key)
+        
+        # If it's a new key, set expiration
         if current_count == 1:
             client.expire(redis_key, window_seconds)
-        elif client.ttl(redis_key) < 0:
-            client.expire(redis_key, window_seconds)
+        else:
+            # Safety check: if for some reason the key has no TTL (e.g. server crash after INCR but before EXPIRE)
+            # we must set it to avoid permanent blocking.
+            ttl = client.ttl(redis_key)
+            if ttl < 0:
+                client.expire(redis_key, window_seconds)
 
         if current_count > limit:
-            retry_after = client.ttl(redis_key)
+            ttl = client.ttl(redis_key)
+            retry_after = max(1, ttl if ttl > 0 else window_seconds)
+            
+            # Log high-frequency rate limit hits as they might indicate an attack or misconfiguration
+            if current_count > limit * 2:
+                logger.warning(f"SEVERE RATE LIMIT HIT: {bucket_key} reached {current_count}/{limit}")
+                
             raise HTTPException(
                 status_code=status.HTTP_429_TOO_MANY_REQUESTS,
                 detail="Too many requests. Please try again later.",
-                headers={"Retry-After": str(max(1, retry_after if retry_after > 0 else window_seconds))},
+                headers={"Retry-After": str(retry_after)},
             )
 
         return True
     except HTTPException:
         raise
     except RedisError as exc:
-        logger.warning(
-            "Redis-backed rate limiting failed during request, falling back to in-memory buckets",
+        # At scale (100k users), falling back to in-memory will cause memory pressure on the app servers
+        # and inconsistent rate limiting. We log this as a warning.
+        logger.error(
+            "Redis rate limiting FAILED. Falling back to in-memory. THIS IS NOT SCALABLE.",
             exc_info=exc,
         )
         return False

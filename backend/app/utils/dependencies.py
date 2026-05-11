@@ -36,10 +36,10 @@ async def get_current_user(
     user_id = get_user_id_from_payload(payload)
 
     # ── User Status Caching ──────────────────────────────────────────────────
-    from app.utils.redis import redis_get, redis_set
+    from app.utils.redis import async_redis_get, async_redis_set
     import json
     cache_key = f"user:{user_id}:status"
-    cached_status = redis_get(cache_key)
+    cached_status = await async_redis_get(cache_key)
     
     user_data = None
     if cached_status:
@@ -70,7 +70,7 @@ async def get_current_user(
 
     # Update cache if it was a miss or stale
     if not user_data:
-        redis_set(cache_key, json.dumps({
+        await async_redis_set(cache_key, json.dumps({
             "is_active": user.is_active,
             "session_version": user.session_version,
             "role": user.role.value if hasattr(user.role, "value") else str(user.role)

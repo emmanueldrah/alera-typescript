@@ -3,7 +3,7 @@ import logging
 import asyncio
 from typing import Dict, List, Any
 from fastapi import WebSocket
-from app.utils.redis import redis_publish, get_redis_pubsub
+from app.utils.redis import async_redis_publish, get_async_redis_pubsub
 
 logger = logging.getLogger(__name__)
 
@@ -59,57 +59,72 @@ class ConnectionManager:
         
         # Distributed delivery
         if not local_only:
-            redis_publish(f"ws:user:{user_id}", json.dumps(message))
+            await async_redis_publish(f"ws:user:{user_id}", json.dumps(message))
 
     async def broadcast_to_room(self, message: Any, room_id: str, sender_websocket: WebSocket = None, local_only: bool = False):
         """Broadcasts a message to all local participants in a room. If not local_only, also broadcasts via Redis."""
         # Local delivery
         if room_id in self.active_connections:
+            stale_connections: List[WebSocket] = []
             for connection in self.active_connections[room_id]:
                 if sender_websocket and connection == sender_websocket:
                     continue
                 try:
                     await connection.send_json(message)
                 except Exception:
-                    # Connection might be dead, but we'll let disconnect handle it or clean up next time
-                    pass
+                    stale_connections.append(connection)
+            
+            for connection in stale_connections:
+                self.disconnect(connection, room_id)
 
         # Distributed delivery
         if not local_only:
-            redis_publish(f"ws:room:{room_id}", json.dumps(message))
+            await async_redis_publish(f"ws:room:{room_id}", json.dumps(message))
 
     async def start_redis_listener(self):
         """
         Starts a background task to listen for messages from Redis and broadcast them locally.
-        This should be called during application startup (lifespan).
+        Uses async iterators for maximum efficiency.
         """
-        pubsub = get_redis_pubsub()
+        pubsub = get_async_redis_pubsub()
         if not pubsub:
             logger.warning("Redis Pub/Sub unavailable, WebSockets will operate in local-only mode.")
             return
 
         try:
-            pubsub.psubscribe("ws:*")
-            logger.info("✓ WebSocket Redis listener started")
-            
-            while True:
-                message = pubsub.get_message(ignore_subscribe_messages=True)
-                if message:
-                    channel = message['channel']
-                    data = json.loads(message['data'])
-                    
+            async with pubsub as p:
+                await p.psubscribe("ws:*")
+                logger.info("✓ WebSocket Redis listener started (Async)")
+                
+                async for message in p.listen():
+                    if message["type"] != "pmessage":
+                        continue
+                        
+                    channel = message["channel"]
+                    try:
+                        data = json.loads(message["data"])
+                    except json.JSONDecodeError:
+                        continue
+                        
                     if channel.startswith("ws:room:"):
                         room_id = channel.split(":")[-1]
                         await self.broadcast_to_room(data, room_id, local_only=True)
                     elif channel.startswith("ws:user:"):
-                        user_id = int(channel.split(":")[-1])
-                        await self.send_to_user(user_id, data, local_only=True)
-                
-                await asyncio.sleep(0.01) # Yield to other tasks
+                        user_id_str = channel.split(":")[-1]
+                        try:
+                            user_id = int(user_id_str)
+                            await self.send_to_user(user_id, data, local_only=True)
+                        except ValueError:
+                            continue
+        except asyncio.CancelledError:
+            logger.info("WebSocket Redis listener stopping...")
+            raise
         except Exception as e:
             logger.error(f"Error in Redis WebSocket listener: {e}")
+            # Optional: Add retry logic here with exponential backoff
         finally:
-            pubsub.close()
+            # The async with block handles closure
+            pass
 
 # Global manager instance
 manager = ConnectionManager()

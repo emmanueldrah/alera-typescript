@@ -165,70 +165,88 @@ class FileStorageService:
     ) -> dict:
         """
         Save uploaded file and return file info
-        
-        Returns dict with:
-            - file_id: Unique identifier
-            - filename: Original filename
-            - file_path: Storage path
-            - file_size: Size in bytes
-            - mime_type: MIME type
-            - upload_time: ISO timestamp
         """
         # Validate file
         is_valid, message = FileStorageService.validate_file(file)
         if not is_valid:
             raise HTTPException(status_code=400, detail=message)
 
-        # Ensure filename is not None
         if not file.filename or not isinstance(file.filename, str):
             raise HTTPException(status_code=400, detail="Invalid filename")
 
-        # Create subfolder
-        base_upload_dir = FileStorageService.ensure_upload_directory()
-        save_dir = FileStorageService.ensure_upload_directory(base_upload_dir / _safe_subfolder_path(subfolder))
-
-        # Generate unique filename
-        filename = Path(file.filename).name if file.filename else "unknown"
+        # Prepare path/key
+        filename = Path(file.filename).name
         file_ext = Path(filename).suffix.lower()
         file_id = f"{prefix}_{uuid.uuid4().hex[:12]}"
         unique_filename = f"{file_id}{file_ext}"
-        file_path = save_dir / unique_filename
+        
+        # S3 vs Local path
+        safe_sub = _safe_subfolder_path(subfolder)
+        storage_key = f"{safe_sub}/{unique_filename}".replace("\\", "/")
 
-        # Check file size while reading
         try:
             contents = await file.read()
             if not contents:
                 raise HTTPException(status_code=400, detail="Uploaded file is empty")
             if len(contents) > MAX_FILE_SIZE:
-                raise HTTPException(
-                    status_code=413,
-                    detail=f"File too large. Max size: 25 MB"
-                )
+                raise HTTPException(status_code=413, detail="File too large")
             if not _matches_expected_signature(file_ext, contents):
-                raise HTTPException(status_code=400, detail="Uploaded file content does not match the declared file type")
+                raise HTTPException(
+                    status_code=400,
+                    detail="File contents do not match the declared file type",
+                )
 
-            # Write file in a thread pool to avoid blocking the event loop
-            import asyncio
-            def write_sync():
-                with open(file_path, "wb") as f:
-                    f.write(contents)
-            
-            await asyncio.to_thread(write_sync)
+            mime_type = file.content_type or "application/octet-stream"
+
+            if settings.USE_S3:
+                # S3 Implementation
+                try:
+                    import boto3
+                    s3_client = boto3.client(
+                        's3',
+                        aws_access_key_id=settings.S3_ACCESS_KEY,
+                        aws_secret_access_key=settings.S3_SECRET_KEY,
+                        region_name=settings.S3_REGION,
+                        endpoint_url=settings.S3_ENDPOINT_URL or None
+                    )
+                    
+                    import asyncio
+                    await asyncio.to_thread(
+                        s3_client.put_object,
+                        Bucket=settings.S3_BUCKET,
+                        Key=storage_key,
+                        Body=contents,
+                        ContentType=mime_type
+                    )
+                    file_path = f"s3://{settings.S3_BUCKET}/{storage_key}"
+                except ImportError:
+                    logger.error("boto3 not installed, cannot use S3 storage")
+                    raise HTTPException(status_code=500, detail="S3 storage misconfigured")
+            else:
+                # Local Implementation
+                base_upload_dir = FileStorageService.ensure_upload_directory()
+                save_dir = FileStorageService.ensure_upload_directory(base_upload_dir / safe_sub)
+                file_path_local = save_dir / unique_filename
+                
+                import asyncio
+                def write_sync():
+                    with open(file_path_local, "wb") as f:
+                        f.write(contents)
+                await asyncio.to_thread(write_sync)
+                file_path = str(file_path_local)
 
             return {
                 "file_id": file_id,
                 "filename": filename,
-                "file_path": str(file_path),
+                "file_path": file_path,
                 "file_size": len(contents),
-                "mime_type": file.content_type or "application/octet-stream",
+                "mime_type": mime_type,
                 "upload_time": utcnow().isoformat(),
             }
         except HTTPException:
-            FileStorageService._cleanup_file(file_path)
             raise
         except Exception as exc:
             logger.error("Failed to save uploaded file %s", filename, exc_info=exc)
-            FileStorageService._cleanup_file(file_path)
             raise HTTPException(status_code=500, detail="Failed to save file")
 
     @staticmethod

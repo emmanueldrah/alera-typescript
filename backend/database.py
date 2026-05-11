@@ -53,20 +53,29 @@ engine_kwargs = {
 
 # Use appropriate pool settings based on database type
 if database_url.startswith("sqlite"):
-    # SQLite: No connection pooling for serverless
+    # SQLite: StaticPool is required for in-memory or shared SQLite connections in threads
     engine_kwargs["poolclass"] = StaticPool
     engine_kwargs["connect_args"] = {"check_same_thread": False}
 elif database_url.startswith("postgresql"):
-    # PostgreSQL: Use NullPool for serverless (no connection pooling)
-    # Vercel uses ephemeral connections
-    engine_kwargs["poolclass"] = NullPool
+    # PostgreSQL: For 100k users, we need robust pooling unless we use an external proxy (PgBouncer).
+    # We default to QueuePool with reasonable defaults for high-concurrency.
+    if os.environ.get("DB_POOL_DISABLED") == "true" or os.environ.get("VERCEL") == "1":
+        from sqlalchemy.pool import NullPool
+        engine_kwargs["poolclass"] = NullPool
+    else:
+        # Default to QueuePool (implicit when poolclass is not set)
+        engine_kwargs["pool_size"] = int(os.environ.get("DB_POOL_SIZE", "20"))
+        engine_kwargs["max_overflow"] = int(os.environ.get("DB_MAX_OVERFLOW", "10"))
+        engine_kwargs["pool_timeout"] = 30
+        engine_kwargs["pool_recycle"] = 1800 # 30 mins
+        
     engine_kwargs["connect_args"] = {
-        "connect_timeout": max(1, int(os.environ.get("DATABASE_CONNECT_TIMEOUT_SECONDS", "5"))),
+        "connect_timeout": max(1, int(os.environ.get("DATABASE_CONNECT_TIMEOUT_SECONDS", "10"))),
     }
 else:
-    # Default: No pooling for other database types
+    # Default: Use NullPool for safety if unknown, but allow pooling in production
     if settings.ENVIRONMENT == "production":
-        engine_kwargs["poolclass"] = NullPool
+        engine_kwargs["pool_size"] = 10
 
 try:
     # Create engine

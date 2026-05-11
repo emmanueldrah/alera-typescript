@@ -230,6 +230,15 @@ class Settings(BaseSettings):
     )
     AUDIT_LOG_RETENTION_DAYS: int = 2555
 
+    # Storage
+    USE_S3: bool = Field(default=False, description="Use S3-compatible object storage instead of local filesystem")
+    S3_BUCKET: str = ""
+    S3_REGION: str = "us-east-1"
+    S3_ACCESS_KEY: str = ""
+    S3_SECRET_KEY: str = ""
+    S3_ENDPOINT_URL: str = "" # Useful for Cloudflare R2 or MinIO
+    S3_PUBLIC_URL_PREFIX: str = "" # For serving through a CDN
+
     model_config = SettingsConfigDict(
         env_file=(".env", ".env.local", "backend/.env"),
         case_sensitive=True,

@@ -129,10 +129,13 @@ def _infer_role(db, user_id: int | None, explicit_role: str | None) -> str | Non
         return explicit_role
     if not user_id:
         return None
-    user = db.query(User).filter(User.id == user_id).first()
+    
+    # Check if we can get the role without a DB query if the user object is somehow available
+    # but for now we just optimize the query.
+    user = db.query(User).filter(User.id == user_id).with_entities(User.role).first()
     if not user:
         return None
-    return user.role.value if hasattr(user.role, "value") else str(user.role)
+    return user[0].value if hasattr(user[0], "value") else str(user[0])
 
 
 def write_audit_log(
@@ -227,7 +230,34 @@ async def log_action(
     request_method: str | None = None,
     request_path: str | None = None,
     duration_ms: int | None = None,
+    background_tasks: BackgroundTasks | None = None,
 ):
+    # If background_tasks is provided, offload the DB write to keep the request fast.
+    if background_tasks:
+        background_tasks.add_task(
+            write_audit_log,
+            user_id=user_id,
+            role=role,
+            action=action,
+            resource=resource,
+            resource_type=resource_type,
+            resource_id=resource_id,
+            status=status,
+            ip_address=ip_address,
+            user_agent=user_agent,
+            device_info=device_info,
+            metadata=metadata,
+            request_id=request_id,
+            request_method=request_method,
+            request_path=request_path,
+            duration_ms=duration_ms,
+            changes=changes,
+            description=description,
+            error_message=error_message,
+            severity=_normalize_severity(status)
+        )
+        return
+
     try:
         resolved_role = _infer_role(db, user_id, role)
         audit_log = AuditLog(

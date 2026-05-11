@@ -66,6 +66,20 @@ async def create_ambulance_request(
     db.commit()
     db.refresh(db_request)
 
+    # Real-time notification for dispatchers
+    from app.utils.websocket_manager import manager
+    await manager.broadcast_to_room(
+        message={
+            "type": "NEW_AMBULANCE_REQUEST",
+            "request_id": db_request.id,
+            "patient_id": db_request.patient_id,
+            "priority": db_request.priority.value,
+            "location_name": db_request.location_name,
+            "timestamp": utcnow().isoformat()
+        },
+        room_id="dispatch"
+    )
+
     from app.routes.audit import log_action
 
     await log_action(
@@ -189,6 +203,33 @@ async def update_ambulance_request(
             
     db.commit()
     db.refresh(db_request)
+
+    # Real-time notification for patient and dispatchers
+    from app.utils.websocket_manager import manager
+    
+    # Notify patient
+    await manager.send_to_user(
+        user_id=db_request.patient_id,
+        message={
+            "type": "AMBULANCE_STATUS_UPDATE",
+            "request_id": db_request.id,
+            "status": db_request.status.value,
+            "assigned_ambulance_id": db_request.assigned_ambulance_id,
+            "timestamp": utcnow().isoformat()
+        }
+    )
+    
+    # Notify dispatchers
+    await manager.broadcast_to_room(
+        message={
+            "type": "AMBULANCE_REQUEST_UPDATED",
+            "request_id": db_request.id,
+            "status": db_request.status.value,
+            "assigned_ambulance_id": db_request.assigned_ambulance_id,
+            "timestamp": utcnow().isoformat()
+        },
+        room_id="dispatch"
+    )
 
     from app.routes.audit import log_action
 

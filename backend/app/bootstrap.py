@@ -127,15 +127,22 @@ def request_origin_is_trusted(request: Request) -> bool:
 
 async def initialize_application_state(app: FastAPI) -> None:
     try:
-        # Always run idempotent table creation/patches so existing deployments
-        # receive schema updates required by new features such as audit logging.
-        init_db()
+        # In production environments with horizontal scaling, we often want to 
+        # run migrations as a separate deployment step rather than on every 
+        # application startup to avoid race conditions and slow startup times.
+        if os.environ.get("SKIP_DB_INIT") == "true":
+            logger.info("Skipping database initialization (SKIP_DB_INIT=true)")
+        else:
+            # Always run idempotent table creation/patches so existing deployments
+            # receive schema updates required by new features such as audit logging.
+            init_db()
+            
         app.state.startup_complete = True
         app.state.startup_error = None
     except Exception as exc:
         app.state.startup_complete = False
         app.state.startup_error = str(exc)
-        print(f"Error during startup database initialization: {exc}")
+        logger.error(f"Error during startup database initialization: {exc}", exc_info=True)
 
 
 def database_ready() -> tuple[bool, str]:
