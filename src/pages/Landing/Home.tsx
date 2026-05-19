@@ -11,6 +11,7 @@ import {
   ChevronRight,
   ClipboardCheck,
   FlaskConical,
+  Globe,
   HeartPulse,
   LockKeyhole,
   Pill,
@@ -230,6 +231,23 @@ const blogTopics = [
   'How Alera streamlines patient care from booking to follow-up',
   'The future of telemedicine for hospitals and outpatient clinics',
   'How pharmacies and clinicians reduce prescription delays with shared workflows',
+];
+
+const onboardingOptions = [
+  {
+    title: 'Continue with Google',
+    copy: 'For faster onboarding, care teams and patients can start with Google sign-in and finish the role details Alera needs.',
+    cta: 'Use Google sign-in',
+    href: '/login',
+    tone: 'border-emerald-200 bg-emerald-50',
+  },
+  {
+    title: 'Create a role-based account',
+    copy: 'Choose patient, doctor, hospital, pharmacy, laboratory, imaging center, or ambulance access during sign-up.',
+    cta: 'Create your account',
+    href: '/signup',
+    tone: 'border-sky-200 bg-sky-50',
+  },
 ];
 
 const setMetaContent = (selector: string, value: string, attribute: 'name' | 'property') => {
@@ -551,6 +569,42 @@ const Home = () => {
         </div>
       </section>
 
+      <section className="bg-slate-50 py-20 sm:py-24">
+        <div className="mx-auto max-w-7xl px-6 lg:px-8">
+          <div className="grid gap-10 lg:grid-cols-[minmax(0,0.9fr)_minmax(0,1.1fr)] lg:items-center">
+            <div>
+              <p className="text-sm font-semibold uppercase tracking-[0.24em] text-emerald-700">Faster onboarding</p>
+              <h2 className="mt-3 text-3xl font-bold tracking-tight text-slate-950 sm:text-4xl">
+                Give teams a secure path to start with Google sign-in
+              </h2>
+              <p className="mt-5 text-lg leading-8 text-slate-600">
+                Alera now supports Google sign-in on the live login and sign-up flows. Patients can move faster, while provider roles still complete the license and verification details required for secure healthcare access.
+              </p>
+              <div className="mt-6 inline-flex items-center gap-2 rounded-full border border-slate-200 bg-white px-4 py-2 text-sm text-slate-700">
+                <Globe className="h-4 w-4 text-emerald-700" />
+                Google onboarding is available directly from the authentication screens
+              </div>
+            </div>
+
+            <div className="grid gap-4 md:grid-cols-2">
+              {onboardingOptions.map((option) => (
+                <div key={option.title} className={`rounded-[1.75rem] border p-6 shadow-sm ${option.tone}`}>
+                  <p className="text-sm font-semibold uppercase tracking-[0.2em] text-slate-500">Entry option</p>
+                  <h3 className="mt-3 text-xl font-semibold text-slate-950">{option.title}</h3>
+                  <p className="mt-3 text-sm leading-6 text-slate-600">{option.copy}</p>
+                  <Button asChild size="lg" className="mt-6 h-12 rounded-full bg-slate-950 px-6 text-white hover:bg-slate-900">
+                    <Link to={option.href}>
+                      {option.cta}
+                      <ChevronRight className="ml-2 h-4 w-4" />
+                    </Link>
+                  </Button>
+                </div>
+              ))}
+            </div>
+          </div>
+        </div>
+      </section>
+
       <section className="bg-white py-20 sm:py-24">
         <div className="mx-auto max-w-7xl px-6 lg:px-8">
           <div className="grid gap-10 lg:grid-cols-[minmax(0,0.95fr)_minmax(0,1.05fr)]">
@@ -643,11 +697,14 @@ const Home = () => {
             Bring booking, consultation, fulfillment, and follow-up into one healthcare platform
           </h2>
           <p className="mx-auto mt-5 max-w-3xl text-lg leading-8 text-slate-600">
-            The homepage should close with a direct decision: start coordinating care in one place, or see a guided role-based demo first. Both paths remain visible on desktop and mobile.
+            The homepage should close with a direct decision: create a role-based account, continue with Google sign-in, or review the guided demo first. Both primary paths remain visible on desktop and mobile.
           </p>
           <div className="mt-8 flex flex-col items-center justify-center gap-4 sm:flex-row">
             <Button asChild size="lg" className="h-14 rounded-full bg-slate-950 px-8 text-white hover:bg-slate-900">
               <Link to="/signup">Create your Alera account</Link>
+            </Button>
+            <Button asChild size="lg" variant="outline" className="h-14 rounded-full border-slate-300 bg-white px-8 text-slate-900 hover:bg-slate-50">
+              <Link to="/login">Continue with Google</Link>
             </Button>
             <Button asChild size="lg" variant="outline" className="h-14 rounded-full border-slate-300 bg-white px-8 text-slate-900 hover:bg-slate-50">
               <a href="#guided-demo">Review the guided demo</a>
@@ -662,7 +719,7 @@ const Home = () => {
             <Link to="/signup">Start now</Link>
           </Button>
           <Button asChild variant="outline" className="h-12 flex-1 rounded-full border-slate-300 bg-white text-slate-900 hover:bg-slate-50">
-            <a href="#guided-demo">See demo</a>
+            <Link to="/login">Google sign-in</Link>
           </Button>
         </div>
       </div>

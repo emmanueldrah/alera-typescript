@@ -528,6 +528,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       isLoading,
       login, 
       loginWithGoogle,
+      registerWithGoogle,
       signup, 
       logout, 
       addUser, 
