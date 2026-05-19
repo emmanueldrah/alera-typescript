@@ -1,584 +1,671 @@
 import { Link } from 'react-router-dom';
-import { motion, type Variants, AnimatePresence } from 'framer-motion';
-import { useState, useEffect } from 'react';
+import { motion, type Variants } from 'framer-motion';
+import { useEffect } from 'react';
+import type { LucideIcon } from 'lucide-react';
 import {
-  ArrowRight, LockKeyhole, Zap,
-  Ambulance, FlaskConical, ScanLine, Pill, Building2,
-  Stethoscope, Users, Video, ShieldCheck, MessageSquareText,
-  CalendarDays, HeartPulse, ChevronRight, Activity, MapPin, Sparkles
+  Ambulance,
+  ArrowRight,
+  BadgeCheck,
+  Building2,
+  CalendarClock,
+  ChevronRight,
+  ClipboardCheck,
+  FlaskConical,
+  HeartPulse,
+  LockKeyhole,
+  Pill,
+  ScanLine,
+  ShieldCheck,
+  Stethoscope,
+  UserRound,
+  Users,
+  Video,
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
+import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 
 const fadeUp: Variants = {
-  hidden: { opacity: 0, y: 30 },
-  visible: { opacity: 1, y: 0, transition: { duration: 0.6, ease: [0.22, 1, 0.36, 1] } },
+  hidden: { opacity: 0, y: 24 },
+  visible: { opacity: 1, y: 0, transition: { duration: 0.55, ease: [0.22, 1, 0.36, 1] } },
 };
-const staggerContainer: Variants = {
+
+const stagger: Variants = {
   hidden: { opacity: 0 },
-  visible: { opacity: 1, transition: { staggerChildren: 0.1, delayChildren: 0.1 } },
+  visible: { opacity: 1, transition: { staggerChildren: 0.08, delayChildren: 0.08 } },
 };
 
-const ecosystemRoles = [
-  { icon: Stethoscope, label: 'Doctors', color: 'text-sky-600', bg: 'bg-sky-50', hover: 'hover:bg-sky-100 hover:ring-sky-200' },
-  { icon: Building2, label: 'Hospitals', color: 'text-indigo-600', bg: 'bg-indigo-50', hover: 'hover:bg-indigo-100 hover:ring-indigo-200' },
-  { icon: Pill, label: 'Pharmacies', color: 'text-emerald-600', bg: 'bg-emerald-50', hover: 'hover:bg-emerald-100 hover:ring-emerald-200' },
-  { icon: FlaskConical, label: 'Labs', color: 'text-violet-600', bg: 'bg-violet-50', hover: 'hover:bg-violet-100 hover:ring-violet-200' },
-  { icon: ScanLine, label: 'Imaging', color: 'text-cyan-600', bg: 'bg-cyan-50', hover: 'hover:bg-cyan-100 hover:ring-cyan-200' },
-  { icon: Ambulance, label: 'Ambulance', color: 'text-rose-600', bg: 'bg-rose-50', hover: 'hover:bg-rose-100 hover:ring-rose-200' },
-  { icon: Users, label: 'Patients', color: 'text-teal-600', bg: 'bg-teal-50', hover: 'hover:bg-teal-100 hover:ring-teal-200' },
-];
-
-const liveEvents = [
-  { text: 'Prescription verified by PharmaCare', icon: Pill, color: 'bg-emerald-500/10 text-emerald-600', iconBg: 'bg-emerald-100' },
-  { text: 'Lab result ready: Complete Blood Count', icon: FlaskConical, color: 'bg-violet-500/10 text-violet-600', iconBg: 'bg-violet-100' },
-  { text: 'Dispatcher en route to Victoria Island', icon: Ambulance, color: 'bg-rose-500/10 text-rose-600', iconBg: 'bg-rose-100' },
-  { text: 'Telemedicine call started with Dr. Ama', icon: Video, color: 'bg-sky-500/10 text-sky-600', iconBg: 'bg-sky-100' },
-  { text: 'New MRI scan uploaded by Radiology', icon: ScanLine, color: 'bg-cyan-500/10 text-cyan-600', iconBg: 'bg-cyan-100' },
-];
-
-const LiveActivityTicker = () => {
-  const [current, setCurrent] = useState(0);
-  useEffect(() => {
-    const timer = setInterval(() => setCurrent((prev) => (prev + 1) % liveEvents.length), 3500);
-    return () => clearInterval(timer);
-  }, []);
-  const event = liveEvents[current];
-  const Icon = event.icon;
-  return (
-    <div className="mt-4 overflow-hidden rounded-xl border border-slate-100 bg-white" style={{ minHeight: 48 }}>
-      <AnimatePresence mode="wait">
-        <motion.div
-          key={current}
-          initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -10 }}
-          transition={{ duration: 0.4 }}
-          className="flex flex-1 items-center gap-3 px-3 py-2.5 shadow-sm"
-        >
-          <div className={`flex h-8 w-8 shrink-0 items-center justify-center rounded-full ${event.iconBg} ${event.color}`}>
-             <Icon className="h-4 w-4" />
-          </div>
-          <span className="text-xs font-medium text-slate-700 truncate">{event.text}</span>
-          <span className="relative ml-auto flex h-2 w-2 shrink-0">
-             <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-emerald-400 opacity-75"></span>
-             <span className="relative inline-flex h-2 w-2 rounded-full bg-emerald-500"></span>
-          </span>
-        </motion.div>
-      </AnimatePresence>
-    </div>
-  );
+type RoleCard = {
+  name: string;
+  icon: LucideIcon;
+  summary: string;
+  tone: string;
+  accent: string;
 };
 
-const STATS = [
-  { label: 'Platform Uptime', value: '99.9%', icon: Activity },
-  { label: 'Ecosystem Roles', value: '8 Connected', icon: Users },
-  { label: 'Data Security', value: 'AES-256', icon: LockKeyhole },
-]
-
-const heroSignals = [
-  { label: 'Care teams online', value: '148', icon: Users, color: 'bg-emerald-400 text-slate-950' },
-  { label: 'Referrals in motion', value: '32', icon: ArrowRight, color: 'bg-sky-400 text-slate-950' },
-  { label: 'Emergency lanes', value: '6', icon: MapPin, color: 'bg-amber-300 text-slate-950' },
-];
-
-const careJourney = [
-  { label: 'Book', icon: CalendarDays, copy: 'Patients can book care fast without long calls or delays.' },
-  { label: 'Consult', icon: Stethoscope, copy: 'Doctors can see records, notes, and history in one place.' },
-  { label: 'Fulfill', icon: Pill, copy: 'Pharmacies, labs, imaging, and emergency teams get updates right away.' },
-  { label: 'Follow up', icon: HeartPulse, copy: 'Results, reminders, and care plans stay connected after the visit.' },
-];
-
-const launchHighlights = [
+const roleCards: RoleCard[] = [
   {
-    title: 'Everyone stays on the same page',
-    copy: 'Doctors, labs, imaging teams, and pharmacies can follow the same patient journey instead of working in separate systems.',
-    icon: MessageSquareText,
-    accent: 'from-sky-500/20 to-cyan-400/10',
+    name: 'Patient',
+    icon: UserRound,
+    summary: 'Book visits, review results, receive prescriptions, and stay informed without repeating your story.',
+    tone: 'bg-cyan-50',
+    accent: 'text-cyan-700',
   },
   {
-    title: 'See what is happening live',
-    copy: 'Teams can track appointments, results, prescriptions, and urgent cases without chasing updates by hand.',
-    icon: ShieldCheck,
-    accent: 'from-emerald-500/20 to-teal-400/10',
-  },
-];
-
-const trustRibbon = [
-  'Right access for each user',
-  'Live updates across care teams',
-  'Built-in tracking and safety checks',
-];
-
-const decisionTriggers = [
-  {
-    title: 'Stop wasting time',
-    copy: 'No more chasing lab results, making extra calls, or using too many tools for one patient journey.',
-    accent: 'border-sky-100 bg-sky-50/70',
+    name: 'Doctor',
+    icon: Stethoscope,
+    summary: 'Consult with context, review history fast, and coordinate next steps from one workspace.',
+    tone: 'bg-sky-50',
+    accent: 'text-sky-700',
   },
   {
-    title: 'Bring every team together',
-    copy: 'Patients, doctors, pharmacies, labs, hospitals, imaging centers, and ambulance teams can work in one simple flow.',
-    accent: 'border-emerald-100 bg-emerald-50/70',
+    name: 'Hospital',
+    icon: Building2,
+    summary: 'Standardize handoffs across departments, admissions, follow-up, and referrals.',
+    tone: 'bg-indigo-50',
+    accent: 'text-indigo-700',
   },
   {
-    title: 'Make people want in',
-    copy: 'The page should make visitors feel this is the tool they have been missing, not just another app to read about.',
-    accent: 'border-violet-100 bg-violet-50/70',
+    name: 'Pharmacy',
+    icon: Pill,
+    summary: 'Receive verified orders, track fulfillment, and reduce prescription call-backs.',
+    tone: 'bg-emerald-50',
+    accent: 'text-emerald-700',
+  },
+  {
+    name: 'Lab',
+    icon: FlaskConical,
+    summary: 'Accept requests, post results securely, and keep providers and patients in sync.',
+    tone: 'bg-violet-50',
+    accent: 'text-violet-700',
+  },
+  {
+    name: 'Imaging Center',
+    icon: ScanLine,
+    summary: 'Move scan requests and results faster so treatment decisions are not delayed.',
+    tone: 'bg-amber-50',
+    accent: 'text-amber-700',
+  },
+  {
+    name: 'Ambulance',
+    icon: Ambulance,
+    summary: 'Share live dispatch updates and route urgent cases to the right facility quickly.',
+    tone: 'bg-rose-50',
+    accent: 'text-rose-700',
   },
 ];
 
-const proofMoments = [
-  'Faster referrals between care teams',
-  'Better follow-up after each visit',
-  'Clearer view for hospitals and larger teams',
-  'Safer updates for prescriptions, tests, and scans',
+const trustPills = ['AES-256 encryption', 'HIPAA-ready workflows', 'Role-based access control', 'Audit-ready activity trails'];
+
+const homepageMetrics = [
+  {
+    title: 'One connected journey',
+    value: '7 care roles',
+    copy: 'Patients, clinicians, hospitals, pharmacies, labs, imaging centers, and ambulance teams work from one coordinated system.',
+  },
+  {
+    title: 'Security by design',
+    value: 'AES-256',
+    copy: 'Sensitive records stay protected in transit and at rest with healthcare-grade access controls.',
+  },
+  {
+    title: 'Clearer action',
+    value: '4-step flow',
+    copy: 'Book, consult, fulfill, and follow up through one visible care pathway.',
+  },
 ];
 
-const accountNotes = [
-  'Use one account for work',
-  'Use a separate patient account for your own care',
-  'Keep personal care and work tasks clearly separate',
+const journeySteps = [
+  {
+    title: '1. Book care',
+    icon: CalendarClock,
+    copy: 'Patients find the right service, choose a time, and receive confirmation without long call chains.',
+  },
+  {
+    title: '2. Consult with context',
+    icon: Stethoscope,
+    copy: 'Doctors open appointments with charts, prior notes, imaging, and medication history already available.',
+  },
+  {
+    title: '3. Fulfill next steps',
+    icon: ClipboardCheck,
+    copy: 'Pharmacies, labs, imaging teams, and hospitals receive the right requests without duplicate handoffs.',
+  },
+  {
+    title: '4. Follow up confidently',
+    icon: HeartPulse,
+    copy: 'Patients and care teams stay aligned with results, reminders, status updates, and care instructions.',
+  },
 ];
+
+const roleFlows = {
+  patient: {
+    eyebrow: 'Patient demo',
+    heading: 'From searching for care to getting follow-up instructions',
+    summary:
+      'The patient journey is reduced to a few clear steps, so people book care, see updates, and know what happens next without chasing multiple offices.',
+    steps: [
+      'Search for a doctor, lab, imaging center, or hospital service and book in minutes.',
+      'Receive confirmations, reminders, and pre-visit instructions in one place.',
+      'Join a consultation or attend in person with your history already available to the clinician.',
+      'See prescriptions, test orders, and follow-up tasks after the visit without extra calls.',
+    ],
+    signalLabel: 'What the patient sees',
+    signalCopy: 'Appointment status, provider instructions, prescriptions, results, and secure messages in one calm interface.',
+  },
+  doctor: {
+    eyebrow: 'Doctor demo',
+    heading: 'Consult faster with history, diagnostics, and care coordination in view',
+    summary:
+      'Clinicians move from intake to action without opening disconnected tools, reducing context switching and delays in decision-making.',
+    steps: [
+      'Open a patient visit with medical history, prior notes, allergies, and current medications already visible.',
+      'Send lab, imaging, referral, and prescription orders from the same workflow.',
+      'Launch video consultations when remote care is needed and document the encounter in context.',
+      'Track whether downstream teams completed the requested actions and close the loop on follow-up.',
+    ],
+    signalLabel: 'What the clinician sees',
+    signalCopy: 'A unified visit workspace with clinical context, live order status, and role-based communication.',
+  },
+  pharmacy: {
+    eyebrow: 'Pharmacy demo',
+    heading: 'Move prescriptions from provider approval to patient fulfillment with less friction',
+    summary:
+      'Pharmacy teams can verify incoming prescriptions, manage status, and confirm fulfillment without repeated clarification calls.',
+    steps: [
+      'Receive a verified prescription tied to the patient and prescribing clinician.',
+      'Check medication details and fulfillment status from a clear queue.',
+      'Update the care team when medication is ready, dispensed, delayed, or requires clarification.',
+      'Keep a clean audit trail that supports safer medication coordination and better patient follow-through.',
+    ],
+    signalLabel: 'What the pharmacy sees',
+    signalCopy: 'Verified orders, fulfillment tracking, communication logs, and a safer dispensing workflow.',
+  },
+};
+
+const networkSupport = [
+  {
+    title: 'Hospital operations',
+    icon: Building2,
+    copy: 'Keep referrals, admissions, and discharge follow-up visible across departments instead of buried in separate systems.',
+  },
+  {
+    title: 'Laboratory coordination',
+    icon: FlaskConical,
+    copy: 'Turn test requests into secure results delivery that reaches both providers and patients without manual forwarding.',
+  },
+  {
+    title: 'Imaging workflows',
+    icon: ScanLine,
+    copy: 'Speed up scan scheduling and result sharing so clinical decisions are not blocked by missing images or reports.',
+  },
+  {
+    title: 'Ambulance routing',
+    icon: Ambulance,
+    copy: 'Share dispatch status and incoming patient context with receiving facilities when urgent transfers matter most.',
+  },
+];
+
+const proofModules = [
+  {
+    title: 'Story block for patients',
+    copy: 'Explain how a patient books care, receives a prescription, gets lab work done, and completes follow-up without repeating the same information.',
+  },
+  {
+    title: 'Story block for clinicians',
+    copy: 'Show how a doctor consults, orders tests, and sees downstream status without leaving the encounter workflow.',
+  },
+  {
+    title: 'Story block for operations leaders',
+    copy: 'Highlight fewer manual handoffs, clearer referral tracking, and more accountable coordination across the care network.',
+  },
+];
+
+const complianceBadges = [
+  { title: 'AES-256 encrypted', copy: 'Healthcare records and operational data are protected with strong encryption controls.' },
+  { title: 'HIPAA-ready controls', copy: 'Role-based access, audit visibility, and secure communication support regulated care workflows.' },
+  { title: 'Permissioned by role', copy: 'Patients, doctors, hospitals, pharmacies, labs, imaging teams, and ambulance staff each see only what they need.' },
+];
+
+const blogTopics = [
+  'How Alera streamlines patient care from booking to follow-up',
+  'The future of telemedicine for hospitals and outpatient clinics',
+  'How pharmacies and clinicians reduce prescription delays with shared workflows',
+];
+
+const setMetaContent = (selector: string, value: string, attribute: 'name' | 'property') => {
+  let element = document.head.querySelector(selector) as HTMLMetaElement | null;
+
+  if (!element) {
+    element = document.createElement('meta');
+    const key = selector.match(/"([^"]+)"/)?.[1];
+    if (key) {
+      element.setAttribute(attribute, key);
+    }
+    document.head.appendChild(element);
+  }
+
+  element.setAttribute('content', value);
+};
 
 const Home = () => {
+  useEffect(() => {
+    document.title = 'Alera | Healthcare Management Software for Patients, Doctors, Hospitals, Labs and Pharmacies';
+
+    setMetaContent(
+      'meta[name="description"]',
+      'Alera is healthcare management software for patients, doctors, hospitals, pharmacies, labs, imaging centers, and ambulance teams. Book appointments, coordinate care, manage prescriptions, and deliver secure telemedicine in one connected platform.',
+      'name',
+    );
+    setMetaContent(
+      'meta[name="keywords"]',
+      'healthcare management software, telemedicine platform, patient appointment booking, hospital workflow software, pharmacy prescription management, lab results platform, imaging center software, ambulance dispatch coordination',
+      'name',
+    );
+    setMetaContent(
+      'meta[property="og:title"]',
+      'Alera | Connected Healthcare Management Software',
+      'property',
+    );
+    setMetaContent(
+      'meta[property="og:description"]',
+      'Coordinate appointments, consultations, prescriptions, diagnostics, referrals, and emergency response through one secure healthcare platform.',
+      'property',
+    );
+    setMetaContent(
+      'meta[name="twitter:title"]',
+      'Alera | Connected Healthcare Management Software',
+      'name',
+    );
+    setMetaContent(
+      'meta[name="twitter:description"]',
+      'Healthcare management software for patients, doctors, hospitals, pharmacies, labs, imaging centers, and ambulance teams.',
+      'name',
+    );
+  }, []);
+
   return (
-    <div className="min-h-screen bg-[#f6fafb] selection:bg-sky-100 selection:text-sky-900 font-body overflow-x-hidden">
-      {/* ──────────── HERO ──────────── */}
-      <section className="relative isolate min-h-[calc(100vh-5rem)] overflow-hidden text-white">
-        <img
-          src="/images/hero_medical_team.png"
-          alt="Diverse medical team collaborating inside a modern care setting"
-          className="absolute inset-0 -z-20 h-full w-full object-cover"
-        />
-        <div className="absolute inset-0 -z-10 bg-[linear-gradient(90deg,_rgba(6,18,34,0.94)_0%,_rgba(8,31,48,0.76)_46%,_rgba(8,31,48,0.34)_100%)]" />
-        <div className="absolute inset-x-0 bottom-0 -z-10 h-48 bg-[linear-gradient(180deg,_rgba(246,250,251,0)_0%,_#f6fafb_100%)]" />
-        <div className="pointer-events-none absolute inset-0 -z-10 bg-[linear-gradient(rgba(255,255,255,0.05)_1px,_transparent_1px),linear-gradient(90deg,_rgba(255,255,255,0.05)_1px,_transparent_1px)] bg-[size:72px_72px] opacity-40" />
+    <div className="overflow-x-hidden bg-[#f4f8fb] pb-28 font-body text-slate-900 md:pb-0">
+      <section className="relative isolate overflow-hidden bg-[radial-gradient(circle_at_top_left,_rgba(56,189,248,0.16),_transparent_28%),linear-gradient(135deg,_#082032_0%,_#0d2b3f_48%,_#10393b_100%)] text-white">
+        <div className="absolute inset-0 bg-[linear-gradient(rgba(255,255,255,0.05)_1px,_transparent_1px),linear-gradient(90deg,_rgba(255,255,255,0.05)_1px,_transparent_1px)] bg-[size:72px_72px] opacity-30" />
+        <div className="mx-auto grid min-h-[calc(100vh-5rem)] max-w-7xl gap-14 px-6 py-14 lg:grid-cols-[minmax(0,1.05fr)_440px] lg:items-center lg:px-8">
+          <motion.div initial="hidden" animate="visible" variants={stagger} className="relative z-10 max-w-3xl">
+            <motion.div variants={fadeUp} className="inline-flex flex-wrap items-center gap-2 rounded-full border border-white/15 bg-white/10 px-4 py-2 text-sm backdrop-blur">
+              <ShieldCheck className="h-4 w-4 text-emerald-200" />
+              Healthcare management software for connected care delivery
+            </motion.div>
 
-        <div className="mx-auto flex min-h-[calc(100vh-5rem)] max-w-7xl flex-col justify-center px-6 pb-20 pt-16 lg:px-8 lg:pb-28">
-          <div className="grid gap-12 lg:grid-cols-[minmax(0,0.95fr)_minmax(340px,0.55fr)] lg:items-end">
-            <motion.div variants={staggerContainer} initial="hidden" animate="visible" className="max-w-3xl">
-              <motion.div variants={fadeUp} className="inline-flex flex-wrap items-center gap-3 rounded-full border border-white/15 bg-white/[0.08] px-4 py-2 backdrop-blur">
-                <span className="inline-flex items-center gap-2 text-sm font-semibold text-emerald-200">
-                  <Sparkles className="h-4 w-4" />
-                  Connected care command center
-                </span>
-                <span className="hidden h-4 w-px bg-white/15 sm:block" />
-                <span className="text-xs uppercase tracking-[0.24em] text-slate-300">
-                  Made for real healthcare work
-                </span>
-              </motion.div>
+            <motion.h1 variants={fadeUp} className="mt-6 text-4xl font-extrabold leading-[1.02] tracking-tight sm:text-6xl lg:text-7xl">
+              Make every healthcare handoff
+              <span className="block text-cyan-200">clear, secure, and faster to act on.</span>
+            </motion.h1>
 
-              <motion.h1 variants={fadeUp} className="max-w-4xl text-5xl font-extrabold tracking-tight text-white sm:text-7xl font-display leading-[1.02]">
-                Alera
-                <span className="block text-emerald-200">brings healthcare together in one place.</span>
-              </motion.h1>
-              
-              <motion.p variants={fadeUp} className="mt-6 max-w-2xl text-lg leading-8 text-slate-100 sm:text-xl">
-                Patients, doctors, pharmacies, labs, imaging centers, hospitals, and ambulance teams can all work better when they use one platform that keeps everyone connected.
-              </motion.p>
-              
-              <motion.div variants={fadeUp} className="mt-10 flex flex-col sm:flex-row items-center justify-start gap-4 sm:gap-x-6 w-full sm:w-auto">
-                <Button asChild size="lg" className="h-14 w-full sm:w-auto rounded-full bg-emerald-300 px-8 text-base text-slate-950 shadow-xl shadow-emerald-950/20 transition-all hover:-translate-y-0.5 hover:bg-emerald-200">
-                  <Link to="/signup">
-                    Get started now <ChevronRight className="ml-2 h-5 w-5" />
-                  </Link>
-                </Button>
-                <Link to="/who-we-serve" className="flex items-center text-base font-semibold leading-6 text-white transition-colors hover:text-emerald-200 group">
-                  See who this is for <ArrowRight className="ml-1 h-4 w-4 transition-transform group-hover:translate-x-1" />
+            <motion.p variants={fadeUp} className="mt-6 max-w-2xl text-lg leading-8 text-slate-200 sm:text-xl">
+              Alera helps patients, doctors, hospitals, pharmacies, labs, imaging centers, and ambulance teams coordinate appointments, consultations, prescriptions, diagnostics, and follow-up from one trusted healthcare platform.
+            </motion.p>
+
+            <motion.div variants={fadeUp} className="mt-8 flex flex-col gap-4 sm:flex-row sm:items-center">
+              <Button asChild size="lg" className="h-14 rounded-full bg-emerald-300 px-8 text-base text-slate-950 hover:bg-emerald-200">
+                <Link to="/signup">
+                  Start secure care coordination
+                  <ChevronRight className="ml-2 h-5 w-5" />
                 </Link>
-              </motion.div>
-
-              <motion.div variants={fadeUp} className="mt-5 flex flex-wrap gap-2">
-                {['For patients', 'For clinicians', 'For hospitals', 'For pharmacies', 'For labs', 'For imaging', 'For ambulance teams'].map((tag) => (
-                  <span key={tag} className="rounded-full border border-white/15 bg-white/[0.08] px-3 py-1.5 text-xs font-medium text-slate-100 backdrop-blur">
-                    {tag}
-                  </span>
-                ))}
-              </motion.div>
-
-              <motion.div variants={fadeUp} className="mt-6 rounded-[1.5rem] border border-white/10 bg-white/[0.06] p-5 backdrop-blur">
-                <p className="text-sm font-semibold text-white">For providers who are also patients</p>
-                <div className="mt-3 grid gap-2 sm:grid-cols-3">
-                  {accountNotes.map((item) => (
-                    <div key={item} className="rounded-2xl bg-white/[0.06] px-3 py-3 text-sm text-slate-200">
-                      {item}
-                    </div>
-                  ))}
-                </div>
-              </motion.div>
-
-              <motion.div variants={fadeUp} className="mt-12 grid gap-3 sm:grid-cols-3">
-                {heroSignals.map((signal) => {
-                  const Icon = signal.icon;
-                  return (
-                    <div key={signal.label} className="border-l border-white/20 bg-white/[0.08] px-4 py-4 backdrop-blur">
-                      <div className={`mb-4 flex h-9 w-9 items-center justify-center rounded-xl ${signal.color}`}>
-                        <Icon className="h-4 w-4" />
-                      </div>
-                      <p className="text-3xl font-bold tracking-tight">{signal.value}</p>
-                      <p className="mt-1 text-xs font-semibold uppercase tracking-[0.2em] text-slate-300">{signal.label}</p>
-                    </div>
-                  );
-                })}
-              </motion.div>
-
-              <motion.div variants={fadeUp} className="mt-8 grid gap-4 lg:grid-cols-2">
-                {launchHighlights.map((item) => {
-                  const Icon = item.icon;
-                  return (
-                    <div
-                      key={item.title}
-                      className={`relative overflow-hidden rounded-[1.75rem] border border-white/10 bg-gradient-to-br ${item.accent} bg-white/[0.07] p-5 backdrop-blur`}
-                    >
-                      <div className="flex items-start gap-4">
-                        <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl bg-white text-slate-950 shadow-lg shadow-slate-950/10">
-                          <Icon className="h-5 w-5" />
-                        </div>
-                        <div>
-                          <p className="text-lg font-semibold text-white">{item.title}</p>
-                          <p className="mt-2 text-sm leading-6 text-slate-200">{item.copy}</p>
-                        </div>
-                      </div>
-                    </div>
-                  );
-                })}
-              </motion.div>
+              </Button>
+              <Button asChild size="lg" variant="outline" className="h-14 rounded-full border-white/20 bg-white/5 px-8 text-base text-white hover:bg-white/10 hover:text-white">
+                <a href="#guided-demo">
+                  See the role-based demo
+                  <ArrowRight className="ml-2 h-5 w-5" />
+                </a>
+              </Button>
             </motion.div>
 
-            <motion.div
-              initial={{ opacity: 0, y: 24 }}
-              animate={{ opacity: 1, y: 0 }}
-              transition={{ duration: 0.7, delay: 0.25, ease: "easeOut" }}
-              className="hidden border border-white/15 bg-slate-950/55 p-5 shadow-2xl shadow-slate-950/25 backdrop-blur-xl lg:block"
-            >
-              <div className="flex items-center justify-between border-b border-white/10 pb-4">
+            <motion.div variants={fadeUp} className="mt-6 flex flex-wrap gap-2">
+              {trustPills.map((pill) => (
+                <span key={pill} className="rounded-full border border-white/12 bg-white/8 px-3 py-1.5 text-xs font-semibold uppercase tracking-[0.14em] text-slate-200">
+                  {pill}
+                </span>
+              ))}
+            </motion.div>
+
+            <motion.div variants={fadeUp} className="mt-10 grid gap-4 sm:grid-cols-3">
+              {homepageMetrics.map((metric) => (
+                <div key={metric.title} className="rounded-[1.75rem] border border-white/12 bg-white/8 p-5 backdrop-blur">
+                  <p className="text-xs font-semibold uppercase tracking-[0.22em] text-cyan-200">{metric.title}</p>
+                  <p className="mt-3 text-3xl font-bold">{metric.value}</p>
+                  <p className="mt-3 text-sm leading-6 text-slate-200">{metric.copy}</p>
+                </div>
+              ))}
+            </motion.div>
+          </motion.div>
+
+          <motion.div
+            initial={{ opacity: 0, y: 28 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ duration: 0.65, delay: 0.2, ease: 'easeOut' }}
+            className="relative z-10 rounded-[2rem] border border-white/12 bg-white/10 p-5 shadow-2xl shadow-slate-950/30 backdrop-blur-xl"
+          >
+            <div className="rounded-[1.5rem] bg-white p-5 text-slate-900">
+              <div className="flex items-center justify-between">
                 <div>
-                  <p className="text-xs font-semibold uppercase tracking-[0.22em] text-emerald-200">Network Pulse</p>
-                  <p className="mt-1 text-lg font-semibold text-white">Live care coordination</p>
+                  <p className="text-xs font-semibold uppercase tracking-[0.22em] text-sky-700">Homepage wireframe</p>
+                  <h2 className="mt-2 text-2xl font-bold tracking-tight">A guided care journey instead of a text wall</h2>
                 </div>
-                <span className="flex h-3 w-3 rounded-full bg-emerald-300 shadow-[0_0_0_6px_rgba(110,231,183,0.16)]" />
-              </div>
-              <div className="mt-5 space-y-3">
-                {careJourney.map((step) => {
-                  const Icon = step.icon;
-                  return (
-                    <div key={step.label} className="flex gap-3 border border-white/10 bg-white/[0.07] p-4">
-                      <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-white text-slate-950">
-                        <Icon className="h-5 w-5" />
-                      </div>
-                      <div>
-                        <p className="font-semibold text-white">{step.label}</p>
-                        <p className="mt-1 text-sm leading-6 text-slate-300">{step.copy}</p>
-                      </div>
-                    </div>
-                  );
-                })}
-              </div>
-              <div className="mt-6 rounded-2xl border border-white/10 bg-white/[0.05] p-4">
-                <p className="text-xs font-semibold uppercase tracking-[0.24em] text-slate-300">Why teams choose Alera</p>
-                <div className="mt-3 space-y-2">
-                  {trustRibbon.map((item) => (
-                    <div key={item} className="flex items-start gap-3 text-sm text-slate-200">
-                      <span className="mt-1.5 h-2 w-2 rounded-full bg-emerald-300" />
-                      <span>{item}</span>
-                    </div>
-                  ))}
+                <div className="rounded-2xl bg-emerald-50 p-3 text-emerald-700">
+                  <HeartPulse className="h-6 w-6" />
                 </div>
               </div>
-            </motion.div>
-          </div>
+
+              <div className="mt-6 space-y-4">
+                <div className="rounded-[1.5rem] border border-slate-200 bg-slate-50 p-4">
+                  <div className="flex items-center gap-3">
+                    <div className="rounded-2xl bg-cyan-100 p-3 text-cyan-700">
+                      <CalendarClock className="h-5 w-5" />
+                    </div>
+                    <div>
+                      <p className="font-semibold">Patient books a visit</p>
+                      <p className="text-sm text-slate-600">Appointment slot selected, confirmation sent, pre-visit details shared.</p>
+                    </div>
+                  </div>
+                </div>
+                <div className="rounded-[1.5rem] border border-slate-200 bg-slate-50 p-4">
+                  <div className="flex items-center gap-3">
+                    <div className="rounded-2xl bg-sky-100 p-3 text-sky-700">
+                      <Video className="h-5 w-5" />
+                    </div>
+                    <div>
+                      <p className="font-semibold">Doctor consults with context</p>
+                      <p className="text-sm text-slate-600">History, notes, orders, and telemedicine tools stay in one clinical workspace.</p>
+                    </div>
+                  </div>
+                </div>
+                <div className="rounded-[1.5rem] border border-slate-200 bg-slate-50 p-4">
+                  <div className="flex items-center gap-3">
+                    <div className="rounded-2xl bg-emerald-100 p-3 text-emerald-700">
+                      <Pill className="h-5 w-5" />
+                    </div>
+                    <div>
+                      <p className="font-semibold">Pharmacy fulfills safely</p>
+                      <p className="text-sm text-slate-600">Verified prescription received, status updated, patient follow-through supported.</p>
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+              <div className="mt-6 rounded-[1.5rem] border border-emerald-100 bg-emerald-50 p-4">
+                <div className="flex items-start gap-3">
+                  <LockKeyhole className="mt-0.5 h-5 w-5 text-emerald-700" />
+                  <div>
+                    <p className="font-semibold text-emerald-900">Trust module</p>
+                    <p className="mt-1 text-sm leading-6 text-emerald-900/80">
+                      Surface encryption, compliance, and role-based permissions where decision-makers actually see them.
+                    </p>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </motion.div>
         </div>
       </section>
 
-      {/* ──────────── PLATFORM PREVIEW ──────────── */}
-      <section className="relative pb-24">
-         <div className="mx-auto max-w-7xl px-6 lg:px-8">
-            <motion.div 
-               initial={{ opacity: 0, y: 40 }}
-               whileInView={{ opacity: 1, y: 0 }}
-               viewport={{ once: true, margin: "-100px" }}
-               transition={{ duration: 0.8, ease: "easeOut" }}
-               className="relative rounded-[2.5rem] bg-white ring-1 ring-slate-900/5 shadow-2xl shadow-slate-200/50 overflow-hidden"
-            >
-               <div className="absolute top-0 inset-x-0 h-px bg-gradient-to-r from-transparent via-sky-500/20 to-transparent"></div>
-               
-               <div className="grid lg:grid-cols-[1fr_400px] divide-y lg:divide-y-0 lg:divide-x divide-slate-100">
-                  <div className="p-8 sm:p-12 lg:p-16">
-                     <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-8">
-                        <div className="flex items-center gap-4">
-                           <div className="h-12 w-12 rounded-2xl bg-gradient-primary flex items-center justify-center shadow-lg shadow-sky-500/20 text-white">
-                              <HeartPulse className="h-6 w-6" />
-                           </div>
-                           <div>
-                              <h3 className="text-xl font-bold font-display text-slate-900">Ecosystem Network</h3>
-                              <p className="text-sm text-slate-500">Fast updates across the whole care team</p>
-                           </div>
-                        </div>
-                     </div>
-
-                     <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
-                        {ecosystemRoles.map((role, i) => {
-                           const Icon = role.icon;
-                           return (
-                              <motion.div 
-                                 key={role.label} 
-                                 initial={{ opacity: 0, scale: 0.9 }}
-                                 whileInView={{ opacity: 1, scale: 1 }}
-                                 viewport={{ once: true }}
-                                 transition={{ delay: i * 0.05 + 0.2 }}
-                                 className={`group flex flex-col items-center justify-center gap-3 p-4 rounded-3xl border border-slate-100 transition-all duration-300 cursor-pointer hover:shadow-md ${role.bg} ${role.hover}`}
-                              >
-                                 <div className={`p-3 rounded-2xl bg-white shadow-sm ring-1 ring-slate-900/5 ${role.color}`}>
-                                    <Icon className="h-5 w-5" />
-                                 </div>
-                                 <span className="font-semibold text-slate-700 text-sm">{role.label}</span>
-                              </motion.div>
-                           )
-                        })}
-                     </div>
-                  </div>
-
-                  <div className="bg-slate-50/50 p-8 sm:p-12 flex flex-col justify-center">
-                     <div className="mb-6 flex justify-between items-center">
-                        <h4 className="font-semibold text-slate-900 flex items-center gap-2 text-sm">
-                           <Activity className="h-4 w-4 text-emerald-500" /> Live Activity Feed
-                        </h4>
-                        <span className="text-[10px] font-bold uppercase tracking-wider text-slate-400">System Log</span>
-                     </div>
-                     
-                     <LiveActivityTicker />
-                     
-                     <div className="mt-8 space-y-4">
-                        <div className="p-4 rounded-2xl bg-white border border-slate-100 shadow-sm relative overflow-hidden group">
-                           <div className="absolute inset-y-0 left-0 w-1 bg-sky-500 rounded-l-2xl"></div>
-                           <div className="flex gap-4">
-                              <div className="h-10 w-10 shrink-0 rounded-full bg-slate-100 flex items-center justify-center">
-                                 <Stethoscope className="h-5 w-5 text-slate-500" />
-                              </div>
-                              <div>
-                                 <p className="text-sm font-semibold text-slate-900">Dr. Sarah Jenkins</p>
-                                 <p className="text-xs text-slate-500 mt-0.5">Cardiologist • City Hospital</p>
-                                 <div className="mt-3 inline-flex items-center rounded-full bg-emerald-50 px-2 py-0.5 text-[10px] font-medium text-emerald-700 ring-1 ring-inset ring-emerald-600/20">
-                                    <span className="mr-1.5 h-1.5 w-1.5 rounded-full bg-emerald-500 animate-pulse"></span>
-                                    Available for Telemedicine
-                                 </div>
-                              </div>
-                           </div>
-                        </div>
-                     </div>
-                  </div>
-               </div>
-            </motion.div>
-         </div>
-      </section>
-
-      <section className="pb-24">
+      <section id="roles" className="bg-white py-20 sm:py-24">
         <div className="mx-auto max-w-7xl px-6 lg:px-8">
-          <div className="rounded-[2.5rem] border border-slate-200 bg-white p-8 shadow-[0_24px_80px_-50px_rgba(15,23,42,0.35)] sm:p-10 lg:p-12">
-            <div className="grid gap-10 lg:grid-cols-[minmax(0,1fr)_320px] lg:items-start">
+          <div className="max-w-3xl">
+            <p className="text-sm font-semibold uppercase tracking-[0.24em] text-sky-700">Role-based navigation</p>
+            <h2 className="mt-3 text-3xl font-bold tracking-tight text-slate-950 sm:text-4xl">
+              Let every visitor recognize where they fit within seconds
+            </h2>
+            <p className="mt-5 text-lg leading-8 text-slate-600">
+              The homepage should not ask healthcare teams to decode generic product language. It should immediately show how Alera supports each role in the care network.
+            </p>
+          </div>
+
+          <motion.div
+            initial="hidden"
+            whileInView="visible"
+            viewport={{ once: true, margin: '-80px' }}
+            variants={stagger}
+            className="mt-10 grid gap-4 sm:grid-cols-2 xl:grid-cols-4"
+          >
+            {roleCards.map((role) => {
+              const Icon = role.icon;
+              return (
+                <motion.div key={role.name} variants={fadeUp} className="rounded-[1.75rem] border border-slate-200 bg-white p-5 shadow-sm transition-transform hover:-translate-y-1">
+                  <div className={`inline-flex rounded-2xl p-3 ${role.tone} ${role.accent}`}>
+                    <Icon className="h-6 w-6" />
+                  </div>
+                  <h3 className="mt-4 text-xl font-semibold text-slate-950">{role.name}</h3>
+                  <p className="mt-3 text-sm leading-6 text-slate-600">{role.summary}</p>
+                  <a href="#guided-demo" className="mt-5 inline-flex items-center text-sm font-semibold text-sky-700 hover:text-sky-800">
+                    Explore this workflow
+                    <ChevronRight className="ml-1 h-4 w-4" />
+                  </a>
+                </motion.div>
+              );
+            })}
+          </motion.div>
+        </div>
+      </section>
+
+      <section id="guided-demo" className="bg-slate-50 py-20 sm:py-24">
+        <div className="mx-auto max-w-7xl px-6 lg:px-8">
+          <div className="grid gap-10 lg:grid-cols-[minmax(0,0.8fr)_minmax(0,1.2fr)] lg:items-start">
+            <div className="lg:sticky lg:top-28">
+              <p className="text-sm font-semibold uppercase tracking-[0.24em] text-emerald-700">Guided demos</p>
+              <h2 className="mt-3 text-3xl font-bold tracking-tight text-slate-950 sm:text-4xl">
+                Replace long paragraphs with role-based product walkthroughs
+              </h2>
+              <p className="mt-5 text-lg leading-8 text-slate-600">
+                Visitors should be able to follow exactly how patients book, doctors consult, and pharmacies fulfill care tasks. This is where the homepage becomes persuasive, not just descriptive.
+              </p>
+            </div>
+
+            <Tabs defaultValue="patient" className="rounded-[2rem] border border-slate-200 bg-white p-5 shadow-[0_24px_80px_-55px_rgba(15,23,42,0.45)] sm:p-6">
+              <TabsList className="grid h-auto grid-cols-3 rounded-[1.25rem] bg-slate-100 p-1">
+                <TabsTrigger value="patient" className="rounded-[1rem] py-3 data-[state=active]:bg-white">Patients</TabsTrigger>
+                <TabsTrigger value="doctor" className="rounded-[1rem] py-3 data-[state=active]:bg-white">Doctors</TabsTrigger>
+                <TabsTrigger value="pharmacy" className="rounded-[1rem] py-3 data-[state=active]:bg-white">Pharmacies</TabsTrigger>
+              </TabsList>
+
+              {Object.entries(roleFlows).map(([key, flow]) => (
+                <TabsContent key={key} value={key} className="mt-6">
+                  <div className="grid gap-6 lg:grid-cols-[minmax(0,1fr)_320px]">
+                    <div>
+                      <p className="text-xs font-semibold uppercase tracking-[0.22em] text-sky-700">{flow.eyebrow}</p>
+                      <h3 className="mt-2 text-2xl font-bold tracking-tight text-slate-950">{flow.heading}</h3>
+                      <p className="mt-4 text-base leading-7 text-slate-600">{flow.summary}</p>
+
+                      <div className="mt-6 space-y-3">
+                        {flow.steps.map((step, index) => (
+                          <div key={step} className="flex gap-4 rounded-[1.25rem] border border-slate-200 bg-slate-50 p-4">
+                            <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-slate-900 text-sm font-bold text-white">
+                              {index + 1}
+                            </div>
+                            <p className="text-sm leading-6 text-slate-700">{step}</p>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+
+                    <div className="rounded-[1.5rem] bg-[linear-gradient(180deg,_#082032_0%,_#10393b_100%)] p-5 text-white">
+                      <p className="text-xs font-semibold uppercase tracking-[0.22em] text-emerald-200">{flow.signalLabel}</p>
+                      <p className="mt-4 text-lg font-semibold">{flow.signalCopy}</p>
+                      <div className="mt-6 space-y-3">
+                        <div className="rounded-2xl bg-white/10 p-4">
+                          <p className="text-sm font-semibold">Clear status signals</p>
+                          <p className="mt-2 text-sm leading-6 text-slate-200">Confirmed, in consultation, awaiting lab, ready for pickup, and follow-up due.</p>
+                        </div>
+                        <div className="rounded-2xl bg-white/10 p-4">
+                          <p className="text-sm font-semibold">Secure action trail</p>
+                          <p className="mt-2 text-sm leading-6 text-slate-200">Every update stays attributable, permissioned, and easier to audit.</p>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                </TabsContent>
+              ))}
+            </Tabs>
+          </div>
+
+          <div className="mt-10 grid gap-4 md:grid-cols-2 xl:grid-cols-4">
+            {networkSupport.map((item) => {
+              const Icon = item.icon;
+              return (
+                <div key={item.title} className="rounded-[1.5rem] border border-slate-200 bg-white p-5 shadow-sm">
+                  <div className="inline-flex rounded-2xl bg-slate-100 p-3 text-slate-700">
+                    <Icon className="h-5 w-5" />
+                  </div>
+                  <h3 className="mt-4 text-lg font-semibold text-slate-950">{item.title}</h3>
+                  <p className="mt-3 text-sm leading-6 text-slate-600">{item.copy}</p>
+                </div>
+              );
+            })}
+          </div>
+        </div>
+      </section>
+
+      <section className="bg-[linear-gradient(180deg,_#f7fcff_0%,_#eef8f4_100%)] py-20 sm:py-24">
+        <div className="mx-auto max-w-7xl px-6 lg:px-8">
+          <div className="mx-auto max-w-3xl text-center">
+            <p className="text-sm font-semibold uppercase tracking-[0.24em] text-sky-700">Step-by-step care flow</p>
+            <h2 className="mt-3 text-3xl font-bold tracking-tight text-slate-950 sm:text-4xl">
+              A homepage story that mirrors how healthcare actually moves
+            </h2>
+            <p className="mt-5 text-lg leading-8 text-slate-600">
+              The strongest structure is a simple operational narrative: book care, consult, fulfill, and follow up. It is easier to scan, easier to trust, and easier to remember on mobile.
+            </p>
+          </div>
+
+          <div className="mt-12 grid gap-5 lg:grid-cols-4">
+            {journeySteps.map((step) => {
+              const Icon = step.icon;
+              return (
+                <div key={step.title} className="relative rounded-[1.75rem] border border-slate-200 bg-white p-6 shadow-sm">
+                  <div className="inline-flex rounded-2xl bg-sky-50 p-3 text-sky-700">
+                    <Icon className="h-6 w-6" />
+                  </div>
+                  <h3 className="mt-5 text-xl font-semibold text-slate-950">{step.title}</h3>
+                  <p className="mt-3 text-sm leading-6 text-slate-600">{step.copy}</p>
+                </div>
+              );
+            })}
+          </div>
+        </div>
+      </section>
+
+      <section className="bg-white py-20 sm:py-24">
+        <div className="mx-auto max-w-7xl px-6 lg:px-8">
+          <div className="grid gap-10 lg:grid-cols-[minmax(0,0.95fr)_minmax(0,1.05fr)]">
+            <div>
+              <p className="text-sm font-semibold uppercase tracking-[0.24em] text-sky-700">Trust-building content</p>
+              <h2 className="mt-3 text-3xl font-bold tracking-tight text-slate-950 sm:text-4xl">
+                Publish proof in concise modules, not dense generic claims
+              </h2>
+              <p className="mt-5 text-lg leading-8 text-slate-600">
+                This area should carry your approved testimonials, case studies, and outcomes once they are available. Until then, structure the section so it is ready for real evidence instead of filler copy.
+              </p>
+            </div>
+
+            <div className="grid gap-4 md:grid-cols-3">
+              {proofModules.map((module) => (
+                <div key={module.title} className="rounded-[1.75rem] border border-slate-200 bg-slate-50 p-5">
+                  <p className="text-sm font-semibold uppercase tracking-[0.18em] text-slate-500">Case study slot</p>
+                  <h3 className="mt-3 text-lg font-semibold text-slate-950">{module.title}</h3>
+                  <p className="mt-3 text-sm leading-6 text-slate-600">{module.copy}</p>
+                </div>
+              ))}
+            </div>
+          </div>
+
+          <div className="mt-12 rounded-[2rem] bg-[linear-gradient(135deg,_#082032_0%,_#0f3e44_100%)] p-8 text-white sm:p-10">
+            <div className="grid gap-8 lg:grid-cols-[minmax(0,1fr)_320px] lg:items-center">
               <div>
-                <p className="text-sm font-semibold uppercase tracking-[0.28em] text-sky-700">Why Visitors Convert</p>
-                  <h2 className="mt-3 max-w-3xl text-3xl font-bold tracking-tight text-slate-950 sm:text-4xl font-display">
-                  Alera should feel like the tool healthcare teams have been waiting for.
-                  </h2>
-                  <p className="mt-5 max-w-3xl text-lg leading-8 text-slate-600">
-                  A good landing page should do more than explain the product. It should make people want to join. This page now shows the problem, shows the fix, and keeps giving visitors a reason to take the next step.
-                  </p>
-
-                <div className="mt-8 grid gap-4 md:grid-cols-3">
-                  {decisionTriggers.map((item) => (
-                    <div key={item.title} className={`rounded-[1.75rem] border p-5 ${item.accent}`}>
-                      <p className="text-lg font-semibold text-slate-950">{item.title}</p>
-                      <p className="mt-3 text-sm leading-6 text-slate-600">{item.copy}</p>
-                    </div>
-                  ))}
-                </div>
+                <p className="text-sm font-semibold uppercase tracking-[0.24em] text-emerald-200">Security and compliance section</p>
+                <h3 className="mt-3 text-3xl font-bold tracking-tight">Show trust signals where healthcare buyers look for them</h3>
+                <p className="mt-4 max-w-2xl text-base leading-7 text-slate-200">
+                  Security should not be buried in the footer. Alera can position encryption, HIPAA-ready workflows, and role-based access controls as visible reasons to trust the platform.
+                </p>
               </div>
 
-              <div className="rounded-[2rem] bg-slate-950 p-6 text-white shadow-2xl shadow-slate-950/20">
-                <p className="text-xs font-semibold uppercase tracking-[0.24em] text-emerald-200">What pulls people in</p>
-                <div className="mt-4 space-y-3">
-                  {proofMoments.map((item) => (
-                    <div key={item} className="flex items-start gap-3 text-sm text-slate-200">
-                      <span className="mt-1.5 h-2 w-2 rounded-full bg-emerald-300" />
-                      <span>{item}</span>
-                    </div>
-                  ))}
+              <div className="rounded-[1.5rem] bg-white/10 p-5 backdrop-blur">
+                <div className="flex items-center gap-3 text-emerald-200">
+                  <BadgeCheck className="h-5 w-5" />
+                  <p className="text-sm font-semibold uppercase tracking-[0.2em]">Certification badge zone</p>
                 </div>
-                <Button asChild size="lg" className="mt-8 h-12 w-full rounded-full bg-white text-slate-950 hover:bg-slate-100">
-                  <Link to="/signup">
-                    Join Alera
-                    <ChevronRight className="h-4 w-4" />
-                  </Link>
-                </Button>
+                <p className="mt-4 text-sm leading-6 text-slate-200">
+                  Add approved compliance badges, audit references, or security attestations here once legal and security review is complete.
+                </p>
               </div>
+            </div>
+
+            <div className="mt-8 grid gap-4 md:grid-cols-3">
+              {complianceBadges.map((badge) => (
+                <div key={badge.title} className="rounded-[1.5rem] border border-white/10 bg-white/8 p-5">
+                  <p className="text-lg font-semibold">{badge.title}</p>
+                  <p className="mt-3 text-sm leading-6 text-slate-200">{badge.copy}</p>
+                </div>
+              ))}
             </div>
           </div>
         </div>
       </section>
 
-      {/* ──────────── MOTIVE & INTEGRATION (IMAGE VERSION) ──────────── */}
-      <section className="relative py-24 sm:py-32 overflow-hidden bg-slate-900">
-         <div className="absolute inset-0 -z-10">
-            <div className="absolute top-0 right-0 -translate-y-12 translate-x-1/3 blur-[100px] opacity-30">
-               <div className="aspect-square w-[40rem] rounded-full bg-gradient-to-br from-sky-400 to-emerald-400" />
+      <section className="bg-slate-50 py-20 sm:py-24">
+        <div className="mx-auto max-w-7xl px-6 lg:px-8">
+          <div className="grid gap-8 lg:grid-cols-[minmax(0,0.85fr)_minmax(0,1.15fr)] lg:items-start">
+            <div>
+              <p className="text-sm font-semibold uppercase tracking-[0.24em] text-sky-700">SEO and content strategy</p>
+              <h2 className="mt-3 text-3xl font-bold tracking-tight text-slate-950 sm:text-4xl">
+                Support discovery with healthcare-specific language and a content engine
+              </h2>
+              <p className="mt-5 text-lg leading-8 text-slate-600">
+                The homepage now uses search-friendly phrasing around healthcare management software, telemedicine, appointment booking, hospital workflows, prescription management, diagnostics, and care coordination.
+              </p>
             </div>
-            <div className="absolute bottom-0 left-0 translate-y-1/3 -translate-x-1/3 blur-[100px] opacity-20">
-               <div className="aspect-square w-[30rem] rounded-full bg-gradient-to-tr from-violet-400 to-sky-400" />
-            </div>
-         </div>
-         <div className="mx-auto max-w-7xl px-6 lg:px-8 relative">
-            <div className="grid lg:grid-cols-2 gap-16 lg:gap-12 items-center">
-               
-               <motion.div 
-                  initial={{ opacity: 0, x: -30 }} whileInView={{ opacity: 1, x: 0 }} viewport={{ once: true }} transition={{ duration: 0.6 }}
-                  className="relative order-2 lg:order-1"
-               >
-                  <div className="relative rounded-[2rem] overflow-hidden border border-white/20 shadow-2xl">
-                     <img src="/images/consulting_patients.png" alt="Doctor and patient reviewing tablet" className="w-full object-cover h-[500px]" />
-                     <div className="absolute inset-0 bg-gradient-to-t from-slate-900/80 via-transparent to-transparent pointer-events-none" />
-                  </div>
-                  
-                  {/* Glass Card on Image */}
-                  <div className="absolute -bottom-8 -right-8 bg-white/10 backdrop-blur-xl border border-white/20 rounded-2xl p-6 hidden md:block max-w-[280px]">
-                     <div className="flex items-center gap-3 text-emerald-400 font-semibold mb-2">
-                        <ShieldCheck className="h-5 w-5" /> Single Source of Truth
-                     </div>
-                     <p className="text-slate-300 text-sm">Both doctors and patients viewing the exact identical lab report instantly, in real time.</p>
-                  </div>
-               </motion.div>
 
-               <motion.div 
-                  initial={{ opacity: 0, x: 30 }} whileInView={{ opacity: 1, x: 0 }} viewport={{ once: true }} transition={{ duration: 0.6, delay: 0.2 }}
-                  className="max-w-2xl order-1 lg:order-2"
-               >
-                  <h2 className="text-sm font-semibold leading-7 text-sky-400 tracking-wider uppercase flex items-center gap-2">
-                     <span className="h-px w-8 bg-sky-400"></span> Our Motive
-                  </h2>
-                  <p className="mt-4 text-3xl font-bold tracking-tight text-white sm:text-5xl font-display leading-[1.1]">
-                     Stop care from breaking apart.
+            <div className="grid gap-4 md:grid-cols-3">
+              {blogTopics.map((topic) => (
+                <div key={topic} className="rounded-[1.5rem] border border-slate-200 bg-white p-5 shadow-sm">
+                  <p className="text-xs font-semibold uppercase tracking-[0.22em] text-slate-500">Suggested article</p>
+                  <h3 className="mt-3 text-lg font-semibold text-slate-950">{topic}</h3>
+                  <p className="mt-3 text-sm leading-6 text-slate-600">
+                    Use this topic to attract search traffic while explaining how connected care workflows improve the patient and provider experience.
                   </p>
-                  <p className="mt-6 text-lg leading-8 text-slate-300">
-                     Too much care is still disconnected. Patients repeat themselves, doctors chase records, hospitals manage messy handoffs, and other teams work without the full picture.
-                  </p>
-                  <p className="mt-4 text-lg leading-8 text-slate-300">
-                     <strong className="text-white font-semibold">Alera was built to fix this.</strong> When a doctor asks for a scan, the imaging center gets it at once. When a prescription is written, the pharmacy sees it fast. When a patient needs follow-up, the next team is already ready.
-                  </p>
-                  <div className="mt-8 flex items-center gap-4 text-sm font-medium text-white">
-                     <div className="flex -space-x-2">
-                        <div className="h-8 w-8 rounded-full bg-emerald-500 ring-2 ring-slate-900 flex items-center justify-center"><Pill className="h-4 w-4" /></div>
-                        <div className="h-8 w-8 rounded-full bg-sky-500 ring-2 ring-slate-900 flex items-center justify-center"><Stethoscope className="h-4 w-4" /></div>
-                        <div className="h-8 w-8 rounded-full bg-violet-500 ring-2 ring-slate-900 flex items-center justify-center"><FlaskConical className="h-4 w-4" /></div>
-                     </div>
-                     Total System Integration
-                  </div>
-               </motion.div>
-               
+                </div>
+              ))}
             </div>
-         </div>
+          </div>
+        </div>
       </section>
 
-      {/* ──────────── FEATURES / HIGHLIGHTS ──────────── */}
-      <section className="py-24 sm:py-32 bg-white">
-         <div className="mx-auto max-w-7xl px-6 lg:px-8">
-            <div className="mx-auto max-w-2xl lg:text-center mb-16">
-               <h2 className="text-base font-semibold leading-7 text-sky-600">Faster, Smarter, Better</h2>
-               <p className="mt-2 text-3xl font-bold tracking-tight text-slate-900 sm:text-4xl font-display">
-                  Why people say yes to Alera
-               </p>
-               <p className="mt-6 text-lg leading-8 text-slate-600">
-                  The value is simple: less delay, less stress, better teamwork, and a smoother care journey for everyone.
-               </p>
-            </div>
-
-            <div className="mx-auto mt-16 max-w-2xl sm:mt-20 lg:mt-24 lg:max-w-none">
-               <dl className="grid max-w-xl grid-cols-1 gap-x-8 gap-y-16 lg:max-w-none lg:grid-cols-3">
-                  {[
-                     {
-                        title: 'Interoperable Records',
-                        description: 'Records update fast when medicine is given or test results come in, so every team sees the same information.',
-                        icon: ShieldCheck,
-                        color: 'bg-emerald-50 text-emerald-600 border-emerald-100'
-                     },
-                     {
-                        title: 'Secure Communications',
-                        description: 'Built-in chat and video calls help teams talk faster and keep every update close to the patient record.',
-                        icon: MessageSquareText,
-                        color: 'bg-sky-50 text-sky-600 border-sky-100'
-                     },
-                     {
-                        title: 'Intelligent Workflows',
-                        description: 'Referrals, reminders, and emergency dispatch are easier to manage, so teams can move faster with less stress.',
-                        icon: Zap,
-                        color: 'bg-violet-50 text-violet-600 border-violet-100'
-                     }
-                  ].map((feature, idx) => (
-                     <div key={feature.title} className="flex flex-col items-start transition-transform hover:-translate-y-1">
-                        <div className={`rounded-2xl p-4 border ${feature.color} shadow-sm mb-5`}>
-                           <feature.icon className="h-6 w-6" aria-hidden="true" />
-                        </div>
-                        <dt className="text-xl font-semibold leading-7 text-slate-900 font-display">
-                           {feature.title}
-                        </dt>
-                        <dd className="mt-3 flex flex-auto flex-col text-base leading-7 text-slate-600">
-                           <p className="flex-auto">{feature.description}</p>
-                        </dd>
-                     </div>
-                  ))}
-               </dl>
-            </div>
-         </div>
+      <section className="bg-white px-6 py-20 sm:py-24 lg:px-8">
+        <div className="mx-auto max-w-5xl rounded-[2.5rem] border border-slate-200 bg-[linear-gradient(135deg,_#f7fcff_0%,_#eef8f4_100%)] p-8 text-center shadow-[0_24px_80px_-55px_rgba(15,23,42,0.4)] sm:p-12">
+          <p className="text-sm font-semibold uppercase tracking-[0.24em] text-sky-700">Primary conversion block</p>
+          <h2 className="mt-3 text-3xl font-bold tracking-tight text-slate-950 sm:text-4xl">
+            Bring booking, consultation, fulfillment, and follow-up into one healthcare platform
+          </h2>
+          <p className="mx-auto mt-5 max-w-3xl text-lg leading-8 text-slate-600">
+            The homepage should close with a direct decision: start coordinating care in one place, or see a guided role-based demo first. Both paths remain visible on desktop and mobile.
+          </p>
+          <div className="mt-8 flex flex-col items-center justify-center gap-4 sm:flex-row">
+            <Button asChild size="lg" className="h-14 rounded-full bg-slate-950 px-8 text-white hover:bg-slate-900">
+              <Link to="/signup">Create your Alera account</Link>
+            </Button>
+            <Button asChild size="lg" variant="outline" className="h-14 rounded-full border-slate-300 bg-white px-8 text-slate-900 hover:bg-slate-50">
+              <a href="#guided-demo">Review the guided demo</a>
+            </Button>
+          </div>
+        </div>
       </section>
 
-      {/* ──────────── STATS ──────────── */}
-      <section className="bg-slate-900 py-16 sm:py-24 relative overflow-hidden">
-         <div className="absolute inset-0 bg-gradient-hero mix-blend-multiply opacity-50"></div>
-         <div className="relative mx-auto max-w-7xl px-6 lg:px-8">
-            <div className="mx-auto max-w-2xl lg:max-w-none">
-               <div className="text-center">
-                  <h2 className="text-3xl font-bold tracking-tight text-white sm:text-4xl font-display">Made to feel clear and trusted from the first visit</h2>
-               </div>
-               <dl className="mt-16 grid grid-cols-1 gap-0.5 overflow-hidden rounded-2xl text-center sm:grid-cols-3 lg:grid-cols-3 ring-1 ring-white/10">
-                  {STATS.map((stat) => (
-                     <div key={stat.label} className="flex flex-col bg-white/5 p-8 backdrop-blur-md transition-colors hover:bg-white/10">
-                        <dt className="text-sm font-semibold leading-6 text-slate-300 flex items-center justify-center gap-2">
-                           <stat.icon className="h-4 w-4" /> {stat.label}
-                        </dt>
-                        <dd className="order-first text-4xl font-bold tracking-tight text-white mb-2 font-display">{stat.value}</dd>
-                     </div>
-                  ))}
-               </dl>
-            </div>
-         </div>
-      </section>
-
-      {/* ──────────── FINAL CTA ──────────── */}
-      <section className="relative isolate px-6 py-24 sm:py-32 lg:px-8 bg-white overflow-hidden">
-         <div className="absolute inset-x-0 top-1/2 -z-10 -translate-y-1/2 transform-gpu overflow-hidden opacity-30 blur-3xl">
-            <div
-               className="ml-[max(50%,38rem)] aspect-[1313/771] w-[82.0625rem] bg-gradient-to-tr from-sky-200 to-emerald-200"
-               style={{
-                  clipPath:
-                  'polygon(74.1% 44.1%, 100% 61.6%, 97.5% 26.9%, 85.5% 0.1%, 80.7% 2%, 72.5% 32.5%, 60.2% 62.4%, 52.4% 68.1%, 47.5% 58.3%, 45.2% 34.5%, 27.5% 76.7%, 0.1% 64.9%, 17.9% 100%, 27.6% 76.8%, 76.1% 97.7%, 74.1% 44.1%)',
-               }}
-            />
-         </div>
-
-         <div className="mx-auto max-w-2xl text-center">
-            <h2 className="text-3xl font-bold tracking-tight text-slate-900 sm:text-4xl font-display">
-               Ready to bring your work into one simple platform?
-            </h2>
-            <p className="mx-auto mt-6 max-w-xl text-lg leading-8 text-slate-600">
-               If you want faster teamwork, clearer updates, and a better patient experience, this is the next step.
-            </p>
-            <div className="mt-10 flex flex-col sm:flex-row items-center justify-center gap-4 sm:gap-x-6">
-               <Button asChild size="lg" className="h-14 w-full sm:w-auto rounded-full px-8 shadow-md transition-transform hover:scale-105 bg-slate-900 border-0 text-white hover:bg-slate-800">
-                  <Link to="/signup">Create your account</Link>
-               </Button>
-               <Link to="/why-alera" className="text-sm font-semibold leading-6 text-slate-900 hover:text-sky-600 transition-colors group flex items-center">
-                  See why people choose Alera <ChevronRight className="ml-1 h-4 w-4 transition-transform group-hover:translate-x-1" />
-               </Link>
-            </div>
-         </div>
-      </section>
+      <div className="fixed inset-x-0 bottom-0 z-40 border-t border-slate-200 bg-white/95 px-4 py-3 shadow-[0_-12px_32px_-18px_rgba(15,23,42,0.45)] backdrop-blur md:hidden">
+        <div className="mx-auto flex max-w-7xl items-center gap-3">
+          <Button asChild className="h-12 flex-1 rounded-full bg-slate-950 text-white hover:bg-slate-900">
+            <Link to="/signup">Start now</Link>
+          </Button>
+          <Button asChild variant="outline" className="h-12 flex-1 rounded-full border-slate-300 bg-white text-slate-900 hover:bg-slate-50">
+            <a href="#guided-demo">See demo</a>
+          </Button>
+        </div>
+      </div>
     </div>
   );
 };

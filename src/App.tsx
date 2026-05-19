@@ -8,12 +8,14 @@ import { AuthProvider } from "@/contexts/AuthContext";
 import { AppDataProvider } from "@/contexts/AppDataContext";
 import { NotificationProvider } from "@/contexts/NotificationContext";
 import { ChatProvider } from "@/contexts/ChatContext";
-import { SystemProvider, useSystem } from "@/contexts/SystemContext";
+import { SystemProvider } from "@/contexts/SystemContext";
 import { useAuth } from "@/contexts/useAuth";
+import { useSystem } from "@/contexts/useSystem";
 import ProtectedRoute from "@/components/ProtectedRoute";
 import ErrorBoundary from "./components/ErrorBoundary";
 import RouteLoader from "./components/RouteLoader";
 import { featureRouteKeys } from "@/app/featureRegistry";
+import type { MaintenanceBannerType } from "@/contexts/system-context";
 
 const MainLayout = lazy(() => import("./components/MainLayout"));
 const LandingHome = lazy(() => import("./pages/Landing/Home"));
@@ -28,6 +30,8 @@ const Login = lazy(() => import("./pages/Login"));
 const Signup = lazy(() => import("./pages/Signup"));
 const ForgotPassword = lazy(() => import("./pages/ForgotPassword"));
 const ResetPassword = lazy(() => import("./pages/ResetPassword"));
+const VerifyEmail = lazy(() => import("./pages/VerifyEmail"));
+const DashboardHome = lazy(() => import("./pages/DashboardHome"));
 const FeatureWrapper = lazy(() => import("./pages/FeatureWrapper"));
 const Maintenance = lazy(() => import("./pages/Maintenance"));
 const SystemManagement = lazy(() => import("./pages/admin/SystemManagement"));
@@ -65,6 +69,10 @@ const MaintenanceGuard = ({ children }: { children: React.ReactNode }) => {
   const { isMaintenanceMode, settings, bannerVisible, closeBanner } = useSystem();
   const { user } = useAuth();
   const location = useLocation();
+  const bannerType: MaintenanceBannerType =
+    settings?.notification_banner_type === 'warning' || settings?.notification_banner_type === 'success'
+      ? settings.notification_banner_type
+      : 'info';
 
   const isAdmin = user?.role === 'admin' || user?.role === 'super_admin';
   const isMaintenancePage = location.pathname === '/maintenance';
@@ -86,7 +94,7 @@ const MaintenanceGuard = ({ children }: { children: React.ReactNode }) => {
       {bannerVisible && settings?.notification_banner_message && (
         <MaintenanceBanner 
           message={settings.notification_banner_message} 
-          type={settings.notification_banner_type as any}
+          type={bannerType}
           onClose={closeBanner}
         />
       )}

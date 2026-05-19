@@ -21,6 +21,7 @@ import {
 import { handleApiError } from '@/lib/errorHandler';
 import { GoogleAuthSection } from '@/components/auth/GoogleAuthSection';
 import { frontendEnv } from '@/config/env';
+import type { GoogleSignupData } from '@/contexts/auth-context';
 
 type SignupRole =
   | 'patient'
@@ -55,7 +56,7 @@ const providerRoles = new Set<SignupRole>([
 
 const Signup = () => {
   const location = useLocation();
-  const locationState = location.state as { isGoogleSignup?: boolean; googleData?: any } | null;
+  const locationState = location.state as { isGoogleSignup?: boolean; googleData?: GoogleSignupData } | null;
   const isGoogleSignupMode = locationState?.isGoogleSignup || false;
   const googleData = locationState?.googleData;
 

@@ -1,12 +1,15 @@
 import { createContext } from 'react';
 import type { User, UserProfile, UserRole, SignupRole } from './AuthContext';
+import type { ApiAuthResponse } from '@/lib/apiService';
+
+export type GoogleSignupData = NonNullable<ApiAuthResponse['google_data']>;
 
 export interface AuthContextType {
   user: User | null;
   isAuthenticated: boolean;
   isLoading: boolean;
   login: (email: string, password: string) => Promise<void>;
-  loginWithGoogle: (credential: string) => Promise<{ needsRegistration?: boolean; googleData?: any }>;
+  loginWithGoogle: (credential: string) => Promise<{ needsRegistration?: boolean; googleData?: GoogleSignupData }>;
   registerWithGoogle: (
     credential: string,
     role: SignupRole,

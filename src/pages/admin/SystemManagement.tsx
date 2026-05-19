@@ -13,7 +13,7 @@ import {
 } from 'lucide-react';
 import { adminApi, SystemSettings } from '@/lib/apiService';
 import { useAuth } from '@/contexts/useAuth';
-import { useSystem } from '@/contexts/SystemContext';
+import { useSystem } from '@/contexts/useSystem';
 import { toast } from 'sonner';
 
 const SystemManagement: React.FC = () => {
