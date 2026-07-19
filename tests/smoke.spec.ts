@@ -2,7 +2,7 @@ import { expect, test } from "@playwright/test";
 
 test("landing page loads primary hero copy", async ({ page }) => {
   await page.goto("/");
-  await expect(page.getByRole("heading", { name: /healthcare/i })).toBeVisible();
+  await expect(page.getByRole("heading", { name: /make every healthcare handoff/i })).toBeVisible();
   await expect(page.getByRole("link", { name: "Sign in", exact: true }).first()).toBeVisible();
 });
 
