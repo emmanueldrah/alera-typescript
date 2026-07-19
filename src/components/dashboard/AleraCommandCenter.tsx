@@ -342,19 +342,30 @@ export default function AleraCommandCenter({ role: roleOverride }: { role?: Role
   const role = (roleOverride ?? normalizeUserRole(user?.role ?? '') ?? 'patient') as RoleKey;
   const today = new Date().toISOString().split('T')[0];
   const users = getUsers();
+  const appointments = data.appointments ?? [];
+  const prescriptions = data.prescriptions ?? [];
+  const labTests = data.labTests ?? [];
+  const imagingScans = data.imagingScans ?? [];
+  const ambulanceRequests = data.ambulanceRequests ?? [];
+  const inventoryItems = data.inventoryItems ?? [];
+  const ambulances = data.ambulances ?? [];
+  const referrals = data.referrals ?? [];
+  const providerVerifications = data.providerVerifications ?? [];
+  const clinicalNotes = data.clinicalNotes ?? [];
+  const billingRecords = data.billingRecords ?? [];
+  const invoices = data.invoices ?? [];
 
-  const patientAppointments = data.appointments.filter((item) => item.patientId === user?.id);
-  const doctorAppointments = data.appointments.filter((item) => item.doctorId === user?.id);
-  const openAppointments = data.appointments.filter(isOpenAppointment);
-  const visibleReferrals = getVisibleReferrals(data.referrals, user);
-  const activeEmergency = data.ambulanceRequests.filter((item) => !['completed', 'cancelled'].includes(item.status));
+  const patientAppointments = appointments.filter((item) => item.patientId === user?.id);
+  const doctorAppointments = appointments.filter((item) => item.doctorId === user?.id);
+  const openAppointments = appointments.filter(isOpenAppointment);
+  const visibleReferrals = getVisibleReferrals(referrals, user);
+  const activeEmergency = ambulanceRequests.filter((item) => !['completed', 'cancelled'].includes(item.status));
   const criticalEmergency = activeEmergency.filter((item) => item.priority === 'critical' || item.priority === 'high');
-  const pendingLabs = data.labTests.filter((item) => ['requested', 'in-progress'].includes(item.status));
-  const pendingImaging = data.imagingScans.filter((item) => ['requested', 'in-progress'].includes(item.status));
-  const activePrescriptions = data.prescriptions.filter((item) => item.status === 'active');
-  const lowStock = data.inventoryItems.filter((item) => item.status === 'low-stock' || item.status === 'out-of-stock');
-  const pendingVerifications = data.providerVerifications.filter((item) => item.status === 'pending');
-  const activePatients = new Set(data.appointments.map((item) => item.patientId).filter(Boolean)).size;
+  const pendingLabs = labTests.filter((item) => ['requested', 'in-progress'].includes(item.status));
+  const pendingImaging = imagingScans.filter((item) => ['requested', 'in-progress'].includes(item.status));
+  const activePrescriptions = prescriptions.filter((item) => item.status === 'active');
+  const lowStock = inventoryItems.filter((item) => item.status === 'low-stock' || item.status === 'out-of-stock');
+  const pendingVerifications = providerVerifications.filter((item) => item.status === 'pending');
   const verifiedDoctors = users.filter((item) => normalizeUserRole(item.role) === 'doctor' && item.isVerified !== false && item.isActive !== false);
 
   const appointmentItems = (items: Appointment[], href = '/dashboard/appointments'): WorkItem[] =>
@@ -376,13 +387,13 @@ export default function AleraCommandCenter({ role: roleOverride }: { role?: Role
   const patientConfig = {
     metrics: [
       { label: 'Upcoming visits', value: patientAppointments.filter(isOpenAppointment).length, helper: 'Scheduled or confirmed', icon: <Calendar className="h-5 w-5" />, tone: 'primary' as Tone, href: '/dashboard/appointments' },
-      { label: 'Active medications', value: data.prescriptions.filter((item) => item.patientId === user?.id && item.status === 'active').length, helper: 'Current medication plan', icon: <Pill className="h-5 w-5" />, tone: 'success' as Tone, href: '/dashboard/prescriptions' },
-      { label: 'Lab records', value: data.labTests.filter((item) => item.patientId === user?.id).length, helper: 'Results and requests', icon: <FlaskConical className="h-5 w-5" />, tone: 'info' as Tone, href: '/dashboard/lab-results' },
-      { label: 'Emergency access', value: data.ambulanceRequests.filter((item) => item.patientId === user?.id && !['completed', 'cancelled'].includes(item.status)).length, helper: 'Active requests', icon: <Ambulance className="h-5 w-5" />, tone: 'critical' as Tone, href: '/dashboard/ambulance' },
+      { label: 'Active medications', value: prescriptions.filter((item) => item.patientId === user?.id && item.status === 'active').length, helper: 'Current medication plan', icon: <Pill className="h-5 w-5" />, tone: 'success' as Tone, href: '/dashboard/prescriptions' },
+      { label: 'Lab records', value: labTests.filter((item) => item.patientId === user?.id).length, helper: 'Results and requests', icon: <FlaskConical className="h-5 w-5" />, tone: 'info' as Tone, href: '/dashboard/lab-results' },
+      { label: 'Emergency access', value: ambulanceRequests.filter((item) => item.patientId === user?.id && !['completed', 'cancelled'].includes(item.status)).length, helper: 'Active requests', icon: <Ambulance className="h-5 w-5" />, tone: 'critical' as Tone, href: '/dashboard/ambulance' },
     ],
     workItems: [
       ...appointmentItems(patientAppointments.filter(isOpenAppointment)),
-      ...data.prescriptions.filter((item) => item.patientId === user?.id && item.status === 'active').map((item) => ({
+      ...prescriptions.filter((item) => item.patientId === user?.id && item.status === 'active').map((item) => ({
         title: item.medications[0]?.name ?? 'Medication plan',
         meta: `${item.doctorName} · ${item.medications.length} medication${item.medications.length === 1 ? '' : 's'}`,
         status: 'active',
@@ -398,8 +409,8 @@ export default function AleraCommandCenter({ role: roleOverride }: { role?: Role
     signal: { label: 'Care ready', value: 'Next step visible', detail: 'Appointments, medications, labs, imaging, and urgent help remain one action away.', tone: 'success' as Tone },
     secondaryTitle: 'Recent care events',
     secondaryItems: [
-      ...data.labTests.filter((item) => item.patientId === user?.id).map((item) => ({ title: item.testName, meta: `${displayDate(item.date)} · ${item.patientName}`, status: item.status, href: '/dashboard/lab-results' })),
-      ...data.imagingScans.filter((item) => item.patientId === user?.id).map((item) => ({ title: item.scanType, meta: `${displayDate(item.date)} · ${item.bodyPart ?? 'Imaging'}`, status: item.status, href: '/dashboard/imaging' })),
+      ...labTests.filter((item) => item.patientId === user?.id).map((item) => ({ title: item.testName, meta: `${displayDate(item.date)} · ${item.patientName}`, status: item.status, href: '/dashboard/lab-results' })),
+      ...imagingScans.filter((item) => item.patientId === user?.id).map((item) => ({ title: item.scanType, meta: `${displayDate(item.date)} · ${item.bodyPart ?? 'Imaging'}`, status: item.status, href: '/dashboard/imaging' })),
     ],
   };
 
@@ -411,7 +422,7 @@ export default function AleraCommandCenter({ role: roleOverride }: { role?: Role
         { label: "Today's visits", value: doctorAppointments.filter((item) => item.date === today && isOpenAppointment(item)).length, helper: 'Ready for consult', icon: <Calendar className="h-5 w-5" />, tone: 'primary', href: '/dashboard/appointments' },
         { label: 'Patient panel', value: new Set(doctorAppointments.map((item) => item.patientId)).size, helper: 'Distinct patients', icon: <Users className="h-5 w-5" />, tone: 'info', href: '/dashboard/patients' },
         { label: 'Pending diagnostics', value: pendingLabs.length + pendingImaging.length, helper: 'Labs and imaging', icon: <TestTube2 className="h-5 w-5" />, tone: 'warning', href: '/dashboard/lab-referrals' },
-        { label: 'Open referrals', value: data.referrals.filter((item) => item.fromDoctorId === user?.id && item.status === 'pending').length, helper: 'Awaiting acceptance', icon: <FileText className="h-5 w-5" />, tone: 'neutral', href: '/dashboard/referrals' },
+        { label: 'Open referrals', value: referrals.filter((item) => item.fromDoctorId === user?.id && item.status === 'pending').length, helper: 'Awaiting acceptance', icon: <FileText className="h-5 w-5" />, tone: 'neutral', href: '/dashboard/referrals' },
       ],
       workItems: appointmentItems(doctorAppointments.filter(isOpenAppointment)),
       actions: [
@@ -432,7 +443,7 @@ export default function AleraCommandCenter({ role: roleOverride }: { role?: Role
       metrics: [
         { label: 'Therapy sessions', value: doctorAppointments.filter(isOpenAppointment).length, helper: 'Upcoming care plan work', icon: <Activity className="h-5 w-5" />, tone: 'primary', href: '/dashboard/appointments' },
         { label: 'Patients', value: new Set(doctorAppointments.map((item) => item.patientId)).size, helper: 'Active rehabilitation panel', icon: <Users className="h-5 w-5" />, tone: 'info', href: '/dashboard/patients' },
-        { label: 'Care plans', value: data.clinicalNotes.filter((item) => item.doctorId === user?.id).length, helper: 'Notes and exercises', icon: <FileText className="h-5 w-5" />, tone: 'success', href: '/dashboard/clinical-notes' },
+        { label: 'Care plans', value: clinicalNotes.filter((item) => item.doctorId === user?.id).length, helper: 'Notes and exercises', icon: <FileText className="h-5 w-5" />, tone: 'success', href: '/dashboard/clinical-notes' },
         { label: 'Referrals', value: visibleReferrals.length, helper: 'Incoming and outgoing', icon: <ArrowRight className="h-5 w-5" />, tone: 'warning', href: '/dashboard/referrals' },
       ],
       workItems: appointmentItems(doctorAppointments.filter(isOpenAppointment)),
@@ -468,10 +479,10 @@ export default function AleraCommandCenter({ role: roleOverride }: { role?: Role
     laboratory: {
       role: 'laboratory',
       metrics: [
-        { label: 'New requests', value: data.labTests.filter((item) => item.status === 'requested').length, helper: 'Awaiting accession', icon: <FlaskConical className="h-5 w-5" />, tone: 'warning', href: '/dashboard/test-requests' },
-        { label: 'In process', value: data.labTests.filter((item) => item.status === 'in-progress').length, helper: 'Samples in workflow', icon: <Activity className="h-5 w-5" />, tone: 'info', href: '/dashboard/test-requests' },
-        { label: 'Completed', value: data.labTests.filter((item) => item.status === 'completed').length, helper: 'Verified results', icon: <CheckCircle2 className="h-5 w-5" />, tone: 'success', href: '/dashboard/results' },
-        { label: 'Critical review', value: data.labTests.filter((item) => item.notes?.toLowerCase().includes('critical')).length, helper: 'Requires escalation', icon: <AlertTriangle className="h-5 w-5" />, tone: 'critical', href: '/dashboard/lab-results-management' },
+        { label: 'New requests', value: labTests.filter((item) => item.status === 'requested').length, helper: 'Awaiting accession', icon: <FlaskConical className="h-5 w-5" />, tone: 'warning', href: '/dashboard/test-requests' },
+        { label: 'In process', value: labTests.filter((item) => item.status === 'in-progress').length, helper: 'Samples in workflow', icon: <Activity className="h-5 w-5" />, tone: 'info', href: '/dashboard/test-requests' },
+        { label: 'Completed', value: labTests.filter((item) => item.status === 'completed').length, helper: 'Verified results', icon: <CheckCircle2 className="h-5 w-5" />, tone: 'success', href: '/dashboard/results' },
+        { label: 'Critical review', value: labTests.filter((item) => item.notes?.toLowerCase().includes('critical')).length, helper: 'Requires escalation', icon: <AlertTriangle className="h-5 w-5" />, tone: 'critical', href: '/dashboard/lab-results-management' },
       ],
       workItems: pendingLabs.map((item) => ({ title: item.testName, meta: `${item.patientName} · ordered by ${item.doctorName}`, status: item.status, href: '/dashboard/test-requests' })),
       actions: [
@@ -482,14 +493,14 @@ export default function AleraCommandCenter({ role: roleOverride }: { role?: Role
       ],
       signal: { label: 'Specimen flow', value: `${pendingLabs.length} open`, detail: 'Requests, sample status, result upload, and verification are kept in one queue.', tone: pendingLabs.length ? 'warning' : 'success' },
       secondaryTitle: 'Recent lab history',
-      secondaryItems: sortByDateDesc(data.labTests).map((item) => ({ title: item.testName, meta: `${item.patientName} · ${displayDate(item.date)}`, status: item.status, href: '/dashboard/results' })),
+      secondaryItems: sortByDateDesc(labTests).map((item) => ({ title: item.testName, meta: `${item.patientName} · ${displayDate(item.date)}`, status: item.status, href: '/dashboard/results' })),
     },
     imaging: {
       role: 'imaging',
       metrics: [
-        { label: 'Scan requests', value: data.imagingScans.filter((item) => item.status === 'requested').length, helper: 'Awaiting scheduling', icon: <ScanLine className="h-5 w-5" />, tone: 'warning', href: '/dashboard/scan-requests' },
-        { label: 'In progress', value: data.imagingScans.filter((item) => item.status === 'in-progress').length, helper: 'Studies underway', icon: <Activity className="h-5 w-5" />, tone: 'info', href: '/dashboard/imaging-referrals' },
-        { label: 'Completed', value: data.imagingScans.filter((item) => item.status === 'completed').length, helper: 'Reports available', icon: <CheckCircle2 className="h-5 w-5" />, tone: 'success', href: '/dashboard/results' },
+        { label: 'Scan requests', value: imagingScans.filter((item) => item.status === 'requested').length, helper: 'Awaiting scheduling', icon: <ScanLine className="h-5 w-5" />, tone: 'warning', href: '/dashboard/scan-requests' },
+        { label: 'In progress', value: imagingScans.filter((item) => item.status === 'in-progress').length, helper: 'Studies underway', icon: <Activity className="h-5 w-5" />, tone: 'info', href: '/dashboard/imaging-referrals' },
+        { label: 'Completed', value: imagingScans.filter((item) => item.status === 'completed').length, helper: 'Reports available', icon: <CheckCircle2 className="h-5 w-5" />, tone: 'success', href: '/dashboard/results' },
         { label: 'Open referrals', value: visibleReferrals.filter((item) => item.referralType === 'imaging').length, helper: 'Pending handoff', icon: <FileText className="h-5 w-5" />, tone: 'neutral', href: '/dashboard/imaging-referrals' },
       ],
       workItems: pendingImaging.map((item) => ({ title: `${item.scanType}${item.bodyPart ? ` · ${item.bodyPart}` : ''}`, meta: `${item.patientName} · ${item.clinicalIndication ?? item.doctorName}`, status: item.status, href: '/dashboard/scan-requests' })),
@@ -501,15 +512,15 @@ export default function AleraCommandCenter({ role: roleOverride }: { role?: Role
       ],
       signal: { label: 'Imaging queue', value: `${pendingImaging.length} open`, detail: 'Scheduling, study status, and reporting stay aligned for clean clinical handoff.', tone: pendingImaging.length ? 'warning' : 'success' },
       secondaryTitle: 'Recent studies',
-      secondaryItems: sortByDateDesc(data.imagingScans).map((item) => ({ title: item.scanType, meta: `${item.patientName} · ${displayDate(item.date)}`, status: item.status, href: '/dashboard/results' })),
+      secondaryItems: sortByDateDesc(imagingScans).map((item) => ({ title: item.scanType, meta: `${item.patientName} · ${displayDate(item.date)}`, status: item.status, href: '/dashboard/results' })),
     },
     pharmacy: {
       role: 'pharmacy',
       metrics: [
         { label: 'Pending Rx', value: activePrescriptions.length, helper: 'Awaiting verification', icon: <Pill className="h-5 w-5" />, tone: 'warning', href: '/dashboard/prescriptions' },
-        { label: 'Dispensed', value: data.prescriptions.filter((item) => item.status === 'dispensed').length, helper: 'Completed orders', icon: <CheckCircle2 className="h-5 w-5" />, tone: 'success', href: '/dashboard/prescriptions' },
+        { label: 'Dispensed', value: prescriptions.filter((item) => item.status === 'dispensed').length, helper: 'Completed orders', icon: <CheckCircle2 className="h-5 w-5" />, tone: 'success', href: '/dashboard/prescriptions' },
         { label: 'Inventory risk', value: lowStock.length, helper: 'Low or out of stock', icon: <Package className="h-5 w-5" />, tone: lowStock.length ? 'critical' : 'success', href: '/dashboard/inventory' },
-        { label: 'Refill requests', value: data.prescriptions.flatMap((item) => item.refillRequests ?? []).filter((item) => item.status === 'pending').length, helper: 'Need review', icon: <Clock3 className="h-5 w-5" />, tone: 'info', href: '/dashboard/prescription-refills' },
+        { label: 'Refill requests', value: prescriptions.flatMap((item) => item.refillRequests ?? []).filter((item) => item.status === 'pending').length, helper: 'Need review', icon: <Clock3 className="h-5 w-5" />, tone: 'info', href: '/dashboard/prescription-refills' },
       ],
       workItems: activePrescriptions.map((item) => ({ title: item.patientName, meta: `${item.medications[0]?.name ?? 'Medication'}${item.medications.length > 1 ? ` +${item.medications.length - 1}` : ''} · ${item.doctorName}`, status: item.status, href: '/dashboard/prescriptions' })),
       actions: [
@@ -527,8 +538,8 @@ export default function AleraCommandCenter({ role: roleOverride }: { role?: Role
       metrics: [
         { label: 'Active requests', value: activeEmergency.length, helper: 'Not yet completed', icon: <Radio className="h-5 w-5" />, tone: activeEmergency.length ? 'critical' : 'success', href: '/dashboard/requests' },
         { label: 'Critical calls', value: criticalEmergency.length, helper: 'High-acuity cases', icon: <AlertTriangle className="h-5 w-5" />, tone: criticalEmergency.length ? 'critical' : 'neutral', href: '/dashboard/requests' },
-        { label: 'Available units', value: data.ambulances.filter((item) => item.status === 'available').length, helper: 'Ready to dispatch', icon: <Ambulance className="h-5 w-5" />, tone: 'success', href: '/dashboard/vehicles' },
-        { label: 'In field', value: data.ambulances.filter((item) => ['dispatched', 'in-transit', 'on-scene'].includes(item.status)).length, helper: 'Assigned vehicles', icon: <MapPin className="h-5 w-5" />, tone: 'info', href: '/dashboard/vehicles' },
+        { label: 'Available units', value: ambulances.filter((item) => item.status === 'available').length, helper: 'Ready to dispatch', icon: <Ambulance className="h-5 w-5" />, tone: 'success', href: '/dashboard/vehicles' },
+        { label: 'In field', value: ambulances.filter((item) => ['dispatched', 'in-transit', 'on-scene'].includes(item.status)).length, helper: 'Assigned vehicles', icon: <MapPin className="h-5 w-5" />, tone: 'info', href: '/dashboard/vehicles' },
       ],
       workItems: activeEmergency.map((item) => ({ title: item.patientName, meta: `${item.location} · ${item.time} · ${item.priority} priority`, status: item.status, href: '/dashboard/requests', tone: item.priority === 'critical' || item.priority === 'high' ? 'critical' : statusTone(item.status) })),
       actions: [
@@ -539,7 +550,7 @@ export default function AleraCommandCenter({ role: roleOverride }: { role?: Role
       ],
       signal: { label: criticalEmergency.length ? 'Critical response' : 'Dispatch ready', value: `${activeEmergency.length} active`, detail: 'Priority, routing, patient identity, and fleet readiness remain visible for emergency teams.', tone: criticalEmergency.length ? 'critical' : 'success' },
       secondaryTitle: 'Fleet readiness',
-      secondaryItems: data.ambulances.map((item) => ({ title: item.callSign, meta: `${item.plateNumber} · fuel ${item.fuel}%`, status: item.status, href: '/dashboard/vehicles' })),
+      secondaryItems: ambulances.map((item) => ({ title: item.callSign, meta: `${item.plateNumber} · fuel ${item.fuel}%`, status: item.status, href: '/dashboard/vehicles' })),
     },
     admin: {
       role: 'admin',
@@ -569,7 +580,7 @@ export default function AleraCommandCenter({ role: roleOverride }: { role?: Role
         { label: 'Ecosystem users', value: users.length, helper: 'Patients and providers', icon: <Users className="h-5 w-5" />, tone: 'primary', href: '/dashboard/users' },
         { label: 'Organizations', value: users.filter((item) => ['hospital', 'laboratory', 'imaging', 'pharmacy', 'ambulance'].includes(normalizeUserRole(item.role) ?? '')).length, helper: 'Care network operators', icon: <Building2 className="h-5 w-5" />, tone: 'info', href: '/dashboard/users' },
         { label: 'Open risk', value: pendingVerifications.length + activeEmergency.length + lowStock.length, helper: 'Verification, emergency, stock', icon: <AlertTriangle className="h-5 w-5" />, tone: pendingVerifications.length + activeEmergency.length + lowStock.length ? 'warning' : 'success', href: '/dashboard/audit' },
-        { label: 'Billing records', value: data.billingRecords.length + data.invoices.length, helper: 'Financial operations', icon: <FileText className="h-5 w-5" />, tone: 'neutral', href: '/dashboard/admin-billing' },
+        { label: 'Billing records', value: billingRecords.length + invoices.length, helper: 'Financial operations', icon: <FileText className="h-5 w-5" />, tone: 'neutral', href: '/dashboard/admin-billing' },
       ],
       workItems: [
         ...pendingVerifications.map((item) => ({ title: item.name, meta: `${item.role} verification · ${item.email}`, status: item.status, href: '/dashboard/verifications' })),
