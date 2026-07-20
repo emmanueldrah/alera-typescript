@@ -39,7 +39,7 @@ const MainLayout = () => {
             </div>
             <div>
               <p className="text-lg font-semibold tracking-tight text-slate-950">Alera</p>
-              <p className="text-xs text-slate-500">Connected healthcare</p>
+              <p className="text-xs text-slate-500">Care OS 2026</p>
             </div>
           </Link>
 

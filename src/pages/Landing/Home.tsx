@@ -106,6 +106,8 @@ const roleCards: RoleCard[] = [
 
 const trustPills = ['End-to-end encryption', 'Role-based permissions', 'Audit-ready timelines', 'HIPAA-ready workflows'];
 
+const deploymentSignal = 'Alera Care OS 2026';
+
 const homepageMetrics = [
   {
     title: 'One operating system',
@@ -212,16 +214,16 @@ const Home = () => {
           <motion.div initial="hidden" animate="visible" variants={stagger} className="relative z-10 max-w-3xl">
             <motion.div variants={fadeUp} className="inline-flex items-center gap-2 rounded-full border border-white/15 bg-white/10 px-4 py-2 text-sm text-slate-100 backdrop-blur">
               <ShieldCheck className="h-4 w-4 text-emerald-200" />
-              A refined healthcare ecosystem for patients, clinicians, and operators
+              {deploymentSignal} · handcrafted healthcare orchestration
             </motion.div>
 
             <motion.h1 variants={fadeUp} className="mt-6 text-4xl font-semibold leading-[0.98] tracking-[-0.03em] sm:text-6xl lg:text-7xl">
-              Calm care coordination
-              <span className="mt-2 block text-cyan-200">for every part of the health journey.</span>
+              Alera Care OS
+              <span className="mt-2 block text-cyan-200">for the full healthcare ecosystem.</span>
             </motion.h1>
 
             <motion.p variants={fadeUp} className="mt-6 max-w-2xl text-lg leading-8 text-slate-200 sm:text-xl">
-              Alera brings booking, care delivery, diagnostics, pharmacy flow, and emergency coordination together in one secure platform designed to reduce anxiety and speed up action.
+              A premium healthcare command layer for patients, clinicians, hospitals, pharmacies, laboratories, imaging centers, ambulance teams, insurers, caregivers, and administrators.
             </motion.p>
 
             <motion.div variants={fadeUp} className="mt-8 flex flex-col gap-3 sm:flex-row sm:items-center">
@@ -262,12 +264,25 @@ const Home = () => {
             <div className="rounded-[1.4rem] bg-white p-5 text-slate-900">
               <div className="flex items-center justify-between">
                 <div>
-                  <p className="text-[11px] font-semibold uppercase tracking-[0.24em] text-sky-700">Live care view</p>
-                  <h2 className="mt-2 text-xl font-semibold tracking-tight">A coordinated care timeline</h2>
+                  <p className="text-[11px] font-semibold uppercase tracking-[0.24em] text-sky-700">{deploymentSignal}</p>
+                  <h2 className="mt-2 text-xl font-semibold tracking-tight">One live operating picture</h2>
                 </div>
                 <div className="rounded-2xl bg-emerald-50 p-3 text-emerald-700">
                   <HeartPulse className="h-5 w-5" />
                 </div>
+              </div>
+
+              <div className="mt-5 grid grid-cols-3 gap-2 rounded-[1.1rem] border border-slate-200 bg-slate-950 p-2 text-white">
+                {[
+                  ['Patient', 'Stable'],
+                  ['Doctor', 'Ready'],
+                  ['Lab', 'Queued'],
+                ].map(([label, value]) => (
+                  <div key={label} className="rounded-xl bg-white/[0.08] px-3 py-2">
+                    <p className="text-[10px] font-semibold uppercase tracking-[0.18em] text-slate-400">{label}</p>
+                    <p className="mt-1 text-sm font-semibold">{value}</p>
+                  </div>
+                ))}
               </div>
 
               <div className="mt-5 space-y-3">
