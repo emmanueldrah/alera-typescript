@@ -15,7 +15,7 @@ import { useSystem } from "@/contexts/useSystem";
 import ProtectedRoute from "@/components/ProtectedRoute";
 import ErrorBoundary from "./components/ErrorBoundary";
 import RouteLoader from "./components/RouteLoader";
-import { featureRouteKeys } from "@/app/featureRegistry";
+import { featureRouteKeys as featureRoutes } from "@/app/featureRegistry";
 import type { MaintenanceBannerType } from "@/contexts/system-context";
 
 const MainLayout = lazy(() => import("./components/MainLayout"));
