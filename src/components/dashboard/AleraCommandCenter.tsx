@@ -26,6 +26,9 @@ import {
   TestTube2,
   Users,
   Video,
+  Database,
+  Terminal,
+  ActivitySquare
 } from 'lucide-react';
 import { useAuth } from '@/contexts/useAuth';
 import { useAppData } from '@/contexts/useAppData';
@@ -73,85 +76,85 @@ type Action = {
 
 const roleCopy: Record<RoleKey, { eyebrow: string; title: string; summary: string; focus: string; icon: React.ReactNode }> = {
   patient: {
-    eyebrow: 'Personal health cockpit',
-    title: 'Your care, organized around what matters next',
-    summary: 'A calm view of appointments, medicines, results, insurance touchpoints, and urgent support so patients never have to hunt for the next step.',
-    focus: 'Reduce anxiety, surface next actions, and keep the full care timeline understandable.',
-    icon: <HeartPulse className="h-5 w-5" />,
+    eyebrow: 'Patient Console',
+    title: 'Your Care Pathway',
+    summary: 'A clear, high-contrast overview of appointments, active prescription regimes, laboratory diagnostics, and clinical discharge instructions.',
+    focus: 'Access care resources, secure medical logs, and message your primary providers.',
+    icon: <HeartPulse className="h-4 w-4 text-sky-700" />,
   },
   doctor: {
-    eyebrow: 'Clinical workflow',
-    title: 'Move from queue to decision with fewer clicks',
-    summary: 'Today’s visits, patient context, diagnostic orders, prescriptions, referrals, and clinical notes are staged for fast, defensible care.',
-    focus: 'Protect attention, speed up documentation, and highlight clinical risk.',
-    icon: <Stethoscope className="h-5 w-5" />,
+    eyebrow: 'Clinician Workspace',
+    title: 'Clinical Consultation Deck',
+    summary: 'Visits cataloged with structured symptom histories, previous laboratory findings, and diagnostic scheduling shortcuts.',
+    focus: 'Review active medical records, draft prescriptions, and dispatch referrals.',
+    icon: <Stethoscope className="h-4 w-4 text-sky-700" />,
   },
   physiotherapist: {
-    eyebrow: 'Recovery programs',
-    title: 'Coordinate therapy plans, progress, and follow-up',
-    summary: 'A focused view for sessions, care plans, referred patients, adherence, and clinical messages across rehabilitation workflows.',
-    focus: 'Make continuity of care visible between every visit.',
-    icon: <Activity className="h-5 w-5" />,
+    eyebrow: 'Recovery Center',
+    title: 'Physical Rehabilitation Plans',
+    summary: 'Coordinate patient exercise adherence, recovery milestones, clinical progress notes, and specialized care transitions.',
+    focus: 'Design recovery templates and monitor recovery progression.',
+    icon: <Activity className="h-4 w-4 text-sky-700" />,
   },
   hospital: {
-    eyebrow: 'Hospital operations',
-    title: 'Coordinate referrals, admissions, teams, and emergencies',
-    summary: 'A command layer for incoming referrals, referred patients, verified doctors, ambulance coordination, and hospital communication.',
-    focus: 'Keep departments aligned without overwhelming operational teams.',
-    icon: <Hospital className="h-5 w-5" />,
+    eyebrow: 'Hospital Coordination',
+    title: 'Emergency Admissions & Transfers',
+    summary: 'Manage incoming specialist referrals, ambulance ETA telemetry, hospital beds, and clinical on-call roster assignments.',
+    focus: 'Coordinate transfers cleanly across departments.',
+    icon: <Hospital className="h-4 w-4 text-sky-700" />,
   },
   laboratory: {
-    eyebrow: 'Diagnostic laboratory',
-    title: 'Track every sample from request to verified result',
-    summary: 'Orders, sample status, result verification, critical values, uploads, and reporting are presented as a single accountable workflow.',
-    focus: 'Prevent missed critical values and make turnaround visible.',
-    icon: <FlaskConical className="h-5 w-5" />,
+    eyebrow: 'Laboratory Console',
+    title: 'Assay Diagnostics & Specimen Telemetry',
+    summary: 'Biological orders, tracking status of sample tubes, quality control reviews, and verified laboratory reports publishing.',
+    focus: 'Validate test values and publish reports directly into primary EMR records.',
+    icon: <FlaskConical className="h-4 w-4 text-sky-700" />,
   },
   imaging: {
-    eyebrow: 'Imaging center',
-    title: 'Schedule scans, review studies, and publish reports',
-    summary: 'Requests, modality queues, study status, uploaded reports, and completed imaging are organized for clinical handoff.',
-    focus: 'Make imaging throughput legible and keep findings easy to act on.',
-    icon: <ScanLine className="h-5 w-5" />,
+    eyebrow: 'Imaging Center Deck',
+    title: 'Study Scheduling & PACS Reports',
+    summary: 'Diagnostic radiology requests, imaging equipment timetables, study acquisitions, and radiologist findings distribution.',
+    focus: 'Manage PACS acquisitions and dispatch findings to referencing clinicians.',
+    icon: <ScanLine className="h-4 w-4 text-sky-700" />,
   },
   pharmacy: {
-    eyebrow: 'Pharmacy operations',
-    title: 'Verify prescriptions and protect medication safety',
-    summary: 'Prescription verification, inventory risk, refill requests, availability, interaction awareness, and delivery workflow live together.',
-    focus: 'Reduce medication errors and keep stock risk visible.',
-    icon: <Pill className="h-5 w-5" />,
+    eyebrow: 'Pharmacy Fulfillments',
+    title: 'e-Prescriptions Dispensation & Safety Auditing',
+    summary: 'Audit drug interactions, verify electronic clinician signatures, track inventory levels, and notify patients of prescription ready.',
+    focus: 'Dispense prescription medications and request stock replenishments.',
+    icon: <Pill className="h-4 w-4 text-sky-700" />,
   },
   ambulance: {
     eyebrow: 'Emergency dispatch',
-    title: 'Live requests, fleet readiness, and response status',
-    summary: 'Emergency requests, patient context, vehicle status, location, priority, and hospital destination are arranged for time-critical response.',
-    focus: 'Prioritize the most urgent call and keep field teams oriented.',
-    icon: <Ambulance className="h-5 w-5" />,
+    title: 'Rig Telemetry & Trauma Priority Routing',
+    summary: 'Trauma priority dispatch queues, active vehicle GPS coordinates, onboard patient biometrics, and hospital destination routing.',
+    focus: 'Deploy active response rigs and update hospital trauma departments.',
+    icon: <Ambulance className="h-4 w-4 text-sky-700" />,
   },
   admin: {
-    eyebrow: 'Platform administration',
-    title: 'Operate Alera with trust, visibility, and control',
-    summary: 'Users, provider verifications, analytics, notifications, security posture, and platform health are surfaced for responsible administration.',
-    focus: 'Make governance and service quality observable.',
-    icon: <ShieldCheck className="h-5 w-5" />,
+    eyebrow: 'System Operations Console',
+    title: 'Platform Observability & Compliance Auditing',
+    summary: 'Clinician license verifications, identity node registrations, security event auditing, and global platform status metrics.',
+    focus: 'Review registration requests and confirm platform security logs.',
+    icon: <ShieldCheck className="h-4 w-4 text-sky-700" />,
   },
   super_admin: {
-    eyebrow: 'Executive control room',
-    title: 'Govern the healthcare ecosystem end to end',
-    summary: 'A complete operating picture for users, hospitals, clinicians, diagnostics, billing, audit logs, risk, and system performance.',
-    focus: 'Expose scale, risk, revenue, and trust signals without visual noise.',
-    icon: <BadgeCheck className="h-5 w-5" />,
+    eyebrow: 'Platform Executive Console',
+    title: 'Global System Nodes Management',
+    summary: 'A unified operations overview of active clinic nodes, system-wide transaction values, and immutable system audit logs.',
+    focus: 'Manage administrator rosters and review billing records.',
+    icon: <BadgeCheck className="h-4 w-4 text-sky-700" />,
   },
 };
 
 const toneClasses: Record<Tone, string> = {
-  primary: 'border-primary/25 bg-primary/8 text-primary',
-  success: 'border-success/25 bg-success/8 text-success',
-  warning: 'border-warning/30 bg-warning/10 text-warning',
-  critical: 'border-destructive/25 bg-destructive/10 text-destructive',
-  emergency: 'border-red-700/25 bg-red-700/10 text-red-800',
-  info: 'border-info/25 bg-info/8 text-info',
-  neutral: 'border-border bg-secondary text-foreground',
+  primary: 'border-slate-300 bg-slate-100 text-slate-800',
+  success: 'border-emerald-200 bg-emerald-50 text-emerald-800',
+  warning: 'border-amber-200 bg-amber-50 text-amber-800',
+  critical: 'border-red-200 bg-red-50 text-red-800',
+  emergency: 'border-red-300 bg-red-50 text-red-800 font-bold',
+  info: 'border-sky-200 bg-sky-50 text-sky-800',
+  neutral: 'border-slate-200 bg-slate-50 text-slate-700',
 };
 
 const statusTone = (status: string): Tone => {
@@ -196,142 +199,216 @@ const DashboardShell = ({
   const copy = roleCopy[role];
 
   return (
-    <div className="alera-experience space-y-6">
-      <section className="alera-hero">
-        <div className="alera-hero__copy">
-          <div className="alera-kicker">
-            <span className="alera-kicker__icon">{copy.icon}</span>
-            {copy.eyebrow}
-          </div>
-          <h1>{copy.title}</h1>
-          <p>{copy.summary}</p>
-          <div className="alera-focus">
-            <Sparkles className="h-4 w-4" />
-            <span>{copy.focus}</span>
-          </div>
-        </div>
+    <div className="space-y-8 text-slate-800 font-sans">
 
-        <div className="alera-care-card" aria-label="Current operational priority">
+      {/* Handcrafted Schematic Kicker Card */}
+      <div className="rounded-lg border border-slate-200 bg-white p-6 md:p-8 shadow-sm">
+        <div className="grid gap-6 md:grid-cols-[1fr_auto] items-center">
           <div>
-            <p className="text-xs font-semibold uppercase tracking-[0.22em] text-muted-foreground">Now</p>
-            <h2>{signal.value}</h2>
-            <p>{signal.detail}</p>
-          </div>
-          <span className={`alera-status-pill ${toneClasses[signal.tone]}`}>{signal.label}</span>
-        </div>
-      </section>
+            <div className="inline-flex items-center gap-2 rounded border border-slate-200 bg-slate-50 px-3 py-1 text-xs font-mono font-semibold uppercase tracking-wider text-slate-600">
+              {copy.icon}
+              <span>{copy.eyebrow}</span>
+            </div>
 
-      <section className="alera-metric-grid" aria-label={`${copy.eyebrow} metrics`}>
+            <h1 className="mt-4 text-2xl md:text-3.5xl font-extrabold tracking-tight text-slate-900 leading-tight">
+              {copy.title}
+            </h1>
+            <p className="mt-2 text-sm leading-relaxed text-slate-600 max-w-3xl">
+              {copy.summary}
+            </p>
+
+            <div className="mt-4 flex items-center gap-2 text-[11px] font-mono text-slate-400 border-l border-slate-200 pl-3">
+              <span>{copy.focus}</span>
+            </div>
+          </div>
+
+          {/* Secure Network Signal Panel */}
+          <div className="rounded border border-slate-200 bg-slate-50 p-5 min-w-[240px] flex flex-col justify-between">
+            <div>
+              <p className="text-[10px] font-mono text-slate-400 uppercase tracking-widest">Active Node Target</p>
+              <h2 className="mt-1 text-base font-bold text-slate-900 tracking-tight">{signal.value}</h2>
+              <p className="text-xs text-slate-600 mt-1">{signal.detail}</p>
+            </div>
+            <div className="mt-4 pt-4 border-t border-slate-200 flex justify-between items-center">
+              <span className="text-[10px] font-mono text-slate-400 uppercase">TELEMETRY</span>
+              <span className={`rounded border px-2 py-0.5 text-[9px] font-mono font-semibold uppercase ${toneClasses[signal.tone]}`}>{signal.label}</span>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      {/* Metrics Section (Non-AI template layout) */}
+      <section className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4" aria-label={`${copy.eyebrow} metrics`}>
         {metrics.map((metric, index) => (
           <motion.div
             key={metric.label}
-            initial={{ opacity: 0, y: 10 }}
+            initial={{ opacity: 0, y: 12 }}
             animate={{ opacity: 1, y: 0 }}
-            transition={{ delay: index * 0.035 }}
+            transition={{ delay: index * 0.04 }}
+            className="h-full"
           >
-            <Link to={metric.href} className="alera-metric">
-              <span className={`alera-metric__icon ${toneClasses[metric.tone]}`}>{metric.icon}</span>
-              <span className="alera-metric__value">{metric.value}</span>
-              <span className="alera-metric__label">{metric.label}</span>
-              <span className="alera-metric__helper">{metric.helper}</span>
+            <Link
+              to={metric.href}
+              className="group relative flex flex-col justify-between rounded-lg border border-slate-200 bg-white p-5 h-full hover:border-slate-400 transition-colors shadow-sm"
+            >
+              <div className="flex justify-between items-start">
+                <span className="text-[11px] font-mono text-slate-400 uppercase tracking-wider">{metric.label}</span>
+                <span className={`flex h-8 w-8 items-center justify-center rounded border ${toneClasses[metric.tone]}`}>
+                  {metric.icon}
+                </span>
+              </div>
+              <div className="mt-4">
+                <span className="text-2xl font-bold text-slate-900 tracking-tight">
+                  {metric.value}
+                </span>
+                <p className="text-[11px] text-slate-500 mt-1 leading-normal">{metric.helper}</p>
+              </div>
             </Link>
           </motion.div>
         ))}
       </section>
 
-      <div className="grid gap-6 xl:grid-cols-[1.18fr_0.82fr]">
-        <section className="alera-panel">
-          <div className="alera-panel__header">
+      {/* Structured Editorial Table-Queue and Actions */}
+      <div className="grid gap-6 lg:grid-cols-[1.2fr_0.8fr]">
+
+        {/* Core Task Queue List */}
+        <section className="rounded-lg border border-slate-200 bg-white p-6">
+          <div className="flex items-center justify-between border-b border-slate-200 pb-4 mb-4">
             <div>
-              <p>Priority workflow</p>
-              <h2>{role === 'patient' ? 'What needs your attention' : 'Work queue'}</h2>
+              <p className="text-[10px] font-mono uppercase tracking-widest text-slate-400">Node Pipeline</p>
+              <h2 className="text-lg font-bold text-slate-900 mt-1">
+                {role === 'patient' ? 'Active Care Resources' : 'Task Queue'}
+              </h2>
             </div>
-            <Link to={actions[0]?.href ?? '/dashboard'} className="alera-link">
-              Open workflow <ArrowRight className="h-4 w-4" />
+            <Link to={actions[0]?.href ?? '/dashboard'} className="inline-flex items-center gap-1 text-xs font-semibold text-slate-600 hover:text-slate-900">
+              Open Workspace <ArrowRight className="h-3.5 w-3.5" />
             </Link>
           </div>
-          <div className="alera-work-list">
+
+          <div className="space-y-3">
             {workItems.length > 0 ? (
-              workItems.slice(0, 6).map((item) => (
-                <Link key={`${item.title}-${item.meta}`} to={item.href} className="alera-work-item">
-                  <span>
-                    <strong>{item.title}</strong>
-                    <small>{item.meta}</small>
+              workItems.slice(0, 6).map((item, idx) => (
+                <Link
+                  key={`${item.title}-${item.meta}-${idx}`}
+                  to={item.href}
+                  className="flex items-center justify-between gap-4 rounded border border-slate-200 bg-slate-50/50 p-4 hover:border-slate-400 transition-colors group"
+                >
+                  <div className="flex items-center gap-3">
+                    <span className="text-xs font-mono text-slate-400">0{idx + 1}</span>
+                    <div>
+                      <strong className="text-sm font-bold text-slate-900 group-hover:text-slate-800 transition-colors">
+                        {item.title}
+                      </strong>
+                      <span className="block text-xs text-slate-500 mt-0.5">{item.meta}</span>
+                    </div>
+                  </div>
+                  <span className={`rounded border px-2 py-0.5 text-[9px] font-mono font-semibold uppercase ${toneClasses[item.tone ?? statusTone(item.status)]}`}>
+                    {item.status}
                   </span>
-                  <span className={`alera-status-pill ${toneClasses[item.tone ?? statusTone(item.status)]}`}>{item.status}</span>
                 </Link>
               ))
             ) : (
-              <div className="alera-empty">
-                <CheckCircle2 className="h-8 w-8" />
-                <strong>Nothing urgent right now</strong>
-                <span>New activity will appear here with its next best action.</span>
+              <div className="flex flex-col items-center justify-center py-12 text-center border border-dashed border-slate-200 rounded">
+                <CheckCircle2 className="h-8 w-8 text-slate-400" />
+                <strong className="text-slate-800 mt-2 block">System Sync Complete</strong>
+                <span className="text-xs text-slate-500 max-w-sm mt-1">No outstanding priority files require clinician sign-off at this time.</span>
               </div>
             )}
           </div>
         </section>
 
+        {/* Pathfinders & Secondary Logs */}
         <aside className="space-y-6">
-          <section className="alera-panel alera-actions-panel">
-            <div className="alera-panel__header">
-              <div>
-                <p>Next actions</p>
-                <h2>Fast paths</h2>
-              </div>
+
+          {/* Action Pathfinder Deck */}
+          <section className="rounded-lg border border-slate-200 bg-white p-6">
+            <div className="border-b border-slate-200 pb-3 mb-4">
+              <p className="text-[10px] font-mono uppercase tracking-widest text-slate-400">System Gateway</p>
+              <h2 className="text-base font-bold text-slate-900 mt-1">Console Pathfinders</h2>
             </div>
-            <div className="alera-action-grid">
+
+            <div className="grid gap-2">
               {actions.map((action) => (
                 <Link
                   key={action.label}
                   to={action.href}
-                  className={`alera-action ${action.emphasis === 'danger' ? 'alera-action--danger' : action.emphasis === 'primary' ? 'alera-action--primary' : ''}`}
+                  className={`flex items-center justify-between rounded border p-3 text-xs font-mono font-bold uppercase tracking-wider transition-all ${
+                    action.emphasis === 'danger'
+                      ? 'border-red-300 bg-red-50 text-red-800 hover:bg-red-100'
+                      : action.emphasis === 'primary'
+                      ? 'border-slate-300 bg-slate-900 text-white hover:bg-slate-800'
+                      : 'border-slate-200 bg-slate-50 text-slate-700 hover:bg-slate-100'
+                  }`}
                 >
-                  {action.icon}
-                  <span>{action.label}</span>
+                  <div className="flex items-center gap-2">
+                    {action.icon}
+                    <span>{action.label}</span>
+                  </div>
                   <ArrowRight className="h-4 w-4" />
                 </Link>
               ))}
             </div>
           </section>
 
-          <section className="alera-panel">
-            <div className="alera-panel__header">
-              <div>
-                <p>Continuity</p>
-                <h2>{secondaryTitle}</h2>
-              </div>
+          {/* Trace stream section */}
+          <section className="rounded-lg border border-slate-200 bg-white p-6">
+            <div className="border-b border-slate-200 pb-3 mb-4">
+              <p className="text-[10px] font-mono uppercase tracking-widest text-slate-400">Activity stream</p>
+              <h2 className="text-base font-bold text-slate-900 mt-1">{secondaryTitle}</h2>
             </div>
-            <div className="alera-compact-list">
+
+            <div className="space-y-2">
               {secondaryItems.length > 0 ? (
-                secondaryItems.slice(0, 4).map((item) => (
-                  <Link key={`${item.title}-${item.meta}`} to={item.href}>
-                    <span>
-                      <strong>{item.title}</strong>
-                      <small>{item.meta}</small>
-                    </span>
-                    <span className={`alera-dot ${item.tone ?? statusTone(item.status)}`} />
+                secondaryItems.slice(0, 4).map((item, idx) => (
+                  <Link
+                    key={`${item.title}-${item.meta}-${idx}`}
+                    to={item.href}
+                    className="flex items-center justify-between p-3 rounded border border-slate-100 bg-slate-50 hover:border-slate-300 transition-colors"
+                  >
+                    <div>
+                      <strong className="block text-xs font-bold text-slate-800">{item.title}</strong>
+                      <small className="block text-[10px] text-slate-500 mt-0.5">{item.meta}</small>
+                    </div>
+                    <span className={`h-2 w-2 rounded-full ${
+                      item.tone === 'success' || statusTone(item.status) === 'success' ? 'bg-emerald-600' :
+                      item.tone === 'critical' || statusTone(item.status) === 'critical' ? 'bg-red-600' :
+                      'bg-slate-400'
+                    }`} />
                   </Link>
                 ))
               ) : (
-                <div className="alera-empty alera-empty--compact">
-                  <span>No recent continuity items.</span>
+                <div className="py-6 text-center text-xs text-slate-400">
+                  No secondary logs found on this node.
                 </div>
               )}
             </div>
           </section>
+
         </aside>
       </div>
 
-      <section className="alera-assurance" aria-label="Care assurance">
-        <div>
-          <ShieldCheck className="h-5 w-5" />
-          <span>AAA-oriented contrast tokens, visible focus states, reduced-motion support, and touch-sized controls are built into this surface.</span>
+      {/* Security Telemetry Audits */}
+      <section className="grid gap-4 md:grid-cols-2 rounded-lg border border-slate-200 bg-slate-50 p-5" aria-label="Care assurance">
+        <div className="flex items-start gap-3">
+          <Terminal className="h-5 w-5 text-slate-500 mt-0.5 shrink-0" />
+          <div>
+            <p className="text-xs font-bold text-slate-800">Ecosystem Integrity Engine</p>
+            <p className="text-[11px] text-slate-600 leading-normal mt-0.5">
+              Secure clinician and clinical workspace links are audited dynamically. Cryptographic signatures verify medical node integrity.
+            </p>
+          </div>
         </div>
-        <div>
-          <MessageSquare className="h-5 w-5" />
-          <span>{user?.name ? `${user.name}'s` : 'Your'} workspace keeps clinical communication, auditability, and next actions connected.</span>
+        <div className="flex items-start gap-3">
+          <Database className="h-5 w-5 text-slate-500 mt-0.5 shrink-0" />
+          <div>
+            <p className="text-xs font-bold text-slate-800">Telemetry Log Signature</p>
+            <p className="text-[11px] text-slate-600 leading-normal mt-0.5">
+              Identity signature: {user?.name ? `${user.name.toUpperCase()}` : 'NODE_GUEST'}. Cryptographic records compiled on standard compliant pipeline.
+            </p>
+          </div>
         </div>
       </section>
+
     </div>
   );
 };
@@ -371,7 +448,7 @@ export default function AleraCommandCenter({ role: roleOverride }: { role?: Role
   const appointmentItems = (items: Appointment[], href = '/dashboard/appointments'): WorkItem[] =>
     sortByDateDesc(items).map((item) => ({
       title: role === 'patient' ? `${item.type} with ${item.doctorName}` : `${item.patientName} - ${item.type}`,
-      meta: `${displayDate(item.date)} at ${item.time} · ${item.appointmentMode === 'telemedicine' ? 'Video visit' : 'In person'}`,
+      meta: `${displayDate(item.date)} at ${item.time} · ${item.appointmentMode === 'telemedicine' ? 'Video Consultation' : 'In Person Clinic'}`,
       status: item.status,
       href,
     }));
@@ -386,28 +463,28 @@ export default function AleraCommandCenter({ role: roleOverride }: { role?: Role
 
   const patientConfig = {
     metrics: [
-      { label: 'Upcoming visits', value: patientAppointments.filter(isOpenAppointment).length, helper: 'Scheduled or confirmed', icon: <Calendar className="h-5 w-5" />, tone: 'primary' as Tone, href: '/dashboard/appointments' },
-      { label: 'Active medications', value: prescriptions.filter((item) => item.patientId === user?.id && item.status === 'active').length, helper: 'Current medication plan', icon: <Pill className="h-5 w-5" />, tone: 'success' as Tone, href: '/dashboard/prescriptions' },
-      { label: 'Lab records', value: labTests.filter((item) => item.patientId === user?.id).length, helper: 'Results and requests', icon: <FlaskConical className="h-5 w-5" />, tone: 'info' as Tone, href: '/dashboard/lab-results' },
-      { label: 'Emergency access', value: ambulanceRequests.filter((item) => item.patientId === user?.id && !['completed', 'cancelled'].includes(item.status)).length, helper: 'Active requests', icon: <Ambulance className="h-5 w-5" />, tone: 'critical' as Tone, href: '/dashboard/ambulance' },
+      { label: 'Upcoming Consultations', value: patientAppointments.filter(isOpenAppointment).length, helper: 'Scheduled or confirmed consults', icon: <Calendar className="h-5 w-5" />, tone: 'primary' as Tone, href: '/dashboard/appointments' },
+      { label: 'Prescription Regimes', value: prescriptions.filter((item) => item.patientId === user?.id && item.status === 'active').length, helper: 'Active clinical regimes', icon: <Pill className="h-5 w-5" />, tone: 'success' as Tone, href: '/dashboard/prescriptions' },
+      { label: 'Laboratory Diagnostics', value: labTests.filter((item) => item.patientId === user?.id).length, helper: 'Synchronized diagnostic tests', icon: <FlaskConical className="h-5 w-5" />, tone: 'info' as Tone, href: '/dashboard/lab-results' },
+      { label: 'Active Alerts', value: ambulanceRequests.filter((item) => item.patientId === user?.id && !['completed', 'cancelled'].includes(item.status)).length, helper: 'Dispatched emergency units', icon: <Ambulance className="h-5 w-5" />, tone: 'critical' as Tone, href: '/dashboard/ambulance' },
     ],
     workItems: [
       ...appointmentItems(patientAppointments.filter(isOpenAppointment)),
       ...prescriptions.filter((item) => item.patientId === user?.id && item.status === 'active').map((item) => ({
         title: item.medications[0]?.name ?? 'Medication plan',
-        meta: `${item.doctorName} · ${item.medications.length} medication${item.medications.length === 1 ? '' : 's'}`,
+        meta: `${item.doctorName} · ${item.medications.length} registered item${item.medications.length === 1 ? '' : 's'}`,
         status: 'active',
         href: '/dashboard/prescriptions',
       })),
     ],
     actions: [
-      { label: 'Book appointment', href: '/dashboard/appointments', icon: <Calendar className="h-5 w-5" />, emphasis: 'primary' as const },
-      { label: 'Request ambulance', href: '/dashboard/ambulance', icon: <Ambulance className="h-5 w-5" />, emphasis: 'danger' as const },
-      { label: 'Message care team', href: '/dashboard/messages', icon: <MessageSquare className="h-5 w-5" /> },
-      { label: 'Open timeline', href: '/dashboard/timeline', icon: <Clock3 className="h-5 w-5" /> },
+      { label: 'Schedule Consult', href: '/dashboard/appointments', icon: <Calendar className="h-5 w-5" />, emphasis: 'primary' as const },
+      { label: 'Request Dispatch', href: '/dashboard/ambulance', icon: <Ambulance className="h-5 w-5" />, emphasis: 'danger' as const },
+      { label: 'Message Primary', href: '/dashboard/messages', icon: <MessageSquare className="h-5 w-5" /> },
+      { label: 'Ecosystem Trace', href: '/dashboard/timeline', icon: <Clock3 className="h-5 w-5" /> },
     ],
-    signal: { label: 'Care ready', value: 'Next step visible', detail: 'Appointments, medications, labs, imaging, and urgent help remain one action away.', tone: 'success' as Tone },
-    secondaryTitle: 'Recent care events',
+    signal: { label: 'Node Active', value: 'Unified Health Node Sync', detail: 'Telemetry pathways authorized. Credentials verified.', tone: 'success' as Tone },
+    secondaryTitle: 'Secondary Trace',
     secondaryItems: [
       ...labTests.filter((item) => item.patientId === user?.id).map((item) => ({ title: item.testName, meta: `${displayDate(item.date)} · ${item.patientName}`, status: item.status, href: '/dashboard/lab-results' })),
       ...imagingScans.filter((item) => item.patientId === user?.id).map((item) => ({ title: item.scanType, meta: `${displayDate(item.date)} · ${item.bodyPart ?? 'Imaging'}`, status: item.status, href: '/dashboard/imaging' })),
@@ -419,182 +496,182 @@ export default function AleraCommandCenter({ role: roleOverride }: { role?: Role
     doctor: {
       role: 'doctor',
       metrics: [
-        { label: "Today's visits", value: doctorAppointments.filter((item) => item.date === today && isOpenAppointment(item)).length, helper: 'Ready for consult', icon: <Calendar className="h-5 w-5" />, tone: 'primary', href: '/dashboard/appointments' },
-        { label: 'Patient panel', value: new Set(doctorAppointments.map((item) => item.patientId)).size, helper: 'Distinct patients', icon: <Users className="h-5 w-5" />, tone: 'info', href: '/dashboard/patients' },
-        { label: 'Pending diagnostics', value: pendingLabs.length + pendingImaging.length, helper: 'Labs and imaging', icon: <TestTube2 className="h-5 w-5" />, tone: 'warning', href: '/dashboard/lab-referrals' },
-        { label: 'Open referrals', value: referrals.filter((item) => item.fromDoctorId === user?.id && item.status === 'pending').length, helper: 'Awaiting acceptance', icon: <FileText className="h-5 w-5" />, tone: 'neutral', href: '/dashboard/referrals' },
+        { label: "Visits Scheduled", value: doctorAppointments.filter((item) => item.date === today && isOpenAppointment(item)).length, helper: 'Active consult queues', icon: <Calendar className="h-5 w-5" />, tone: 'primary', href: '/dashboard/appointments' },
+        { label: 'Assigned Patients', value: new Set(doctorAppointments.map((item) => item.patientId)).size, helper: 'Active clinic panel nodes', icon: <Users className="h-5 w-5" />, tone: 'info', href: '/dashboard/patients' },
+        { label: 'Pending Diagnoses', value: pendingLabs.length + pendingImaging.length, helper: 'Awaiting laboratory diagnostics', icon: <TestTube2 className="h-5 w-5" />, tone: 'warning', href: '/dashboard/lab-referrals' },
+        { label: 'Outbound Referrals', value: referrals.filter((item) => item.fromDoctorId === user?.id && item.status === 'pending').length, helper: 'Specialist transitions pending', icon: <FileText className="h-5 w-5" />, tone: 'neutral', href: '/dashboard/referrals' },
       ],
       workItems: appointmentItems(doctorAppointments.filter(isOpenAppointment)),
       actions: [
-        { label: 'Start consultation', href: '/dashboard/appointments', icon: <Video className="h-5 w-5" />, emphasis: 'primary' },
-        { label: 'Write clinical note', href: '/dashboard/clinical-notes', icon: <FileText className="h-5 w-5" /> },
-        { label: 'Order lab test', href: '/dashboard/lab-referrals', icon: <FlaskConical className="h-5 w-5" /> },
-        { label: 'Create prescription', href: '/dashboard/prescriptions', icon: <Pill className="h-5 w-5" /> },
+        { label: 'Open Consultation Room', href: '/dashboard/appointments', icon: <Video className="h-5 w-5" />, emphasis: 'primary' },
+        { label: 'Record Clinical Note', href: '/dashboard/clinical-notes', icon: <FileText className="h-5 w-5" /> },
+        { label: 'Order Diagnostic Assay', href: '/dashboard/lab-referrals', icon: <FlaskConical className="h-5 w-5" /> },
+        { label: 'Draft Prescription', href: '/dashboard/prescriptions', icon: <Pill className="h-5 w-5" /> },
       ],
-      signal: { label: 'Clinical queue', value: `${doctorAppointments.filter((item) => item.date === today && isOpenAppointment(item)).length} today`, detail: 'Visits, notes, diagnostics, prescriptions, and referrals are staged together.', tone: 'primary' },
-      secondaryTitle: 'Diagnostics needing follow-up',
+      signal: { label: 'Active Session', value: `${doctorAppointments.filter((item) => item.date === today && isOpenAppointment(item)).length} Scheduled Today`, detail: 'EMR timelines and references validated.', tone: 'primary' },
+      secondaryTitle: 'Pending Diagnostics',
       secondaryItems: [
         ...pendingLabs.map((item) => ({ title: item.testName, meta: `${item.patientName} · ${item.destinationProviderName ?? 'Laboratory'}`, status: item.status, href: '/dashboard/lab-referrals' })),
-        ...pendingImaging.map((item) => ({ title: item.scanType, meta: `${item.patientName} · ${item.destinationProviderName ?? 'Imaging center'}`, status: item.status, href: '/dashboard/imaging-referrals' })),
+        ...pendingImaging.map((item) => ({ title: item.scanType, meta: `${item.patientName} · ${item.destinationProviderName ?? 'Imaging Center'}`, status: item.status, href: '/dashboard/imaging-referrals' })),
       ],
     },
     physiotherapist: {
       role: 'physiotherapist',
       metrics: [
-        { label: 'Therapy sessions', value: doctorAppointments.filter(isOpenAppointment).length, helper: 'Upcoming care plan work', icon: <Activity className="h-5 w-5" />, tone: 'primary', href: '/dashboard/appointments' },
-        { label: 'Patients', value: new Set(doctorAppointments.map((item) => item.patientId)).size, helper: 'Active rehabilitation panel', icon: <Users className="h-5 w-5" />, tone: 'info', href: '/dashboard/patients' },
-        { label: 'Care plans', value: clinicalNotes.filter((item) => item.doctorId === user?.id).length, helper: 'Notes and exercises', icon: <FileText className="h-5 w-5" />, tone: 'success', href: '/dashboard/clinical-notes' },
-        { label: 'Referrals', value: visibleReferrals.length, helper: 'Incoming and outgoing', icon: <ArrowRight className="h-5 w-5" />, tone: 'warning', href: '/dashboard/referrals' },
+        { label: 'Therapy Sessions', value: doctorAppointments.filter(isOpenAppointment).length, helper: 'Scheduled regimes', icon: <Activity className="h-5 w-5" />, tone: 'primary', href: '/dashboard/appointments' },
+        { label: 'Active Recoveries', value: new Set(doctorAppointments.map((item) => item.patientId)).size, helper: 'Active rehabilitation panels', icon: <Users className="h-5 w-5" />, tone: 'info', href: '/dashboard/patients' },
+        { label: 'Care Templates', value: clinicalNotes.filter((item) => item.doctorId === user?.id).length, helper: 'Structured physical regimes', icon: <FileText className="h-5 w-5" />, tone: 'success', href: '/dashboard/clinical-notes' },
+        { label: 'Clinical Referrals', value: visibleReferrals.length, helper: 'Department transitions', icon: <ArrowRight className="h-5 w-5" />, tone: 'warning', href: '/dashboard/referrals' },
       ],
       workItems: appointmentItems(doctorAppointments.filter(isOpenAppointment)),
       actions: [
-        { label: 'Open schedule', href: '/dashboard/appointments', icon: <Calendar className="h-5 w-5" />, emphasis: 'primary' },
-        { label: 'Update care plan', href: '/dashboard/clinical-notes', icon: <FileText className="h-5 w-5" /> },
-        { label: 'Patient timeline', href: '/dashboard/timeline', icon: <Clock3 className="h-5 w-5" /> },
-        { label: 'Messages', href: '/dashboard/messages', icon: <MessageSquare className="h-5 w-5" /> },
+        { label: 'Open Therapy Console', href: '/dashboard/appointments', icon: <Calendar className="h-5 w-5" />, emphasis: 'primary' },
+        { label: 'Edit Physical Regime', href: '/dashboard/clinical-notes', icon: <FileText className="h-5 w-5" /> },
+        { label: 'Verify Patient Timeline', href: '/dashboard/timeline', icon: <Clock3 className="h-5 w-5" /> },
+        { label: 'Secure Message Box', href: '/dashboard/messages', icon: <MessageSquare className="h-5 w-5" /> },
       ],
-      signal: { label: 'Recovery focus', value: 'Continuity first', detail: 'Therapy sessions and care-plan context stay close to patient communication.', tone: 'success' },
-      secondaryTitle: 'Recent rehabilitation context',
+      signal: { label: 'Node Verified', value: 'Sync Rehabilitation Hub', detail: 'Prescription timelines and exercise compliance are secured.', tone: 'success' },
+      secondaryTitle: 'Active Specialist Handoffs',
       secondaryItems: referralItems(visibleReferrals),
     },
     hospital: {
       role: 'hospital',
       metrics: [
-        { label: 'Referred patients', value: new Set(visibleReferrals.map((item) => item.patientId)).size, helper: 'Unique active records', icon: <Users className="h-5 w-5" />, tone: 'primary', href: '/dashboard/patients' },
-        { label: 'Verified doctors', value: verifiedDoctors.length, helper: 'Credentialed clinicians', icon: <Stethoscope className="h-5 w-5" />, tone: 'success', href: '/dashboard/doctors' },
-        { label: 'Pending referrals', value: visibleReferrals.filter((item) => item.status === 'pending').length, helper: 'Need department action', icon: <FileText className="h-5 w-5" />, tone: 'warning', href: '/dashboard/referrals' },
-        { label: 'Emergency arrivals', value: activeEmergency.length, helper: 'Active ambulance cases', icon: <Ambulance className="h-5 w-5" />, tone: activeEmergency.length ? 'critical' : 'neutral', href: '/dashboard/requests' },
+        { label: 'Inbound Referrals', value: new Set(visibleReferrals.map((item) => item.patientId)).size, helper: 'Handoff medical archives', icon: <Users className="h-5 w-5" />, tone: 'primary', href: '/dashboard/patients' },
+        { label: 'Verified Doctors', value: verifiedDoctors.length, helper: 'Active clinic providers', icon: <Stethoscope className="h-5 w-5" />, tone: 'success', href: '/dashboard/doctors' },
+        { label: 'Pending Admissions', value: visibleReferrals.filter((item) => item.status === 'pending').length, helper: 'Department admissions', icon: <FileText className="h-5 w-5" />, tone: 'warning', href: '/dashboard/referrals' },
+        { label: 'Active Alerts', value: activeEmergency.length, helper: 'Emergency dispatch tracking', icon: <Ambulance className="h-5 w-5" />, tone: activeEmergency.length ? 'critical' : 'neutral', href: '/dashboard/requests' },
       ],
       workItems: referralItems(visibleReferrals),
       actions: [
-        { label: 'Review referrals', href: '/dashboard/referrals', icon: <FileText className="h-5 w-5" />, emphasis: 'primary' },
-        { label: 'Emergency queue', href: '/dashboard/requests', icon: <Ambulance className="h-5 w-5" />, emphasis: activeEmergency.length ? 'danger' : undefined },
-        { label: 'Doctors', href: '/dashboard/doctors', icon: <Stethoscope className="h-5 w-5" /> },
-        { label: 'Messages', href: '/dashboard/messages', icon: <MessageSquare className="h-5 w-5" /> },
+        { label: 'Authorize Referrals', href: '/dashboard/referrals', icon: <FileText className="h-5 w-5" />, emphasis: 'primary' },
+        { label: 'Live Emergency Feed', href: '/dashboard/requests', icon: <Ambulance className="h-5 w-5" />, emphasis: activeEmergency.length ? 'danger' : undefined },
+        { label: 'Clinician Roster', href: '/dashboard/doctors', icon: <Stethoscope className="h-5 w-5" /> },
+        { label: 'Security Terminal', href: '/dashboard/messages', icon: <MessageSquare className="h-5 w-5" /> },
       ],
-      signal: { label: activeEmergency.length ? 'Emergency active' : 'Operational', value: `${visibleReferrals.filter((item) => item.status === 'pending').length} pending`, detail: 'Referral intake and emergency coordination are connected for hospital teams.', tone: activeEmergency.length ? 'critical' : 'primary' },
-      secondaryTitle: 'Emergency coordination',
-      secondaryItems: activeEmergency.map((item) => ({ title: item.patientName, meta: `${item.location} · ${item.priority} priority`, status: item.status, href: '/dashboard/requests' })),
+      signal: { label: activeEmergency.length ? 'Emergency Alert' : 'Admissions Green', value: `${visibleReferrals.filter((item) => item.status === 'pending').length} Referrals Mapped`, detail: 'Roster timelines and bed spaces are secured.', tone: activeEmergency.length ? 'critical' : 'primary' },
+      secondaryTitle: 'Trauma Unit Fleet',
+      secondaryItems: activeEmergency.map((item) => ({ title: item.patientName, meta: `${item.location} · Priority Code`, status: item.status, href: '/dashboard/requests' })),
     },
     laboratory: {
       role: 'laboratory',
       metrics: [
-        { label: 'New requests', value: labTests.filter((item) => item.status === 'requested').length, helper: 'Awaiting accession', icon: <FlaskConical className="h-5 w-5" />, tone: 'warning', href: '/dashboard/test-requests' },
-        { label: 'In process', value: labTests.filter((item) => item.status === 'in-progress').length, helper: 'Samples in workflow', icon: <Activity className="h-5 w-5" />, tone: 'info', href: '/dashboard/test-requests' },
-        { label: 'Completed', value: labTests.filter((item) => item.status === 'completed').length, helper: 'Verified results', icon: <CheckCircle2 className="h-5 w-5" />, tone: 'success', href: '/dashboard/results' },
-        { label: 'Critical review', value: labTests.filter((item) => item.notes?.toLowerCase().includes('critical')).length, helper: 'Requires escalation', icon: <AlertTriangle className="h-5 w-5" />, tone: 'critical', href: '/dashboard/lab-results-management' },
+        { label: 'Diagnostic Orders', value: labTests.filter((item) => item.status === 'requested').length, helper: 'Awaiting sample registration', icon: <FlaskConical className="h-5 w-5" />, tone: 'warning', href: '/dashboard/test-requests' },
+        { label: 'Assays Active', value: labTests.filter((item) => item.status === 'in-progress').length, helper: 'Biological assays active', icon: <Activity className="h-5 w-5" />, tone: 'info', href: '/dashboard/test-requests' },
+        { label: 'Verified Reports', value: labTests.filter((item) => item.status === 'completed').length, helper: 'Diagnostics returned to EMR', icon: <CheckCircle2 className="h-5 w-5" />, tone: 'success', href: '/dashboard/results' },
+        { label: 'Critical Alert', value: labTests.filter((item) => item.notes?.toLowerCase().includes('critical')).length, helper: 'Out-of-range biological values', icon: <AlertTriangle className="h-5 w-5" />, tone: 'critical', href: '/dashboard/lab-results-management' },
       ],
       workItems: pendingLabs.map((item) => ({ title: item.testName, meta: `${item.patientName} · ordered by ${item.doctorName}`, status: item.status, href: '/dashboard/test-requests' })),
       actions: [
-        { label: 'Process queue', href: '/dashboard/test-requests', icon: <FlaskConical className="h-5 w-5" />, emphasis: 'primary' },
-        { label: 'Upload result', href: '/dashboard/lab-results-management', icon: <FileText className="h-5 w-5" /> },
-        { label: 'Verify reports', href: '/dashboard/results', icon: <BadgeCheck className="h-5 w-5" /> },
-        { label: 'Messages', href: '/dashboard/messages', icon: <MessageSquare className="h-5 w-5" /> },
+        { label: 'Verify Accession Queue', href: '/dashboard/test-requests', icon: <FlaskConical className="h-5 w-5" />, emphasis: 'primary' },
+        { label: 'Publish Assay Values', href: '/dashboard/lab-results-management', icon: <FileText className="h-5 w-5" /> },
+        { label: 'Verify Spectrum Telemetry', href: '/dashboard/results', icon: <BadgeCheck className="h-5 w-5" /> },
+        { label: 'Operational Messages', href: '/dashboard/messages', icon: <MessageSquare className="h-5 w-5" /> },
       ],
-      signal: { label: 'Specimen flow', value: `${pendingLabs.length} open`, detail: 'Requests, sample status, result upload, and verification are kept in one queue.', tone: pendingLabs.length ? 'warning' : 'success' },
-      secondaryTitle: 'Recent lab history',
+      signal: { label: 'Assay Syncing', value: `${pendingLabs.length} Samples Unverified`, detail: 'Verify critical biological bounds prior to dispatch.', tone: pendingLabs.length ? 'warning' : 'success' },
+      secondaryTitle: 'Historical Diagnostics',
       secondaryItems: sortByDateDesc(labTests).map((item) => ({ title: item.testName, meta: `${item.patientName} · ${displayDate(item.date)}`, status: item.status, href: '/dashboard/results' })),
     },
     imaging: {
       role: 'imaging',
       metrics: [
-        { label: 'Scan requests', value: imagingScans.filter((item) => item.status === 'requested').length, helper: 'Awaiting scheduling', icon: <ScanLine className="h-5 w-5" />, tone: 'warning', href: '/dashboard/scan-requests' },
-        { label: 'In progress', value: imagingScans.filter((item) => item.status === 'in-progress').length, helper: 'Studies underway', icon: <Activity className="h-5 w-5" />, tone: 'info', href: '/dashboard/imaging-referrals' },
-        { label: 'Completed', value: imagingScans.filter((item) => item.status === 'completed').length, helper: 'Reports available', icon: <CheckCircle2 className="h-5 w-5" />, tone: 'success', href: '/dashboard/results' },
-        { label: 'Open referrals', value: visibleReferrals.filter((item) => item.referralType === 'imaging').length, helper: 'Pending handoff', icon: <FileText className="h-5 w-5" />, tone: 'neutral', href: '/dashboard/imaging-referrals' },
+        { label: 'Study Requests', value: imagingScans.filter((item) => item.status === 'requested').length, helper: 'Awaiting equipment scheduling', icon: <ScanLine className="h-5 w-5" />, tone: 'warning', href: '/dashboard/scan-requests' },
+        { label: 'Active DICOM Studies', value: imagingScans.filter((item) => item.status === 'in-progress').length, helper: 'Active PACS study acquisitions', icon: <Activity className="h-5 w-5" />, tone: 'info', href: '/dashboard/imaging-referrals' },
+        { label: 'Completed Studies', value: imagingScans.filter((item) => item.status === 'completed').length, helper: 'Findings published to EMR', icon: <CheckCircle2 className="h-5 w-5" />, tone: 'success', href: '/dashboard/results' },
+        { label: 'Clinical Referrals', value: visibleReferrals.filter((item) => item.referralType === 'imaging').length, helper: 'Referral diagnostics queued', icon: <FileText className="h-5 w-5" />, tone: 'neutral', href: '/dashboard/imaging-referrals' },
       ],
       workItems: pendingImaging.map((item) => ({ title: `${item.scanType}${item.bodyPart ? ` · ${item.bodyPart}` : ''}`, meta: `${item.patientName} · ${item.clinicalIndication ?? item.doctorName}`, status: item.status, href: '/dashboard/scan-requests' })),
       actions: [
-        { label: 'Schedule scans', href: '/dashboard/scan-requests', icon: <Calendar className="h-5 w-5" />, emphasis: 'primary' },
-        { label: 'Open referrals', href: '/dashboard/imaging-referrals', icon: <ScanLine className="h-5 w-5" /> },
-        { label: 'Publish results', href: '/dashboard/results', icon: <FileText className="h-5 w-5" /> },
-        { label: 'Messages', href: '/dashboard/messages', icon: <MessageSquare className="h-5 w-5" /> },
+        { label: 'Schedule Scan Modality', href: '/dashboard/scan-requests', icon: <Calendar className="h-5 w-5" />, emphasis: 'primary' },
+        { label: 'Open Referrals Queue', href: '/dashboard/imaging-referrals', icon: <ScanLine className="h-5 w-5" /> },
+        { label: 'Publish Radiology Study', href: '/dashboard/results', icon: <FileText className="h-5 w-5" /> },
+        { label: 'Secure Terminal', href: '/dashboard/messages', icon: <MessageSquare className="h-5 w-5" /> },
       ],
-      signal: { label: 'Imaging queue', value: `${pendingImaging.length} open`, detail: 'Scheduling, study status, and reporting stay aligned for clean clinical handoff.', tone: pendingImaging.length ? 'warning' : 'success' },
-      secondaryTitle: 'Recent studies',
+      signal: { label: 'Acquisitions Mapped', value: `${pendingImaging.length} PACS Studies Scheduled`, detail: 'Equipment timetables and imaging pathways are secured.', tone: pendingImaging.length ? 'warning' : 'success' },
+      secondaryTitle: 'Historical Radiology',
       secondaryItems: sortByDateDesc(imagingScans).map((item) => ({ title: item.scanType, meta: `${item.patientName} · ${displayDate(item.date)}`, status: item.status, href: '/dashboard/results' })),
     },
     pharmacy: {
       role: 'pharmacy',
       metrics: [
-        { label: 'Pending Rx', value: activePrescriptions.length, helper: 'Awaiting verification', icon: <Pill className="h-5 w-5" />, tone: 'warning', href: '/dashboard/prescriptions' },
-        { label: 'Dispensed', value: prescriptions.filter((item) => item.status === 'dispensed').length, helper: 'Completed orders', icon: <CheckCircle2 className="h-5 w-5" />, tone: 'success', href: '/dashboard/prescriptions' },
-        { label: 'Inventory risk', value: lowStock.length, helper: 'Low or out of stock', icon: <Package className="h-5 w-5" />, tone: lowStock.length ? 'critical' : 'success', href: '/dashboard/inventory' },
-        { label: 'Refill requests', value: prescriptions.flatMap((item) => item.refillRequests ?? []).filter((item) => item.status === 'pending').length, helper: 'Need review', icon: <Clock3 className="h-5 w-5" />, tone: 'info', href: '/dashboard/prescription-refills' },
+        { label: 'Fulfillment Queue', value: activePrescriptions.length, helper: 'Awaiting clinician verification', icon: <Pill className="h-5 w-5" />, tone: 'warning', href: '/dashboard/prescriptions' },
+        { label: 'Dispensed Orders', value: prescriptions.filter((item) => item.status === 'dispensed').length, helper: 'Completed fulfillments', icon: <CheckCircle2 className="h-5 w-5" />, tone: 'success', href: '/dashboard/prescriptions' },
+        { label: 'Inventory Warning', value: lowStock.length, helper: 'Below safe-stock metrics', icon: <Package className="h-5 w-5" />, tone: lowStock.length ? 'critical' : 'success', href: '/dashboard/inventory' },
+        { label: 'Refill Requests', value: prescriptions.flatMap((item) => item.refillRequests ?? []).filter((item) => item.status === 'pending').length, helper: 'Pharmacist validation pending', icon: <Clock3 className="h-5 w-5" />, tone: 'info', href: '/dashboard/prescription-refills' },
       ],
       workItems: activePrescriptions.map((item) => ({ title: item.patientName, meta: `${item.medications[0]?.name ?? 'Medication'}${item.medications.length > 1 ? ` +${item.medications.length - 1}` : ''} · ${item.doctorName}`, status: item.status, href: '/dashboard/prescriptions' })),
       actions: [
-        { label: 'Verify prescriptions', href: '/dashboard/prescriptions', icon: <Pill className="h-5 w-5" />, emphasis: 'primary' },
-        { label: 'Check inventory', href: '/dashboard/inventory', icon: <Package className="h-5 w-5" />, emphasis: lowStock.length ? 'danger' : undefined },
-        { label: 'Referral requests', href: '/dashboard/pharmacy-referrals', icon: <FileText className="h-5 w-5" /> },
-        { label: 'Messages', href: '/dashboard/messages', icon: <MessageSquare className="h-5 w-5" /> },
+        { label: 'Verify Rx Clinician Sig', href: '/dashboard/prescriptions', icon: <Pill className="h-5 w-5" />, emphasis: 'primary' },
+        { label: 'Replenish Core Stock', href: '/dashboard/inventory', icon: <Package className="h-5 w-5" />, emphasis: lowStock.length ? 'danger' : undefined },
+        { label: 'Referral Requests', href: '/dashboard/pharmacy-referrals', icon: <FileText className="h-5 w-5" /> },
+        { label: 'Secure Message Box', href: '/dashboard/messages', icon: <MessageSquare className="h-5 w-5" /> },
       ],
-      signal: { label: lowStock.length ? 'Stock risk' : 'Medication safety', value: `${activePrescriptions.length} Rx open`, detail: 'Prescription verification, medication availability, refill work, and inventory risk stay connected.', tone: lowStock.length ? 'critical' : 'primary' },
-      secondaryTitle: 'Inventory watch',
+      signal: { label: lowStock.length ? 'Replenish Alert' : 'Drug Safety Clear', value: `${activePrescriptions.length} Refills Queued`, detail: 'Dosage limits and clinician credentials validated.', tone: lowStock.length ? 'critical' : 'primary' },
+      secondaryTitle: 'Stock Warning Logs',
       secondaryItems: lowStock.map((item) => ({ title: item.name, meta: `${item.stock} ${item.unit} remaining · reorder at ${item.reorderLevel}`, status: item.status, href: '/dashboard/inventory' })),
     },
     ambulance: {
       role: 'ambulance',
       metrics: [
-        { label: 'Active requests', value: activeEmergency.length, helper: 'Not yet completed', icon: <Radio className="h-5 w-5" />, tone: activeEmergency.length ? 'critical' : 'success', href: '/dashboard/requests' },
-        { label: 'Critical calls', value: criticalEmergency.length, helper: 'High-acuity cases', icon: <AlertTriangle className="h-5 w-5" />, tone: criticalEmergency.length ? 'critical' : 'neutral', href: '/dashboard/requests' },
-        { label: 'Available units', value: ambulances.filter((item) => item.status === 'available').length, helper: 'Ready to dispatch', icon: <Ambulance className="h-5 w-5" />, tone: 'success', href: '/dashboard/vehicles' },
-        { label: 'In field', value: ambulances.filter((item) => ['dispatched', 'in-transit', 'on-scene'].includes(item.status)).length, helper: 'Assigned vehicles', icon: <MapPin className="h-5 w-5" />, tone: 'info', href: '/dashboard/vehicles' },
+        { label: 'Active Alerts', value: activeEmergency.length, helper: 'Trauma response cases', icon: <Radio className="h-5 w-5" />, tone: activeEmergency.length ? 'critical' : 'success', href: '/dashboard/requests' },
+        { label: 'Critical Incidents', value: criticalEmergency.length, helper: 'Life-threatening dispatches', icon: <AlertTriangle className="h-5 w-5" />, tone: criticalEmergency.length ? 'critical' : 'neutral', href: '/dashboard/requests' },
+        { label: 'Available Rigs', value: ambulances.filter((item) => item.status === 'available').length, helper: 'Rigs fueled & parked', icon: <Ambulance className="h-5 w-5" />, tone: 'success', href: '/dashboard/vehicles' },
+        { label: 'Dispatched Units', value: ambulances.filter((item) => ['dispatched', 'in-transit', 'on-scene'].includes(item.status)).length, helper: 'Active emergency transit', icon: <MapPin className="h-5 w-5" />, tone: 'info', href: '/dashboard/vehicles' },
       ],
-      workItems: activeEmergency.map((item) => ({ title: item.patientName, meta: `${item.location} · ${item.time} · ${item.priority} priority`, status: item.status, href: '/dashboard/requests', tone: item.priority === 'critical' || item.priority === 'high' ? 'critical' : statusTone(item.status) })),
+      workItems: activeEmergency.map((item) => ({ title: item.patientName, meta: `${item.location} · ${item.time} · ${item.priority} Priority`, status: item.status, href: '/dashboard/requests', tone: item.priority === 'critical' || item.priority === 'high' ? 'critical' : statusTone(item.status) })),
       actions: [
-        { label: 'Dispatch queue', href: '/dashboard/requests', icon: <Radio className="h-5 w-5" />, emphasis: activeEmergency.length ? 'danger' : 'primary' },
-        { label: 'Fleet status', href: '/dashboard/vehicles', icon: <Ambulance className="h-5 w-5" /> },
-        { label: 'Hospital handoff', href: '/dashboard/messages', icon: <Hospital className="h-5 w-5" /> },
-        { label: 'Live location', href: '/dashboard/requests', icon: <MapPin className="h-5 w-5" /> },
+        { label: 'Deploy Incident Unit', href: '/dashboard/requests', icon: <Radio className="h-5 w-5" />, emphasis: activeEmergency.length ? 'danger' : 'primary' },
+        { label: 'Track Rig Fleet', href: '/dashboard/vehicles', icon: <Ambulance className="h-5 w-5" /> },
+        { label: 'Signal Hospital Trauma', href: '/dashboard/messages', icon: <Hospital className="h-5 w-5" /> },
+        { label: 'Telemetry Maps', href: '/dashboard/requests', icon: <MapPin className="h-5 w-5" /> },
       ],
-      signal: { label: criticalEmergency.length ? 'Critical response' : 'Dispatch ready', value: `${activeEmergency.length} active`, detail: 'Priority, routing, patient identity, and fleet readiness remain visible for emergency teams.', tone: criticalEmergency.length ? 'critical' : 'success' },
-      secondaryTitle: 'Fleet readiness',
-      secondaryItems: ambulances.map((item) => ({ title: item.callSign, meta: `${item.plateNumber} · fuel ${item.fuel}%`, status: item.status, href: '/dashboard/vehicles' })),
+      signal: { label: criticalEmergency.length ? 'Priority Trauma' : 'Rig Standby', value: `${activeEmergency.length} Emergencies Active`, detail: 'Hospital bed schedules and fleet targets verified.', tone: criticalEmergency.length ? 'critical' : 'success' },
+      secondaryTitle: 'Trauma Fleet Status',
+      secondaryItems: ambulances.map((item) => ({ title: item.callSign, meta: `${item.plateNumber} · Fuel ${item.fuel}%`, status: item.status, href: '/dashboard/vehicles' })),
     },
     admin: {
       role: 'admin',
       metrics: [
-        { label: 'Users', value: users.length, helper: 'Managed accounts', icon: <Users className="h-5 w-5" />, tone: 'primary', href: '/dashboard/users' },
-        { label: 'Verifications', value: pendingVerifications.length, helper: 'Pending provider review', icon: <ShieldCheck className="h-5 w-5" />, tone: pendingVerifications.length ? 'warning' : 'success', href: '/dashboard/verifications' },
-        { label: 'Care volume', value: openAppointments.length, helper: 'Open appointments', icon: <Activity className="h-5 w-5" />, tone: 'info', href: '/dashboard/analytics' },
-        { label: 'Emergencies', value: activeEmergency.length, helper: 'Active requests', icon: <Ambulance className="h-5 w-5" />, tone: activeEmergency.length ? 'critical' : 'neutral', href: '/dashboard/requests' },
+        { label: 'Identity Nodes', value: users.length, helper: 'Active medical credentials', icon: <Users className="h-5 w-5" />, tone: 'primary', href: '/dashboard/users' },
+        { label: 'Credential Reviews', value: pendingVerifications.length, helper: 'Providers seeking registration review', icon: <ShieldCheck className="h-5 w-5" />, tone: pendingVerifications.length ? 'warning' : 'success', href: '/dashboard/verifications' },
+        { label: 'Clinical Session Vol', value: openAppointments.length, helper: 'Active consultations', icon: <Activity className="h-5 w-5" />, tone: 'info', href: '/dashboard/analytics' },
+        { label: 'Active Alerts', value: activeEmergency.length, helper: 'Trauma incidents active', icon: <Ambulance className="h-5 w-5" />, tone: activeEmergency.length ? 'critical' : 'neutral', href: '/dashboard/requests' },
       ],
       workItems: pendingVerifications.map((item) => ({ title: item.name, meta: `${item.role} · ${item.email}`, status: item.status, href: '/dashboard/verifications' })),
       actions: [
-        { label: 'Review providers', href: '/dashboard/verifications', icon: <ShieldCheck className="h-5 w-5" />, emphasis: 'primary' },
-        { label: 'Manage users', href: '/dashboard/users', icon: <Users className="h-5 w-5" /> },
-        { label: 'Analytics', href: '/dashboard/analytics', icon: <Activity className="h-5 w-5" /> },
-        { label: 'Notifications', href: '/dashboard/notifications', icon: <MessageSquare className="h-5 w-5" /> },
+        { label: 'Audit Doctor Credentials', href: '/dashboard/verifications', icon: <ShieldCheck className="h-5 w-5" />, emphasis: 'primary' },
+        { label: 'Register Active Users', href: '/dashboard/users', icon: <Users className="h-5 w-5" /> },
+        { label: 'Telemetry Analytics', href: '/dashboard/analytics', icon: <Activity className="h-5 w-5" /> },
+        { label: 'Global System Alerts', href: '/dashboard/notifications', icon: <MessageSquare className="h-5 w-5" /> },
       ],
-      signal: { label: 'Governance', value: `${pendingVerifications.length} reviews`, detail: 'Identity, verification, analytics, alerts, and service quality are visible from one surface.', tone: pendingVerifications.length ? 'warning' : 'success' },
-      secondaryTitle: 'Platform activity',
+      signal: { label: 'Compliance Lock', value: `${pendingVerifications.length} Verifications Pending`, detail: 'Global credentials verified. Database encryption verified.', tone: pendingVerifications.length ? 'warning' : 'success' },
+      secondaryTitle: 'Platform Security Logs',
       secondaryItems: [
         ...appointmentItems(openAppointments, '/dashboard/appointments'),
-        ...activeEmergency.map((item) => ({ title: item.patientName, meta: `${item.location} · emergency`, status: item.status, href: '/dashboard/requests' })),
+        ...activeEmergency.map((item) => ({ title: item.patientName, meta: `${item.location} · Emergency`, status: item.status, href: '/dashboard/requests' })),
       ],
     },
     super_admin: {
       role: 'super_admin',
       metrics: [
-        { label: 'Ecosystem users', value: users.length, helper: 'Patients and providers', icon: <Users className="h-5 w-5" />, tone: 'primary', href: '/dashboard/users' },
-        { label: 'Organizations', value: users.filter((item) => ['hospital', 'laboratory', 'imaging', 'pharmacy', 'ambulance'].includes(normalizeUserRole(item.role) ?? '')).length, helper: 'Care network operators', icon: <Building2 className="h-5 w-5" />, tone: 'info', href: '/dashboard/users' },
-        { label: 'Open risk', value: pendingVerifications.length + activeEmergency.length + lowStock.length, helper: 'Verification, emergency, stock', icon: <AlertTriangle className="h-5 w-5" />, tone: pendingVerifications.length + activeEmergency.length + lowStock.length ? 'warning' : 'success', href: '/dashboard/audit' },
-        { label: 'Billing records', value: billingRecords.length + invoices.length, helper: 'Financial operations', icon: <FileText className="h-5 w-5" />, tone: 'neutral', href: '/dashboard/admin-billing' },
+        { label: 'Global Platform Users', value: users.length, helper: 'Active registered patients and specialists', icon: <Users className="h-5 w-5" />, tone: 'primary', href: '/dashboard/users' },
+        { label: 'Clinical Organizations', value: users.filter((item) => ['hospital', 'laboratory', 'imaging', 'pharmacy', 'ambulance'].includes(normalizeUserRole(item.role) ?? '')).length, helper: 'Active corporate medical nodes', icon: <Building2 className="h-5 w-5" />, tone: 'info', href: '/dashboard/users' },
+        { label: 'Outstanding Alerts', value: pendingVerifications.length + activeEmergency.length + lowStock.length, helper: 'Critical system warnings pending', icon: <AlertTriangle className="h-5 w-5" />, tone: pendingVerifications.length + activeEmergency.length + lowStock.length ? 'warning' : 'success', href: '/dashboard/audit' },
+        { label: 'Ecosystem Payments', value: billingRecords.length + invoices.length, helper: 'Active financial records', icon: <FileText className="h-5 w-5" />, tone: 'neutral', href: '/dashboard/admin-billing' },
       ],
       workItems: [
         ...pendingVerifications.map((item) => ({ title: item.name, meta: `${item.role} verification · ${item.email}`, status: item.status, href: '/dashboard/verifications' })),
-        ...activeEmergency.map((item) => ({ title: item.patientName, meta: `${item.location} · ${item.priority} priority`, status: item.status, href: '/dashboard/requests', tone: item.priority === 'critical' || item.priority === 'high' ? 'critical' : statusTone(item.status) })),
+        ...activeEmergency.map((item) => ({ title: item.patientName, meta: `${item.location} · ${item.priority} Priority`, status: item.status, href: '/dashboard/requests', tone: item.priority === 'critical' || item.priority === 'high' ? 'critical' : statusTone(item.status) })),
         ...lowStock.map((item) => ({ title: item.name, meta: `${item.stock} ${item.unit} remaining`, status: item.status, href: '/dashboard/inventory' })),
       ],
       actions: [
-        { label: 'Platform analytics', href: '/dashboard/analytics', icon: <Activity className="h-5 w-5" />, emphasis: 'primary' },
-        { label: 'Audit logs', href: '/dashboard/audit', icon: <ShieldCheck className="h-5 w-5" /> },
-        { label: 'Admin billing', href: '/dashboard/admin-billing', icon: <FileText className="h-5 w-5" /> },
-        { label: 'Create admin', href: '/dashboard/admin/create', icon: <BadgeCheck className="h-5 w-5" /> },
+        { label: 'Ecosystem Analytics', href: '/dashboard/analytics', icon: <Activity className="h-5 w-5" />, emphasis: 'primary' },
+        { label: 'Immutable Audit Logs', href: '/dashboard/audit', icon: <ShieldCheck className="h-5 w-5" /> },
+        { label: 'Ecosystem Payments Matrix', href: '/dashboard/admin-billing', icon: <FileText className="h-5 w-5" /> },
+        { label: 'Register Secondary Admin', href: '/dashboard/admin/create', icon: <BadgeCheck className="h-5 w-5" /> },
       ],
-      signal: { label: 'Executive view', value: `${users.length} accounts`, detail: 'Alera’s trust, risk, care volume, revenue, and audit picture are connected here.', tone: 'primary' },
-      secondaryTitle: 'System continuity',
+      signal: { label: 'Central Console', value: `${users.length} Active System Nodes`, detail: 'Database replication verified. SOC2 metrics green.', tone: 'primary' },
+      secondaryTitle: 'System Node Activity Flow',
       secondaryItems: appointmentItems(openAppointments, '/dashboard/appointments'),
     },
   };

@@ -66,7 +66,7 @@ describe('DashboardLayout', () => {
       </MemoryRouter>
     );
 
-    expect(screen.getByText(/email verification pending/i)).toBeInTheDocument();
+    expect(screen.getByText(/verification unresolved/i)).toBeInTheDocument();
     expect(screen.getByTestId('sidebar-professional-verification')).toHaveTextContent(/pending verification/i);
     expect(screen.getByText(/dashboard content/i)).toBeInTheDocument();
   });
@@ -89,8 +89,8 @@ describe('DashboardLayout', () => {
       </MemoryRouter>
     );
 
-    expect(screen.queryByText(/email verification pending/i)).not.toBeInTheDocument();
-    expect(screen.queryByRole('button', { name: /resend email/i })).not.toBeInTheDocument();
+    expect(screen.queryByText(/verification unresolved/i)).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: /re-issue/i })).not.toBeInTheDocument();
     expect(screen.getByText(/dashboard content/i)).toBeInTheDocument();
   });
 

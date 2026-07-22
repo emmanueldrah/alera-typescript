@@ -213,11 +213,11 @@ vi.mock('framer-motion', () => ({
 
 describe('provider role smoke tests', () => {
   it.each([
-    ['doctor', /move from queue to decision with fewer clicks/i],
-    ['hospital', /coordinate referrals, admissions, teams, and emergencies/i],
-    ['laboratory', /track every sample from request to verified result/i],
-    ['imaging', /schedule scans, review studies, and publish reports/i],
-    ['pharmacy', /verify prescriptions and protect medication safety/i],
+    ['doctor', /clinician workspace/i],
+    ['hospital', /hospital coordination/i],
+    ['laboratory', /laboratory console/i],
+    ['imaging', /imaging center deck/i],
+    ['pharmacy', /pharmacy fulfillments/i],
   ] as const)('loads %s dashboard', (role, heading) => {
     currentUser = baseUsers.find((user) => user.role === role) as MockUser;
 
