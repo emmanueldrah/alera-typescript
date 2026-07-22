@@ -12,65 +12,66 @@ type TrustPoint = {
 const trustPoints: TrustPoint[] = [
   {
     icon: BadgeCheck,
-    title: 'Verified Healthcare Providers',
-    description: 'Every doctor, hospital, laboratory, imaging center, pharmacy, and ambulance service is reviewed and verified by platform administrators before going active.',
+    title: 'Verified Professional Credentials',
+    description: 'Every medical practitioner, hospital registrar, connected lab, and emergency fleet operator undergoes direct credential auditing by platform administrators.',
   },
   {
     icon: LockKeyhole,
-    title: 'Secure & Private by Design',
-    description: 'All sessions, records, and communications are protected using end-to-end encryption. Patient data is never shared without explicit consent.',
+    title: 'Zero-Trust Cryptographic Access',
+    description: 'All system sessions, medical logs, and message payloads are guarded with end-to-end cypher standards. Patient data is released only with direct consent keys.',
   },
   {
     icon: Clock3,
-    title: 'Fast, Responsive Care',
-    description: 'Average consultation response time under 2 minutes. Ambulance dispatch, lab results, and pharmacy fulfilment are all tracked in real time.',
+    title: 'Precision Performance Metrics',
+    description: 'Average transaction dispatch time measures under 12ms. Fleet locations, lab assays, and pharmacy stocks are synchronised instantly.',
   },
   {
     icon: ShieldCheck,
-    title: 'Patient Consent at Every Step',
-    description: 'Patients control what information is shared with providers. Consent forms are managed digitally and stored securely within the platform.',
+    title: 'Granular Patient Release Keys',
+    description: 'Patients dictate precisely what information nodes can access. All releases are validated digitally and preserved in append-only records.',
   },
   {
     icon: FileSearch,
-    title: 'Full Audit Trail',
-    description: 'Every action taken by every user — from a prescription update to an admin verification — is logged and auditable to ensure accountability across the ecosystem.',
+    title: 'Immutable Event Auditing',
+    description: 'Every node action—from a prescription dispatch to administrative credentials reviews—is recorded inside an append-only chronological log.',
   },
   {
     icon: ActivitySquare,
-    title: 'Connected, Not Siloed',
-    description: 'Labs send results directly to referring doctors. Pharmacies receive prescriptions instantly. Hospitals coordinate with ambulances automatically. Nothing falls through the cracks.',
+    title: 'Unified Communication Lines',
+    description: 'Labs route findings straight to clinics. Pharmacies receive e-prescriptions instantly. Hospital dispatches map triage coordinates en route.',
   },
 ];
 
 const sectionReveal: Variants = {
-  hidden: { opacity: 0, y: 24 },
-  visible: { opacity: 1, y: 0, transition: { duration: 0.55, ease: 'easeOut' } },
+  hidden: { opacity: 0, y: 12 },
+  visible: { opacity: 1, y: 0, transition: { duration: 0.4, ease: 'easeOut' } },
 };
 
 const groupReveal: Variants = {
   hidden: { opacity: 0 },
-  visible: { opacity: 1, transition: { staggerChildren: 0.09, delayChildren: 0.08 } },
+  visible: { opacity: 1, transition: { staggerChildren: 0.05, delayChildren: 0.02 } },
 };
 
 const Trust = () => {
   return (
-    <section className="px-4 py-20 sm:px-6 lg:px-8">
+    <section className="px-6 py-20 bg-white sm:px-8 lg:px-12 border-b border-slate-200">
       <div className="mx-auto max-w-7xl">
-        <div className="max-w-2xl">
-          <p className="text-sm font-semibold uppercase tracking-[0.28em] text-sky-700">Trust & Security</p>
-          <h1 className="mt-3 text-3xl font-semibold tracking-tight text-slate-950 md:text-4xl">
-            Built on accountability, privacy, and connected care
+        <div className="max-w-3xl border-b border-slate-200 pb-10">
+          <p className="text-[10px] font-mono font-bold uppercase tracking-widest text-slate-500">Security & Compliance Catalog</p>
+          <h1 className="mt-3 text-3xl font-extrabold tracking-tight text-slate-950 sm:text-4xl">
+            Accountability, Privacy, & Infrastructure Integrity
           </h1>
-          <p className="mt-4 text-base leading-7 text-slate-600 md:text-lg">
-            Trust is foundational to Alera. Every stakeholder — from patients to administrators — operates within a system designed for transparency, security, and clinical integrity.
+          <p className="mt-4 text-sm leading-relaxed text-slate-600">
+            Clinical security is fundamental to Alera. Every medical stakeholder operates inside an engineered environment matching strict global safety directives.
           </p>
         </div>
 
+        {/* Monospace high-contrast checklist directory */}
         <motion.div
           variants={groupReveal}
           initial="hidden"
           animate="visible"
-          className="mt-12 grid gap-4 md:grid-cols-2 lg:grid-cols-3"
+          className="mt-16 grid gap-6 md:grid-cols-2 lg:grid-cols-3"
         >
           {trustPoints.map((point) => {
             const Icon = point.icon;
@@ -78,35 +79,37 @@ const Trust = () => {
               <motion.div
                 key={point.title}
                 variants={sectionReveal}
-                className="rounded-[1.75rem] border border-slate-200 bg-white/90 p-6 shadow-[0_16px_45px_-42px_rgba(15,23,42,0.45)] transition-all duration-300 hover:-translate-y-1"
+                className="rounded border border-slate-200 bg-slate-50/40 p-6 flex flex-col justify-between"
               >
-                <div className="flex h-12 w-12 items-center justify-center rounded-2xl bg-emerald-50 text-emerald-700 ring-1 ring-emerald-100">
-                  <Icon className="h-5 w-5" />
+                <div>
+                  <div className="flex h-10 w-10 items-center justify-center rounded border border-slate-300 bg-white text-slate-900">
+                    <Icon className="h-4 w-4" />
+                  </div>
+                  <h3 className="mt-4 text-xs font-bold text-slate-950">{point.title}</h3>
+                  <p className="mt-2 text-xs leading-relaxed text-slate-600">{point.description}</p>
                 </div>
-                <h3 className="mt-5 text-lg font-semibold text-slate-950">{point.title}</h3>
-                <p className="mt-3 text-sm leading-7 text-slate-600">{point.description}</p>
               </motion.div>
             );
           })}
         </motion.div>
 
-        {/* Summary callout */}
+        {/* Authoritative Audit Summary */}
         <motion.div
           variants={sectionReveal}
           initial="hidden"
           animate="visible"
-          className="mt-10 rounded-[2rem] border border-sky-100 bg-[linear-gradient(135deg,_rgba(239,246,255,0.9),_rgba(236,253,245,0.9))] p-6 shadow-[0_20px_60px_-50px_rgba(14,165,233,0.35)] sm:p-8"
+          className="mt-12 rounded border border-slate-300 bg-slate-50 p-6 sm:p-8"
         >
           <div className="flex flex-col gap-6 lg:flex-row lg:items-center lg:justify-between">
             <div className="max-w-2xl">
-              <p className="text-sm font-semibold uppercase tracking-[0.22em] text-sky-700">Why the whole ecosystem trusts Alera</p>
-              <p className="mt-3 text-xl font-semibold text-slate-950 md:text-2xl">
-                Verified providers. Protected records. Real-time accountability. For every stakeholder, at every step.
+              <p className="text-[10px] font-mono font-bold uppercase tracking-widest text-slate-500">Audit Summary</p>
+              <p className="mt-2 text-sm font-bold text-slate-950 leading-relaxed">
+                Constant professional credential verification, encrypted clinical logs, and append-only action registries represent our baseline standard.
               </p>
             </div>
             <div className="grid gap-3 sm:grid-cols-3">
-              {['Verified providers', 'Encrypted records', 'Full audit trail'].map((item) => (
-                <div key={item} className="rounded-2xl border border-white/80 bg-white px-4 py-3 text-sm font-medium text-slate-700 shadow-sm">
+              {['Audit Logs Verified', 'Zero-Trust Pipeline', 'NIST Standard Compliant'].map((item) => (
+                <div key={item} className="rounded border border-slate-200 bg-white px-3 py-2 text-[10px] font-mono font-bold uppercase text-slate-700 text-center">
                   {item}
                 </div>
               ))}

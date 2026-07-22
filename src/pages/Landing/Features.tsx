@@ -1,5 +1,3 @@
-import { motion, type Variants } from 'framer-motion';
-import { Card } from '@/components/ui/card';
 import {
   Video, MessageSquareText, CalendarDays, FileText, HeartPulse,
   FlaskConical, ScanLine, Pill, Ambulance, ClipboardList, BarChart3,
@@ -12,83 +10,83 @@ type Feature = {
   title: string;
   description: string;
   category: string;
-  categoryColor: string;
 };
 
 const features: Feature[] = [
   // Consultation
-  { icon: Video, title: 'Video Consultation', description: 'Secure face-to-face telemedicine sessions between patients and verified doctors from any device.', category: 'Consultation', categoryColor: 'text-sky-700 bg-sky-50' },
-  { icon: MessageSquareText, title: 'Real-Time Messaging', description: 'Patients and providers communicate through a secure chat system — before, during, and after appointments.', category: 'Consultation', categoryColor: 'text-sky-700 bg-sky-50' },
-  { icon: CalendarDays, title: 'Appointment Booking', description: 'Smart scheduling for patients to book, track, and receive reminders for upcoming appointments.', category: 'Consultation', categoryColor: 'text-sky-700 bg-sky-50' },
+  { icon: Video, title: 'Video Consultation', description: 'Secure real-time clinical consultations over encrypted media streams.', category: 'Clinical Consult' },
+  { icon: MessageSquareText, title: 'Integrated Messaging', description: 'Secure text threads linking patients with their clinical care team.', category: 'Clinical Consult' },
+  { icon: CalendarDays, title: 'Intake Scheduling', description: 'Structured calendar allocation with automatic status reminders.', category: 'Clinical Consult' },
 
   // Clinical
-  { icon: ClipboardList, title: 'Clinical Notes', description: 'Doctors document symptoms, diagnoses, and treatment plans directly within the platform during or after visits.', category: 'Clinical', categoryColor: 'text-emerald-700 bg-emerald-50' },
-  { icon: HeartPulse, title: 'Medical History & Timeline', description: 'A continuous log of every consultation, prescription, test, and scan — structured chronologically for every patient.', category: 'Clinical', categoryColor: 'text-emerald-700 bg-emerald-50' },
-  { icon: ShieldCheck, title: 'Allergy Management', description: 'Allergy profiles are recorded and surfaced during prescription and treatment decisions to prevent adverse reactions.', category: 'Clinical', categoryColor: 'text-emerald-700 bg-emerald-50' },
+  { icon: ClipboardList, title: 'Electronic Medical Notes', description: 'Structured clinical findings and diagnostic registries.', category: 'Clinical Node' },
+  { icon: HeartPulse, title: 'Chronological Health Log', description: 'Linear unified history indexing consults, labs, and diagnostic scans.', category: 'Clinical Node' },
+  { icon: ShieldCheck, title: 'Allergy Verification Ledger', description: 'Automated warnings matched against prescriptions to prevent conflict events.', category: 'Clinical Node' },
 
   // Prescriptions & Pharmacy
-  { icon: FileText, title: 'E-Prescription Management', description: 'Doctors issue electronic prescriptions that are sent directly to connected pharmacies for fulfilment and tracking.', category: 'Pharmacy', categoryColor: 'text-teal-700 bg-teal-50' },
-  { icon: Pill, title: 'Pharmacy Inventory', description: 'Pharmacies manage drug stock, process prescription refill requests, and receive automatic low-stock alerts.', category: 'Pharmacy', categoryColor: 'text-teal-700 bg-teal-50' },
+  { icon: FileText, title: 'e-Prescription Dispatch', description: 'Immediate, verified prescription routing to patient-selected pharmacies.', category: 'Prescriptions' },
+  { icon: Pill, title: 'Inventory Synchronisation', description: 'Live stock telemetry, verification auditing, and automatic alerts.', category: 'Prescriptions' },
 
   // Labs & Imaging
-  { icon: FlaskConical, title: 'Lab Test Requests & Results', description: 'Doctors order tests; laboratories process them and upload results that flow directly back to the requesting doctor.', category: 'Labs', categoryColor: 'text-violet-700 bg-violet-50' },
-  { icon: ScanLine, title: 'Imaging & Scan Management', description: 'Imaging centers receive referrals, manage scan bookings, upload reports, and notify requesting providers.', category: 'Imaging', categoryColor: 'text-cyan-700 bg-cyan-50' },
+  { icon: FlaskConical, title: 'Lab Order Distribution', description: 'Direct test requests with automated, verified results delivery loops.', category: 'Labs & Scans' },
+  { icon: ScanLine, title: 'Diagnostic Scan Registry', description: 'DICOM record connectivity, diagnostic scanning schedules, and reporting.', category: 'Labs & Scans' },
 
   // Emergency
-  { icon: Ambulance, title: 'Ambulance Dispatch', description: 'Patients request emergency services; ambulance teams manage vehicle assignments, dispatch, and hospital handoffs.', category: 'Emergency', categoryColor: 'text-rose-700 bg-rose-50' },
+  { icon: Ambulance, title: 'Emergency Fleet Coordination', description: 'Triage prioritization queues and real-time fleet coordinates.', category: 'Emergency Node' },
 
   // Admin & Ops
-  { icon: UserCheck, title: 'Provider Verifications', description: 'Administrators review and verify doctor credentials, hospital registrations, and all healthcare provider accounts.', category: 'Admin', categoryColor: 'text-indigo-700 bg-indigo-50' },
-  { icon: BarChart3, title: 'Platform Analytics', description: 'Dashboards giving administrators visibility into service volumes, user activity, response times, and platform health.', category: 'Admin', categoryColor: 'text-indigo-700 bg-indigo-50' },
-  { icon: Receipt, title: 'Billing & Payments', description: 'Integrated billing for consultations, prescriptions, lab tests, and imaging — managed and audited across the platform.', category: 'Admin', categoryColor: 'text-indigo-700 bg-indigo-50' },
-  { icon: FolderOpen, title: 'Document & Consent Management', description: 'Patients manage consent forms and documents; providers upload and retrieve clinical documents securely.', category: 'Records', categoryColor: 'text-amber-700 bg-amber-50' },
-  { icon: Bell, title: 'Smart Reminders & Notifications', description: 'Automated appointment reminders, medication adherence alerts, and platform notifications for every role.', category: 'Reminders', categoryColor: 'text-orange-700 bg-orange-50' },
-  { icon: Stethoscope, title: 'Referral Network', description: 'Doctors refer patients to specialists, labs, or imaging centers through a tracked referral workflow within the platform.', category: 'Clinical', categoryColor: 'text-emerald-700 bg-emerald-50' },
+  { icon: UserCheck, title: 'Provider Verification Ledger', description: 'Strict administrator control loop auditing professional licenses.', category: 'Platform Governance' },
+  { icon: BarChart3, title: 'Platform Telemetry', description: 'Real-time performance dashboards monitoring latency, node activity, and service queues.', category: 'Platform Governance' },
+  { icon: Receipt, title: 'Billing Audit Logs', description: 'Secured transaction registries tracking payments, insurance matching, and billing.', category: 'Platform Governance' },
+  { icon: FolderOpen, title: 'Consent Indexing', description: 'Digital patient release records and validated clinical uploads.', category: 'Platform Governance' },
+  { icon: Bell, title: 'Status Dispatch', description: 'System-triggered action notices and critical medication alerts.', category: 'Platform Governance' },
+  { icon: Stethoscope, title: 'Referral Chain', description: 'Tracked clinical handoffs linking general clinicians with specialists.', category: 'Clinical Node' },
 ];
 
-const sectionReveal: Variants = {
-  hidden: { opacity: 0, y: 24 },
-  visible: { opacity: 1, y: 0, transition: { duration: 0.55, ease: 'easeOut' } },
-};
-
 const Features = () => {
+  // Let's organize these into high-density clinical lists categorized elegantly.
+  const categories = Array.from(new Set(features.map(f => f.category)));
+
   return (
-    <section className="px-4 py-20 sm:px-6 lg:px-8">
+    <section className="px-6 py-20 bg-white sm:px-8 lg:px-12 border-b border-slate-200">
       <div className="mx-auto max-w-7xl">
-        <div className="max-w-2xl">
-          <p className="text-sm font-semibold uppercase tracking-[0.28em] text-sky-700">Platform Features</p>
-          <h1 className="mt-3 text-3xl font-semibold tracking-tight text-slate-950 md:text-4xl">
-            Every feature your care team needs
+        <div className="max-w-3xl border-b border-slate-200 pb-10">
+          <p className="text-[10px] font-mono font-bold uppercase tracking-widest text-slate-500">System Capabilities Index</p>
+          <h1 className="mt-3 text-3xl font-extrabold tracking-tight text-slate-950 sm:text-4xl">
+            Integrated Clinical & Operational Capabilities
           </h1>
-          <p className="mt-4 text-base leading-7 text-slate-600 md:text-lg">
-            Alera is built for the full healthcare ecosystem — not just telemedicine. From lab referrals and pharmacy fulfilment to ambulance dispatch and admin analytics, every feature maps to a real workflow.
+          <p className="mt-4 text-sm leading-relaxed text-slate-600">
+            Alera replaces disconnected point solutions with a single, highly structured system. Every tool is built on matching compliance rules and instant node handoffs, replacing high-overhead administrative tasks.
           </p>
         </div>
 
-        <div className="mt-12 grid gap-4 md:grid-cols-2 xl:grid-cols-3">
-          {features.map((feature, index) => {
-            const Icon = feature.icon;
+        <div className="mt-16 space-y-16">
+          {categories.map((category) => {
+            const categoryFeatures = features.filter(f => f.category === category);
             return (
-              <motion.div
-                key={feature.title}
-                variants={sectionReveal}
-                initial="hidden"
-                animate="visible"
-                transition={{ delay: index * 0.04 }}
-              >
-                <Card className="group h-full rounded-[1.75rem] border-slate-200 bg-white/90 p-6 shadow-[0_16px_45px_-40px_rgba(15,23,42,0.45)] transition-all duration-300 hover:-translate-y-1 hover:border-sky-200 hover:shadow-[0_22px_60px_-40px_rgba(14,165,233,0.25)]">
-                  <div className="flex items-start justify-between gap-3">
-                    <div className={`inline-flex h-11 w-11 flex-shrink-0 items-center justify-center rounded-2xl shadow-sm ring-1 ring-inset ring-black/5 ${feature.categoryColor}`}>
-                      <Icon className="h-5 w-5" />
-                    </div>
-                    <span className={`mt-1 rounded-full px-2.5 py-0.5 text-[11px] font-semibold ${feature.categoryColor}`}>
-                      {feature.category}
-                    </span>
-                  </div>
-                  <h3 className="mt-5 text-lg font-semibold text-slate-950">{feature.title}</h3>
-                  <p className="mt-3 text-sm leading-6 text-slate-600">{feature.description}</p>
-                </Card>
-              </motion.div>
+              <div key={category} className="grid gap-8 lg:grid-cols-[240px_1fr] items-start border-b border-slate-100 pb-12 last:border-b-0">
+                <div>
+                  <h2 className="text-[11px] font-mono font-bold uppercase tracking-wider text-slate-900 border-l-2 border-slate-900 pl-3">
+                    {category}
+                  </h2>
+                </div>
+                <div className="grid gap-6 sm:grid-cols-2">
+                  {categoryFeatures.map((feat) => {
+                    const Icon = feat.icon;
+                    return (
+                      <div key={feat.title} className="rounded border border-slate-200 bg-slate-50/40 p-5 flex gap-4 items-start">
+                        <div className="flex h-8 w-8 flex-shrink-0 items-center justify-center rounded border border-slate-300 bg-white text-slate-900">
+                          <Icon className="h-4 w-4" />
+                        </div>
+                        <div>
+                          <h3 className="text-xs font-bold text-slate-950">{feat.title}</h3>
+                          <p className="mt-1.5 text-xs text-slate-600 leading-relaxed">{feat.description}</p>
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              </div>
             );
           })}
         </div>

@@ -34,14 +34,14 @@ type SignupRole =
   | 'physiotherapist';
 
 const roles: { value: SignupRole; label: string; icon: React.ReactNode; desc: string }[] = [
-  { value: 'patient', label: 'Patient', icon: <User className="w-5 h-5" />, desc: 'Book care, track results, and stay connected' },
-  { value: 'doctor', label: 'Doctor', icon: <Heart className="w-5 h-5" />, desc: 'Manage consultations, referrals, and follow-up' },
-  { value: 'physiotherapist', label: 'Physiotherapist', icon: <Activity className="w-5 h-5" />, desc: 'Run rehabilitation plans, track mobility goals, and coordinate recovery' },
-  { value: 'hospital', label: 'Hospital', icon: <Building2 className="w-5 h-5" />, desc: 'Oversee teams, referrals, and emergency intake' },
-  { value: 'laboratory', label: 'Laboratory', icon: <FlaskConical className="w-5 h-5" />, desc: 'Process test queues and publish results' },
-  { value: 'imaging', label: 'Imaging Center', icon: <ScanLine className="w-5 h-5" />, desc: 'Coordinate scans and report delivery' },
-  { value: 'pharmacy', label: 'Pharmacy', icon: <Pill className="w-5 h-5" />, desc: 'Dispense medication and manage stock flow' },
-  { value: 'ambulance', label: 'Ambulance', icon: <Ambulance className="w-5 h-5" />, desc: 'Handle dispatch and live emergency operations' },
+  { value: 'patient', label: 'Patient', icon: <User className="w-4 h-4" />, desc: 'Access medical records, consult timelines, and billing receipts.' },
+  { value: 'doctor', label: 'Doctor', icon: <Heart className="w-4 h-4" />, desc: 'Evaluate patients, issue e-prescriptions, and order labs.' },
+  { value: 'physiotherapist', label: 'Physiotherapist', icon: <Activity className="w-4 h-4" />, desc: 'Formulate rehabilitation schedules and track mobility plans.' },
+  { value: 'hospital', label: 'Hospital', icon: <Building2 className="w-4 h-4" />, desc: 'Coordinate emergency intake queues and specialized referrals.' },
+  { value: 'laboratory', label: 'Laboratory', icon: <FlaskConical className="w-4 h-4" />, desc: 'Manage diagnostic assays and distribute results.' },
+  { value: 'imaging', label: 'Imaging Center', icon: <ScanLine className="w-4 h-4" />, desc: 'Register radiologic scheduling and upload findings.' },
+  { value: 'pharmacy', label: 'Pharmacy', icon: <Pill className="w-4 h-4" />, desc: 'Review e-prescriptions and sync stock inventory.' },
+  { value: 'ambulance', label: 'Ambulance', icon: <Ambulance className="w-4 h-4" />, desc: 'Coordinate ambulance dispatch queues and real-time telemetry.' },
 ];
 
 const providerRoles = new Set<SignupRole>([
@@ -188,75 +188,77 @@ const Signup = () => {
   };
 
   return (
-    <div className="min-h-screen overflow-hidden bg-[radial-gradient(circle_at_top_right,_rgba(14,165,233,0.16),_transparent_26%),radial-gradient(circle_at_bottom_left,_rgba(16,185,129,0.12),_transparent_24%),linear-gradient(180deg,_#eef8ff_0%,_#f8fbff_42%,_#ffffff_100%)]">
-      <div className="mx-auto grid min-h-screen max-w-7xl gap-8 px-6 py-8 lg:grid-cols-[0.98fr_1.02fr] lg:px-8 lg:py-10">
-        <section className="flex flex-col justify-between rounded-[2rem] border border-slate-200 bg-slate-950 p-8 text-white shadow-2xl shadow-slate-900/20 xl:p-10">
+    <div className="min-h-screen bg-slate-50 text-slate-900 flex flex-col font-sans">
+      <div className="mx-auto grid min-h-screen max-w-7xl gap-12 px-6 py-12 lg:grid-cols-[0.9fr_1.1fr] lg:px-8 lg:items-center">
+
+        {/* Monochromatic Left Panel Overview */}
+        <section className="flex flex-col justify-between h-full py-6">
           <div>
             <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
               <Link to="/" className="inline-flex items-center gap-3">
-                <div className="flex h-12 w-12 items-center justify-center rounded-2xl bg-white/10 ring-1 ring-white/15">
-                  <HeartPulse className="h-6 w-6 text-emerald-300" />
+                <div className="flex h-10 w-10 items-center justify-center rounded border border-slate-300 bg-white">
+                  <HeartPulse className="h-5 w-5 text-slate-950" />
                 </div>
                 <div>
-                  <p className="text-lg font-semibold tracking-tight">ALERA</p>
-                  <p className="text-xs text-slate-300">Unified healthcare operations</p>
+                  <p className="text-xs font-bold tracking-widest uppercase text-slate-950">ALERA</p>
+                  <p className="text-[9px] font-mono text-slate-500 uppercase tracking-widest">Healthcare OS</p>
                 </div>
               </Link>
               <Link
                 to="/"
-                className="inline-flex w-fit items-center gap-2 rounded-full border border-white/15 bg-white/10 px-4 py-2 text-sm font-semibold text-white transition hover:bg-white/15"
+                className="inline-flex w-fit items-center gap-2 rounded border border-slate-300 bg-white px-4 py-2 text-xs font-mono font-bold uppercase tracking-wider text-slate-700 hover:bg-slate-50"
               >
-                <ArrowLeft className="h-4 w-4" />
-                Back to home
+                <ArrowLeft className="h-3.5 w-3.5" />
+                Return to Home
               </Link>
             </div>
 
             <motion.div
-              initial={{ opacity: 0, y: 18 }}
+              initial={{ opacity: 0, y: 8 }}
               animate={{ opacity: 1, y: 0 }}
-              transition={{ duration: 0.55 }}
+              transition={{ duration: 0.4 }}
               className="mt-14 max-w-xl"
             >
-              <div className="inline-flex items-center gap-2 rounded-full border border-sky-400/20 bg-sky-400/10 px-4 py-1.5 text-sm font-medium text-sky-100">
+              <div className="inline-flex items-center gap-2 rounded border border-slate-300 bg-slate-100 px-3 py-1.5 text-xs font-mono font-bold uppercase text-slate-700">
                 <ShieldCheck className="h-4 w-4" />
-                Verified provider onboarding built in
+                Ecosystem Node Registration
               </div>
-              <h1 className="mt-6 text-4xl font-bold leading-tight sm:text-5xl">
-                Create the account that matches your role in care.
+              <h1 className="mt-6 text-3xl font-extrabold leading-tight text-slate-950 sm:text-4xl">
+                Establish your cryptographic node credentials.
               </h1>
-              <p className="mt-5 text-base leading-7 text-slate-300 sm:text-lg">
-                Patients, clinicians, labs, imaging teams, pharmacies, hospitals, and emergency services all join the same network, with role-specific access from day one.
+              <p className="mt-5 text-sm leading-relaxed text-slate-600">
+                Patients, clinicians, hospitals, and emergency fleets coordinate inside a single ledger. Choose your node role to allocate the correct operational layout.
               </p>
-              <div className="mt-6 rounded-2xl border border-white/10 bg-white/5 p-4 text-sm leading-6 text-slate-200">
-                If you are a doctor and also want to use Alera as a patient, create a separate patient account with a different email for your personal care.
+              <div className="mt-6 rounded border border-slate-200 bg-white p-4 text-xs leading-relaxed text-slate-500">
+                Clinical nodes require professional registration. Patient profiles must be registered separately using a personal email ledger.
               </div>
             </motion.div>
           </div>
 
           <div className="mt-12 space-y-5">
             <div className="grid gap-4 sm:grid-cols-2">
-              <div className="rounded-2xl border border-white/10 bg-white/5 p-5">
-                <p className="text-xs uppercase tracking-[0.24em] text-slate-400">Access model</p>
-                <p className="mt-3 text-lg font-semibold">Patients move fast.</p>
-                <p className="mt-2 text-sm leading-6 text-slate-300">
-                  Patient accounts go straight into the platform so they can book appointments, track results, and receive reminders.
+              <div className="rounded border border-slate-200 bg-white p-5">
+                <p className="text-[9px] font-mono font-bold uppercase tracking-widest text-slate-400">Node status: immediate</p>
+                <p className="mt-2 text-xs font-bold text-slate-900 uppercase font-mono">Patient Directory Nodes</p>
+                <p className="mt-2 text-xs leading-relaxed text-slate-600">
+                  Patient registrations are authenticated instantly. Profiles map to consultant schedules, prescription histories, and diagnostic reports.
                 </p>
               </div>
-              <div className="rounded-2xl border border-white/10 bg-white/5 p-5">
-                <p className="text-xs uppercase tracking-[0.24em] text-slate-400">Verification model</p>
-                <p className="mt-3 text-lg font-semibold">Provider roles get reviewed.</p>
-                <p className="mt-2 text-sm leading-6 text-slate-300">
-                  Professional roles remain pending until license details are reviewed by an administrator.
+              <div className="rounded border border-slate-200 bg-white p-5">
+                <p className="text-[9px] font-mono font-bold uppercase tracking-widest text-slate-400">Node status: pending review</p>
+                <p className="mt-2 text-xs font-bold text-slate-900 uppercase font-mono">Professional Care Nodes</p>
+                <p className="mt-2 text-xs leading-relaxed text-slate-600">
+                  Practitioner roles enter a pending state en route to direct credential and license auditing by a platform administrator.
                 </p>
               </div>
             </div>
 
-            <div className="rounded-2xl border border-white/10 bg-white/5 p-5">
-              <p className="text-sm font-semibold">Who can join from here</p>
-              <div className="mt-4 grid grid-cols-2 gap-2 text-sm text-slate-300">
-                {roles.map((role) => (
-                  <div key={role.value} className="rounded-xl bg-white/5 px-3 py-2">
-                    {role.label}
+            <div className="rounded border border-slate-200 bg-white p-5">
+              <p className="text-xs font-bold text-slate-900 uppercase font-mono tracking-wider">Deployable Node Interfaces</p>
+              <div className="mt-4 grid grid-cols-2 gap-2 text-xs text-slate-600 font-mono">
+                {roles.map((r) => (
+                  <div key={r.value} className="rounded border border-slate-200 bg-slate-50 px-3 py-1.5">
+                    {r.label}
                   </div>
                 ))}
               </div>
@@ -264,30 +266,26 @@ const Signup = () => {
           </div>
         </section>
 
+        {/* Minimalist Signup Form */}
         <section className="flex items-center justify-center">
           <motion.div
-            initial={{ opacity: 0, y: 18 }}
+            initial={{ opacity: 0, y: 8 }}
             animate={{ opacity: 1, y: 0 }}
-            transition={{ duration: 0.5, delay: 0.1 }}
-            className="w-full rounded-[2rem] border border-slate-200 bg-white p-6 shadow-2xl shadow-slate-200/80 xl:p-8"
+            transition={{ duration: 0.4 }}
+            className="w-full rounded border border-slate-300 bg-white p-6 sm:p-8"
           >
-            <div className="flex flex-col gap-3 border-b border-slate-100 pb-6 sm:flex-row sm:items-end sm:justify-between">
+            <div className="flex flex-col gap-3 border-b border-slate-100 pb-5 sm:flex-row sm:items-end sm:justify-between">
               <div>
-                <p className="text-sm font-semibold uppercase tracking-[0.22em] text-emerald-700">Account creation</p>
-                <h2 className="mt-2 text-3xl font-bold tracking-tight text-slate-950">Create your account</h2>
-                <p className="mt-2 text-sm leading-6 text-slate-600">Select your role and fill in your details.</p>
+                <p className="text-[10px] font-mono font-bold uppercase tracking-widest text-slate-500">Registry Gateway</p>
+                <h2 className="mt-1 text-2xl font-bold tracking-tight text-slate-950">Create Node Profile</h2>
               </div>
-              <div className="rounded-2xl bg-slate-50 px-4 py-3 text-sm text-slate-600">
-                We send a verification email after sign-up.
+              <div className="rounded border border-slate-200 bg-slate-50 px-3 py-1 text-xs text-slate-500 font-mono">
+                Verification logs active
               </div>
-            </div>
-
-            <div className="mt-6 rounded-2xl border border-sky-100 bg-sky-50 p-4 text-sm text-slate-700">
-              Use one account for your work role. If you also need care for yourself, make a separate patient account.
             </div>
 
             {error ? (
-              <div className="mt-6 rounded-2xl border border-destructive/20 bg-destructive/10 px-4 py-3 text-sm text-destructive">
+              <div className="mt-6 rounded border border-destructive/20 bg-destructive/10 px-4 py-3 text-xs text-destructive">
                 {error}
               </div>
             ) : null}
@@ -306,26 +304,26 @@ const Signup = () => {
 
             <form onSubmit={handleSubmit} className="mt-6 space-y-6">
               <div>
-                <label className="mb-3 block text-sm font-medium text-slate-800">Select Role</label>
-                <div className="grid gap-3 md:grid-cols-2">
+                <label className="mb-2 block text-xs font-bold text-slate-700 uppercase font-mono tracking-wider">Select Node Role</label>
+                <div className="grid gap-3 sm:grid-cols-2">
                   {roles.map((role) => (
                     <button
                       type="button"
                       key={role.value}
                       onClick={() => setSelectedRole(role.value)}
-                      className={`rounded-2xl border p-4 text-left transition-all ${
+                      className={`rounded border p-3.5 text-left transition-all text-xs ${
                         selectedRole === role.value
-                          ? 'border-primary bg-primary/[0.06] shadow-sm ring-1 ring-primary/15'
-                          : 'border-slate-200 bg-white hover:border-primary/30 hover:bg-slate-50'
+                          ? 'border-slate-900 bg-slate-50 ring-1 ring-slate-950'
+                          : 'border-slate-200 bg-white hover:border-slate-400'
                       }`}
                     >
-                      <div className="flex items-start gap-3">
-                        <div className={`mt-0.5 rounded-xl p-2 ${selectedRole === role.value ? 'bg-primary text-white' : 'bg-slate-100 text-slate-600'}`}>
+                      <div className="flex items-start gap-2.5">
+                        <div className={`rounded border p-1.5 ${selectedRole === role.value ? 'bg-slate-950 text-white border-slate-950' : 'bg-slate-50 text-slate-600 border-slate-300'}`}>
                           {role.icon}
                         </div>
                         <div>
-                          <div className="font-semibold text-slate-900">{role.label}</div>
-                          <div className="mt-1 text-xs leading-5 text-slate-500">{role.desc}</div>
+                          <div className="font-bold text-slate-900">{role.label}</div>
+                          <div className="mt-0.5 text-[10px] text-slate-500 leading-normal">{role.desc}</div>
                         </div>
                       </div>
                     </button>
@@ -334,49 +332,49 @@ const Signup = () => {
               </div>
 
               {selectedRole && selectedRole !== 'patient' ? (
-                <div className="rounded-2xl border border-warning/30 bg-warning/5 px-4 py-4 text-sm text-warning">
-                  Professional accounts stay pending until an administrator verifies the license details you provide here.
+                <div className="rounded border border-slate-300 bg-slate-50 px-4 py-3.5 text-xs text-slate-600 font-mono leading-relaxed">
+                  NOTE: Professional accounts are designated as PENDING en route to administrative license audits.
                 </div>
               ) : null}
 
-              <div className="grid gap-4 md:grid-cols-2">
-                <div className="md:col-span-2">
-                  <label className="mb-2 block text-sm font-medium text-slate-800">Full Name</label>
+              <div className="grid gap-4 sm:grid-cols-2">
+                <div className="sm:col-span-2">
+                  <label className="mb-1.5 block text-xs font-bold text-slate-700 uppercase font-mono tracking-wider">Full Name</label>
                   <input
                     type="text"
                     value={name}
                     onChange={(e) => setName(e.target.value)}
-                    placeholder="Enter your full name"
+                    placeholder="Enter full name"
                     disabled={isGoogleSignup}
-                    className="h-12 w-full rounded-2xl border border-slate-200 bg-white px-4 text-slate-950 placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-primary/30 disabled:opacity-70 disabled:bg-slate-50"
+                    className="h-10 w-full rounded border border-slate-300 bg-white px-3 text-slate-950 placeholder:text-slate-400 focus:outline-none focus:ring-1 focus:ring-slate-950 text-xs font-mono disabled:opacity-70 disabled:bg-slate-100"
                   />
                 </div>
                 <div>
-                  <label className="mb-2 block text-sm font-medium text-slate-800">Email</label>
+                  <label className="mb-1.5 block text-xs font-bold text-slate-700 uppercase font-mono tracking-wider">Email Address</label>
                   <input
                     type="email"
                     value={email}
                     onChange={(e) => setEmail(e.target.value)}
-                    placeholder="you@example.com"
+                    placeholder="name@organization.com"
                     disabled={isGoogleSignup}
-                    className="h-12 w-full rounded-2xl border border-slate-200 bg-white px-4 text-slate-950 placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-primary/30 disabled:opacity-70 disabled:bg-slate-50"
+                    className="h-10 w-full rounded border border-slate-300 bg-white px-3 text-slate-950 placeholder:text-slate-400 focus:outline-none focus:ring-1 focus:ring-slate-950 text-xs font-mono disabled:opacity-70 disabled:bg-slate-100"
                   />
                 </div>
                 {!isGoogleSignup && (
                   <div>
-                  <label className="mb-2 block text-sm font-medium text-slate-800">Password</label>
+                    <label className="mb-1.5 block text-xs font-bold text-slate-700 uppercase font-mono tracking-wider">Cryptographic Password</label>
                     <div className="relative">
                       <input
                         type={showPassword ? 'text' : 'password'}
                         value={password}
                         onChange={(e) => setPassword(e.target.value)}
                         placeholder="••••••••"
-                        className="h-12 w-full rounded-2xl border border-slate-200 bg-white pl-4 pr-12 text-slate-950 placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-primary/30"
+                        className="h-10 w-full rounded border border-slate-300 bg-white pl-3 pr-10 text-slate-950 placeholder:text-slate-400 focus:outline-none focus:ring-1 focus:ring-slate-950 text-xs font-mono"
                       />
                       <button
                         type="button"
                         onClick={() => setShowPassword(!showPassword)}
-                        className="absolute right-3 top-1/2 -translate-y-1/2 rounded-xl p-1 text-slate-500 transition hover:bg-slate-100 hover:text-slate-900"
+                        className="absolute right-2 top-1/2 -translate-y-1/2 rounded p-1 text-slate-400 transition hover:bg-slate-50 hover:text-slate-900"
                       >
                         {showPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
                       </button>
@@ -384,110 +382,110 @@ const Signup = () => {
                   </div>
                 )}
                 <div>
-                  <label className="mb-2 block text-sm font-medium text-slate-800">
-                    Phone Number <span className="text-slate-400">(optional)</span>
+                  <label className="mb-1.5 block text-xs font-bold text-slate-700 uppercase font-mono tracking-wider">
+                    Phone Number <span className="text-slate-400 font-normal">(optional)</span>
                   </label>
                   <input
                     type="tel"
                     value={phone}
                     onChange={(e) => setPhone(e.target.value)}
-                    placeholder="+1 (555) 123-4567"
-                    className="h-12 w-full rounded-2xl border border-slate-200 bg-white px-4 text-slate-950 placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-primary/30"
+                    placeholder="+1 (555) 000-0000"
+                    className="h-10 w-full rounded border border-slate-300 bg-white px-3 text-slate-950 placeholder:text-slate-400 focus:outline-none focus:ring-1 focus:ring-slate-950 text-xs font-mono"
                   />
                 </div>
               </div>
 
-              <div className="grid gap-4 md:grid-cols-3">
-                <div className="md:col-span-2">
-                  <label className="mb-2 block text-sm font-medium text-slate-800">
-                    Address <span className="text-slate-400">(optional)</span>
+              <div className="grid gap-4 sm:grid-cols-3">
+                <div className="sm:col-span-2">
+                  <label className="mb-1.5 block text-xs font-bold text-slate-700 uppercase font-mono tracking-wider">
+                    Street Address <span className="text-slate-400 font-normal">(optional)</span>
                   </label>
                   <input
                     type="text"
                     value={address}
                     onChange={(e) => setAddress(e.target.value)}
-                    placeholder="Street address"
-                    className="h-12 w-full rounded-2xl border border-slate-200 bg-white px-4 text-slate-950 placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-primary/30"
+                    placeholder="Ecosystem location address"
+                    className="h-10 w-full rounded border border-slate-300 bg-white px-3 text-slate-950 placeholder:text-slate-400 focus:outline-none focus:ring-1 focus:ring-slate-950 text-xs font-mono"
                   />
                 </div>
                 <div>
-                  <label className="mb-2 block text-sm font-medium text-slate-800">
-                    City <span className="text-slate-400">(optional)</span>
+                  <label className="mb-1.5 block text-xs font-bold text-slate-700 uppercase font-mono tracking-wider">
+                    City <span className="text-slate-400 font-normal">(optional)</span>
                   </label>
                   <input
                     type="text"
                     value={city}
                     onChange={(e) => setCity(e.target.value)}
                     placeholder="City"
-                    className="h-12 w-full rounded-2xl border border-slate-200 bg-white px-4 text-slate-950 placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-primary/30"
+                    className="h-10 w-full rounded border border-slate-300 bg-white px-3 text-slate-950 placeholder:text-slate-400 focus:outline-none focus:ring-1 focus:ring-slate-950 text-xs font-mono"
                   />
                 </div>
                 <div>
-                  <label className="mb-2 block text-sm font-medium text-slate-800">
-                    State <span className="text-slate-400">(optional)</span>
+                  <label className="mb-1.5 block text-xs font-bold text-slate-700 uppercase font-mono tracking-wider">
+                    State <span className="text-slate-400 font-normal">(optional)</span>
                   </label>
                   <input
                     type="text"
                     value={state}
                     onChange={(e) => setState(e.target.value)}
                     placeholder="State"
-                    className="h-12 w-full rounded-2xl border border-slate-200 bg-white px-4 text-slate-950 placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-primary/30"
+                    className="h-10 w-full rounded border border-slate-300 bg-white px-3 text-slate-950 placeholder:text-slate-400 focus:outline-none focus:ring-1 focus:ring-slate-950 text-xs font-mono"
                   />
                 </div>
                 <div>
-                  <label className="mb-2 block text-sm font-medium text-slate-800">
-                    ZIP Code <span className="text-slate-400">(optional)</span>
+                  <label className="mb-1.5 block text-xs font-bold text-slate-700 uppercase font-mono tracking-wider">
+                    ZIP Code <span className="text-slate-400 font-normal">(optional)</span>
                   </label>
                   <input
                     type="text"
                     value={zipCode}
                     onChange={(e) => setZipCode(e.target.value)}
-                    placeholder="12345"
-                    className="h-12 w-full rounded-2xl border border-slate-200 bg-white px-4 text-slate-950 placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-primary/30"
+                    placeholder="00000"
+                    className="h-10 w-full rounded border border-slate-300 bg-white px-3 text-slate-950 placeholder:text-slate-400 focus:outline-none focus:ring-1 focus:ring-slate-950 text-xs font-mono"
                   />
                 </div>
               </div>
 
               {selectedRole && selectedRole !== 'patient' ? (
-                <div className="rounded-[1.5rem] border border-slate-200 bg-slate-50 p-5">
-                  <div className="mb-4 flex items-center justify-between gap-3">
+                <div className="rounded border border-slate-300 bg-slate-50 p-5">
+                  <div className="mb-4 flex items-center justify-between gap-3 border-b border-slate-200 pb-3">
                     <div>
-                      <p className="text-base font-semibold text-slate-950">License details</p>
-                      <p className="mt-1 text-sm text-slate-500">Required for professional review and approval.</p>
+                      <p className="text-xs font-bold text-slate-950 uppercase font-mono">License details</p>
+                      <p className="mt-1 text-[10px] text-slate-500 leading-normal">Required for clinical identity review.</p>
                     </div>
-                    <div className="rounded-2xl bg-white px-3 py-2 text-xs font-semibold uppercase tracking-[0.2em] text-slate-500">
-                      Provider
+                    <div className="rounded border border-slate-200 bg-white px-2.5 py-1 text-[9px] font-mono font-bold uppercase text-slate-500">
+                      Verify node
                     </div>
                   </div>
-                  <div className="grid gap-4 md:grid-cols-2">
+                  <div className="grid gap-4 sm:grid-cols-2">
                     <div>
-                      <label className="mb-2 block text-sm font-medium text-slate-800">License Number</label>
+                      <label className="mb-1.5 block text-xs font-bold text-slate-700 uppercase font-mono tracking-wider">License Number</label>
                       <input
                         type="text"
                         value={licenseNumber}
                         onChange={(e) => setLicenseNumber(e.target.value)}
                         placeholder="License or registration number"
-                        className="h-12 w-full rounded-2xl border border-slate-200 bg-white px-4 text-slate-950 placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-primary/30"
+                        className="h-10 w-full rounded border border-slate-300 bg-white px-3 text-slate-950 placeholder:text-slate-400 focus:outline-none focus:ring-1 focus:ring-slate-950 text-xs font-mono"
                       />
                     </div>
                     <div>
-                      <label className="mb-2 block text-sm font-medium text-slate-800">License State</label>
+                      <label className="mb-1.5 block text-xs font-bold text-slate-700 uppercase font-mono tracking-wider">License State</label>
                       <input
                         type="text"
                         value={licenseState}
                         onChange={(e) => setLicenseState(e.target.value)}
                         placeholder="State or jurisdiction"
-                        className="h-12 w-full rounded-2xl border border-slate-200 bg-white px-4 text-slate-950 placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-primary/30"
+                        className="h-10 w-full rounded border border-slate-300 bg-white px-3 text-slate-950 placeholder:text-slate-400 focus:outline-none focus:ring-1 focus:ring-slate-950 text-xs font-mono"
                       />
                     </div>
-                    <div className="md:col-span-2">
-                      <label className="mb-2 block text-sm font-medium text-slate-800">Specialty</label>
+                    <div className="sm:col-span-2">
+                      <label className="mb-1.5 block text-xs font-bold text-slate-700 uppercase font-mono tracking-wider">Specialty</label>
                       <input
                         type="text"
                         value={specialty}
                         onChange={(e) => setSpecialty(e.target.value)}
                         placeholder="Optional specialty or department"
-                        className="h-12 w-full rounded-2xl border border-slate-200 bg-white px-4 text-slate-950 placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-primary/30"
+                        className="h-10 w-full rounded border border-slate-300 bg-white px-3 text-slate-950 placeholder:text-slate-400 focus:outline-none focus:ring-1 focus:ring-slate-950 text-xs font-mono"
                       />
                     </div>
                   </div>
@@ -497,21 +495,21 @@ const Signup = () => {
               <button
                 type="submit"
                 disabled={loading}
-                className="flex h-12 w-full items-center justify-center gap-2 rounded-2xl bg-slate-950 text-sm font-semibold text-white transition hover:-translate-y-0.5 hover:bg-slate-900 disabled:opacity-50"
+                className="flex h-10 w-full items-center justify-center gap-2 rounded bg-slate-950 text-xs font-mono font-bold uppercase tracking-wider text-white transition hover:bg-slate-900 disabled:opacity-50"
               >
-                {loading ? (isGoogleSignup ? 'Completing sign up...' : 'Creating account...') : <><span>{isGoogleSignup ? 'Complete Sign Up' : 'Create Account'}</span><ArrowRight className="h-4 w-4" /></>}
+                {loading ? (isGoogleSignup ? 'Registering Node Credentials...' : 'Initializing Node...') : <><span>{isGoogleSignup ? 'Complete Node Registration' : 'Establish Node Profile'}</span><ArrowRight className="h-3.5 w-3.5" /></>}
               </button>
-              <p className="mt-6 text-center text-xs leading-6 text-slate-500">
-                We will send a verification email after sign-up so you can confirm your account and recover access later.
+              <p className="mt-4 text-[10px] font-mono text-slate-500 leading-normal text-center uppercase tracking-wider">
+                We will dispatch an authorization email following sign-up to verify your access credentials.
               </p>
             </form>
 
-            <p className="mt-6 text-center text-sm text-slate-600">
-              Already have an account?{' '}
-              <Link to="/login" className="font-semibold text-primary hover:underline">
-                Sign in
+            <div className="mt-6 border-t border-slate-100 pt-5 text-center">
+              <span className="text-xs text-slate-500">Registered Node? </span>
+              <Link to="/login" className="text-xs font-bold text-slate-950 hover:underline">
+                Authenticate gateway
               </Link>
-            </p>
+            </div>
           </motion.div>
         </section>
       </div>

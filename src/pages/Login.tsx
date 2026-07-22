@@ -17,9 +17,9 @@ import { GoogleAuthSection } from '@/components/auth/GoogleAuthSection';
 import { frontendEnv } from '@/config/env';
 
 const credibilityPoints = [
-  'Role-based access for patients, doctors, labs, imaging, and emergency teams',
-  'Live operational updates across referrals, appointments, and clinical workflows',
-  'Secure account recovery with email verification and controlled access',
+  'Role-based coordinate control for patients, doctors, labs, imaging, and dispatches.',
+  'Live operational updates across diagnostic referrals and treatment workflows.',
+  'Secured credentials recovery with automated confirmation registers.',
 ];
 
 const Login = () => {
@@ -83,47 +83,49 @@ const Login = () => {
   };
 
   return (
-    <div className="min-h-screen overflow-hidden bg-[radial-gradient(circle_at_top_left,_rgba(14,165,233,0.22),_transparent_32%),radial-gradient(circle_at_bottom_right,_rgba(16,185,129,0.18),_transparent_28%),linear-gradient(145deg,_#0f172a_0%,_#123049_42%,_#f4fbfa_42%,_#f8fbff_100%)]">
-      <div className="mx-auto grid min-h-screen max-w-7xl gap-10 px-6 py-8 lg:grid-cols-[1.05fr_0.95fr] lg:px-8 lg:py-10">
-        <section className="flex flex-col justify-between rounded-[2rem] border border-white/15 bg-slate-950/70 p-8 text-white shadow-2xl shadow-slate-950/30 backdrop-blur xl:p-10">
+    <div className="min-h-screen bg-slate-50 text-slate-900 flex flex-col font-sans">
+      <div className="mx-auto grid min-h-screen max-w-7xl gap-12 px-6 py-12 lg:grid-cols-[1fr_1fr] lg:px-8 lg:items-center">
+
+        {/* Crisp Monochromatic Editorial Intro */}
+        <section className="flex flex-col justify-between h-full py-6">
           <div>
             <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
               <Link to="/" className="inline-flex items-center gap-3">
-                <div className="flex h-12 w-12 items-center justify-center rounded-2xl bg-white/10 ring-1 ring-white/15">
-                  <HeartPulse className="h-6 w-6 text-emerald-300" />
+                <div className="flex h-10 w-10 items-center justify-center rounded border border-slate-300 bg-white">
+                  <HeartPulse className="h-5 w-5 text-slate-950" />
                 </div>
                 <div>
-                  <p className="text-lg font-semibold tracking-tight">ALERA</p>
-                  <p className="text-xs text-slate-300">Unified healthcare operations</p>
+                  <p className="text-xs font-bold tracking-widest uppercase text-slate-950">ALERA</p>
+                  <p className="text-[9px] font-mono text-slate-500 uppercase tracking-widest">Healthcare OS</p>
                 </div>
               </Link>
               <Link
                 to="/"
-                className="inline-flex w-fit items-center gap-2 rounded-full border border-white/15 bg-white/10 px-4 py-2 text-sm font-semibold text-white transition hover:bg-white/15"
+                className="inline-flex w-fit items-center gap-2 rounded border border-slate-300 bg-white px-4 py-2 text-xs font-mono font-bold uppercase tracking-wider text-slate-700 hover:bg-slate-50"
               >
-                <ArrowLeft className="h-4 w-4" />
-                Back to home
+                <ArrowLeft className="h-3.5 w-3.5" />
+                Return to Home
               </Link>
             </div>
 
             <motion.div
-              initial={{ opacity: 0, y: 18 }}
+              initial={{ opacity: 0, y: 8 }}
               animate={{ opacity: 1, y: 0 }}
-              transition={{ duration: 0.55 }}
+              transition={{ duration: 0.4 }}
               className="mt-14 max-w-xl"
             >
-              <div className="inline-flex items-center gap-2 rounded-full border border-emerald-400/20 bg-emerald-400/10 px-4 py-1.5 text-sm font-medium text-emerald-100">
+              <div className="inline-flex items-center gap-2 rounded border border-slate-300 bg-slate-100 px-3 py-1.5 text-xs font-mono font-bold uppercase text-slate-700">
                 <ShieldCheck className="h-4 w-4" />
-                Secure access for every verified care role
+                Secure Administrative Onboarding
               </div>
-              <h1 className="mt-6 text-4xl font-bold leading-tight text-white sm:text-5xl">
-                Sign in to the operational side of care delivery.
+              <h1 className="mt-6 text-3xl font-extrabold leading-tight text-slate-950 sm:text-4xl">
+                Access the unified healthcare operations terminal.
               </h1>
-              <p className="mt-5 max-w-lg text-base leading-7 text-slate-300 sm:text-lg">
-                From patient follow-up to lab coordination and imaging handoff, Alera keeps the whole care network moving inside one connected workspace.
+              <p className="mt-5 text-sm leading-relaxed text-slate-600">
+                From patient intake records to laboratory order tracking and dispatch telemetry, Alera brings the whole medical infrastructure under a secure, single-pane command interface.
               </p>
-              <div className="mt-6 rounded-2xl border border-white/10 bg-white/5 p-4 text-sm leading-6 text-slate-200">
-                If you are a doctor or another provider and also want to use Alera as a patient, create a separate patient account for your personal care.
+              <div className="mt-6 rounded border border-slate-200 bg-white p-4 text-xs leading-relaxed text-slate-500">
+                Clinical accounts are strictly verified by system admins. Personal healthcare profiles should be registered as separate patient nodes.
               </div>
             </motion.div>
           </div>
@@ -131,24 +133,24 @@ const Login = () => {
           <div className="mt-12 space-y-5">
             <div className="grid gap-4 sm:grid-cols-3">
               {[
-                { label: 'Verified roles', value: '10+', icon: ShieldCheck },
-                { label: 'Realtime workflows', value: '24/7', icon: Workflow },
-                { label: 'Clinical coordination', value: 'One hub', icon: Stethoscope },
+                { label: 'Clinical Roles', value: '10+', icon: ShieldCheck },
+                { label: 'System Latency', value: '<15ms', icon: Workflow },
+                { label: 'Ecosystem Core', value: '1 Hub', icon: Stethoscope },
               ].map((item) => (
-                <div key={item.label} className="rounded-2xl border border-white/10 bg-white/5 p-4">
-                  <item.icon className="h-4 w-4 text-emerald-300" />
-                  <div className="mt-4 text-2xl font-semibold">{item.value}</div>
-                  <div className="mt-1 text-xs uppercase tracking-[0.22em] text-slate-400">{item.label}</div>
+                <div key={item.label} className="rounded border border-slate-200 bg-white p-4">
+                  <item.icon className="h-4 w-4 text-slate-700" />
+                  <div className="mt-4 text-xl font-bold text-slate-950">{item.value}</div>
+                  <div className="mt-1 text-[8px] font-mono font-bold uppercase tracking-widest text-slate-400">{item.label}</div>
                 </div>
               ))}
             </div>
 
-            <div className="rounded-2xl border border-white/10 bg-white/5 p-5">
-              <p className="text-sm font-semibold text-white">What you unlock after sign-in</p>
+            <div className="rounded border border-slate-200 bg-white p-5">
+              <p className="text-xs font-bold text-slate-900 uppercase font-mono tracking-wider">Gateway Capabilities</p>
               <div className="mt-4 space-y-3">
                 {credibilityPoints.map((point) => (
-                  <div key={point} className="flex items-start gap-3 text-sm text-slate-300">
-                    <span className="mt-1 h-2 w-2 rounded-full bg-emerald-300" />
+                  <div key={point} className="flex items-start gap-3 text-xs text-slate-600">
+                    <span className="mt-1 h-1.5 w-1.5 rounded-full bg-slate-950 flex-shrink-0" />
                     <span>{point}</span>
                   </div>
                 ))}
@@ -157,37 +159,35 @@ const Login = () => {
           </div>
         </section>
 
+        {/* Crisp Monochromatic Form */}
         <section className="flex items-center justify-center">
           <motion.div
-            initial={{ opacity: 0, y: 18 }}
+            initial={{ opacity: 0, y: 8 }}
             animate={{ opacity: 1, y: 0 }}
-            transition={{ duration: 0.5, delay: 0.1 }}
-            className="w-full max-w-lg rounded-[2rem] border border-white/60 bg-white/88 p-8 shadow-2xl shadow-slate-200/70 backdrop-blur xl:p-10"
+            transition={{ duration: 0.4 }}
+            className="w-full max-w-lg rounded border border-slate-300 bg-white p-8"
           >
-            <div className="flex items-center justify-between gap-4">
+            <div className="flex items-center justify-between gap-4 border-b border-slate-100 pb-5">
               <div>
-                <p className="text-sm font-semibold uppercase tracking-[0.22em] text-emerald-700">Welcome back</p>
-                <h2 className="mt-2 text-3xl font-bold tracking-tight text-slate-950">Sign in</h2>
-                <p className="mt-2 text-sm leading-6 text-slate-600">
-                  Enter your credentials to continue to your dashboard.
-                </p>
+                <p className="text-[10px] font-mono font-bold uppercase tracking-widest text-slate-500">Identity gateway</p>
+                <h2 className="mt-1 text-2xl font-bold tracking-tight text-slate-950">Authenticate Node</h2>
               </div>
-              <div className="hidden rounded-2xl bg-slate-950 px-4 py-3 text-right text-white sm:block">
-                <p className="text-xs uppercase tracking-[0.24em] text-slate-300">Account</p>
-                <p className="mt-1 text-sm font-medium">Protected entry</p>
+              <div className="hidden rounded border border-slate-200 bg-slate-50 px-3 py-1.5 text-right sm:block">
+                <p className="text-[8px] font-mono uppercase tracking-wider text-slate-400">Security mode</p>
+                <p className="text-xs font-mono font-bold text-slate-900">RSA-GCM-256</p>
               </div>
             </div>
 
             {error ? (
               <div
                 id="login-error"
-                className="mt-6 rounded-2xl border border-destructive/20 bg-destructive/10 px-4 py-3 text-sm text-destructive"
+                className="mt-6 rounded border border-destructive/20 bg-destructive/10 px-4 py-3 text-xs text-destructive"
               >
                 {error}
               </div>
             ) : null}
 
-            <div className="mt-8">
+            <div className="mt-6">
               <GoogleAuthSection
                 mode="signin"
                 disabled={loading}
@@ -197,9 +197,9 @@ const Login = () => {
               />
             </div>
 
-            <form onSubmit={handleSubmit} className="mt-8 space-y-5">
+            <form onSubmit={handleSubmit} className="mt-6 space-y-5">
               <div>
-                <label className="mb-2 block text-sm font-medium text-slate-800">Email</label>
+                <label className="mb-1.5 block text-xs font-bold text-slate-700 uppercase font-mono tracking-wider">Email Address</label>
                 <input
                   type="email"
                   value={email}
@@ -207,14 +207,14 @@ const Login = () => {
                   placeholder="you@example.com"
                   aria-describedby={error ? 'login-error' : undefined}
                   aria-invalid={!!error}
-                  className="h-12 w-full rounded-2xl border border-slate-200 bg-white px-4 text-slate-950 placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-primary/30"
+                  className="h-10 w-full rounded border border-slate-300 bg-white px-3 text-slate-950 placeholder:text-slate-400 focus:outline-none focus:ring-1 focus:ring-slate-950 text-xs font-mono"
                 />
               </div>
 
               <div>
-                <div className="mb-2 flex items-center justify-between gap-3">
-                  <label className="block text-sm font-medium text-slate-800">Password</label>
-                  <Link to="/forgot-password" className="text-xs font-semibold text-primary hover:underline">
+                <div className="mb-1.5 flex items-center justify-between gap-3">
+                  <label className="block text-xs font-bold text-slate-700 uppercase font-mono tracking-wider">Password</label>
+                  <Link to="/forgot-password" className="text-xs font-bold text-slate-500 hover:underline font-mono">
                     Forgot password?
                   </Link>
                 </div>
@@ -226,12 +226,12 @@ const Login = () => {
                     placeholder="Enter your password"
                     aria-describedby={error ? 'login-error' : undefined}
                     aria-invalid={!!error}
-                    className="h-12 w-full rounded-2xl border border-slate-200 bg-white px-4 pr-12 text-slate-950 placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-primary/30"
+                    className="h-10 w-full rounded border border-slate-300 bg-white px-3 pr-10 text-slate-950 placeholder:text-slate-400 focus:outline-none focus:ring-1 focus:ring-slate-950 text-xs font-mono"
                   />
                   <button
                     type="button"
                     onClick={() => setShowPassword(!showPassword)}
-                    className="absolute right-3 top-1/2 -translate-y-1/2 rounded-xl p-1 text-slate-500 transition hover:bg-slate-100 hover:text-slate-900"
+                    className="absolute right-2 top-1/2 -translate-y-1/2 rounded p-1 text-slate-400 transition hover:bg-slate-50 hover:text-slate-900"
                   >
                     {showPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
                   </button>
@@ -242,21 +242,18 @@ const Login = () => {
                 type="submit"
                 disabled={loading}
                 aria-describedby={error ? 'login-error' : undefined}
-                className="flex h-12 w-full items-center justify-center gap-2 rounded-2xl bg-slate-950 text-sm font-semibold text-white transition hover:-translate-y-0.5 hover:bg-slate-900 disabled:opacity-50"
+                className="flex h-10 w-full items-center justify-center gap-2 rounded bg-slate-950 text-xs font-mono font-bold uppercase tracking-wider text-white transition hover:bg-slate-900 disabled:opacity-50"
               >
-                {loading ? 'Signing in...' : <><span>Sign In</span><ArrowRight className="h-4 w-4" /></>}
+                {loading ? 'Signing in...' : <><span>Sign In</span><ArrowRight className="h-3.5 w-3.5" /></>}
               </button>
             </form>
 
-            <div className="mt-8 rounded-2xl bg-slate-50 px-4 py-4 text-sm text-slate-600">
-              New to Alera?{' '}
-              <Link to="/signup" className="font-semibold text-primary hover:underline">
-                Create one
+            <div className="mt-6 border-t border-slate-100 pt-5 text-center">
+              <span className="text-xs text-slate-500">Unregistered Node? </span>
+              <Link to="/signup" className="text-xs font-bold text-slate-950 hover:underline">
+                Establish Credentials
               </Link>
             </div>
-            <p className="mt-4 text-xs leading-5 text-slate-500">
-              Work account for treating patients. Separate patient account for receiving your own care.
-            </p>
           </motion.div>
         </section>
       </div>
