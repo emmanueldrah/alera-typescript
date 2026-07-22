@@ -1,6 +1,7 @@
 import { lazy, Suspense } from "react";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { BrowserRouter, Route, Routes, Navigate, useLocation } from "react-router-dom";
+import { SpeedInsights } from '@vercel/speed-insights/react';
 import { Toaster as Sonner } from "@/components/ui/sonner";
 import { Toaster } from "@/components/ui/toaster";
 import { TooltipProvider } from "@/components/ui/tooltip";
@@ -112,43 +113,33 @@ const App = () => {
           <AppDataProvider>
             <NotificationProvider>
               <ChatProvider>
-                <SystemProvider>
-                  <TooltipProvider>
-                    <Toaster />
-                    <Sonner />
-                    <BrowserRouter future={{ v7_startTransition: true, v7_relativeSplatPath: true }}>
-                      <MaintenanceGuard>
-                        <Suspense fallback={<RouteLoader />}>
-                          <Routes>
-                            <Route element={<AuthRedirect><MainLayout /></AuthRedirect>}>
-                              <Route path="/" element={<LandingHome />} />
-                              <Route path="/how-it-works" element={<LandingHowItWorks />} />
-                              <Route path="/features" element={<LandingFeatures />} />
-                              <Route path="/trust" element={<LandingTrust />} />
-                              <Route path="/who-we-serve" element={<LandingWhoWeServe />} />
-                              <Route path="/why-alera" element={<LandingWhyAlera />} />
-                              <Route path="/privacy-policy" element={<PrivacyPolicy />} />
-                              <Route path="/terms" element={<TermsOfService />} />
-                              <Route path="/cookies" element={<PrivacyPolicy />} />
-                            </Route>
-                            <Route path="/login" element={<Login />} />
-                            <Route path="/signup" element={<Signup />} />
-                            <Route path="/forgot-password" element={<ForgotPassword />} />
-                            <Route path="/reset-password" element={<ResetPassword />} />
-                            <Route path="/verify-email" element={<VerifyEmail />} />
-                            <Route path="/maintenance" element={<Maintenance />} />
-                            <Route path="/dashboard" element={<ProtectedRoute><DashboardHome /></ProtectedRoute>} />
-                            <Route path="/dashboard/admin/system" element={<ProtectedRoute><SystemManagement /></ProtectedRoute>} />
-                            {featureRouteKeys.map(page => (
-                              <Route key={page} path={`/dashboard/${page}`} element={<ProtectedRoute><FeatureWrapper page={page} /></ProtectedRoute>} />
-                            ))}
-                            <Route path="*" element={<NotFound />} />
-                          </Routes>
-                        </Suspense>
-                      </MaintenanceGuard>
-                    </BrowserRouter>
-                  </TooltipProvider>
-                </SystemProvider>
+                <TooltipProvider>
+                  <Toaster />
+                  <Sonner />
+                  <SpeedInsights />
+                  <BrowserRouter future={{ v7_startTransition: true, v7_relativeSplatPath: true }}>
+                    <Routes>
+                      <Route path="/test" element={<div className="p-10 bg-blue-500 text-white text-4xl">TEST PAGE - React is working!</div>} />
+                      <Route element={<AuthRedirect><MainLayout /></AuthRedirect>}>
+                        <Route path="/" element={<LandingHome />} />
+                        <Route path="/how-it-works" element={<LandingHowItWorks />} />
+                        <Route path="/features" element={<LandingFeatures />} />
+                        <Route path="/trust" element={<LandingTrust />} />
+                        <Route path="/who-we-serve" element={<LandingWhoWeServe />} />
+                      </Route>
+                      <Route path="/login" element={<Login />} />
+                      <Route path="/signup" element={<Signup />} />
+                      <Route path="/forgot-password" element={<ForgotPassword />} />
+                      <Route path="/reset-password" element={<ResetPassword />} />
+                      <Route path="/verify-email" element={<VerifyEmail />} />
+                      <Route path="/dashboard" element={<ProtectedRoute><DashboardHome /></ProtectedRoute>} />
+                      {featureRoutes.map(page => (
+                        <Route key={page} path={`/dashboard/${page}`} element={<ProtectedRoute><FeatureWrapper page={page} /></ProtectedRoute>} />
+                      ))}
+                      <Route path="*" element={<NotFound />} />
+                    </Routes>
+                  </BrowserRouter>
+                </TooltipProvider>
               </ChatProvider>
             </NotificationProvider>
           </AppDataProvider>
