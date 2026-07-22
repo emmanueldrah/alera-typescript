@@ -64,7 +64,7 @@ describe('UsersPage verification status', () => {
     ]);
 
     render(
-      <MemoryRouter>
+      <MemoryRouter future={{ v7_startTransition: true, v7_relativeSplatPath: true }}>
         <UsersPage />
       </MemoryRouter>
     );

@@ -2,7 +2,6 @@ from fastapi import APIRouter, Depends, HTTPException, Query, status
 from sqlalchemy.orm import Session
 from database import get_db
 from app.models import Referral, User, UserRole
-from app.models.appointment import Appointment
 from app.models.referral import (
     REFERRAL_TYPE_HOSPITAL,
     REFERRAL_TYPE_IMAGING,
@@ -12,11 +11,12 @@ from app.models.referral import (
 from app.schemas import ReferralCreate, ReferralUpdate, ReferralResponse
 from app.schemas import REFERRAL_TYPE_VALUES
 from app.utils.dependencies import get_current_user
-from app.utils.access import require_verified_workforce_member
+from app.utils.access import require_provider_panel_access, require_verified_workforce_member
 
 router = APIRouter(prefix="/api/referrals", tags=["referrals"])
 
 ALLOWED_TYPES = set(REFERRAL_TYPE_VALUES)
+ALLOWED_STATUSES = {"pending", "accepted", "completed", "cancelled"}
 
 
 def _display_name(user: User | None) -> str | None:
@@ -26,25 +26,33 @@ def _display_name(user: User | None) -> str | None:
     return name or None
 
 
-def _provider_panel_patient_ids(db: Session, provider_id: int) -> set[int]:
-    rows = (
-        db.query(Appointment.patient_id)
-        .filter(Appointment.provider_id == provider_id)
-        .distinct()
-        .all()
-    )
-    return {r[0] for r in rows}
+def _expected_destination_role(referral_type: str) -> UserRole:
+    if referral_type == REFERRAL_TYPE_LABORATORY:
+        return UserRole.LABORATORY
+    if referral_type == REFERRAL_TYPE_IMAGING:
+        return UserRole.IMAGING
+    if referral_type == REFERRAL_TYPE_PHARMACY:
+        return UserRole.PHARMACIST
+    return UserRole.HOSPITAL
 
 
 def referral_to_response(ref: Referral, db: Session) -> ReferralResponse:
     patient = db.query(User).filter(User.id == ref.patient_id).first()
     doctor = db.query(User).filter(User.id == ref.from_doctor_id).first()
+    destination_provider = (
+        db.query(User).filter(User.id == ref.destination_provider_id).first()
+        if ref.destination_provider_id is not None
+        else None
+    )
     rtype = getattr(ref, "referral_type", None) or REFERRAL_TYPE_HOSPITAL
     return ReferralResponse(
         id=ref.id,
         patient_id=ref.patient_id,
         from_doctor_id=ref.from_doctor_id,
         referral_type=rtype,
+        destination_provider_id=ref.destination_provider_id,
+        destination_provider_name=_display_name(destination_provider),
+        destination_provider_role=destination_provider.role.value if destination_provider else None,
         to_department=ref.to_department,
         to_department_id=ref.to_department_id,
         reason=ref.reason,
@@ -67,25 +75,62 @@ def _normalize_type(raw: str) -> str:
     return t
 
 
+def _normalize_status(raw: str) -> str:
+    value = (raw or "").strip().lower()
+    if value not in ALLOWED_STATUSES:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=f"status must be one of: {', '.join(sorted(ALLOWED_STATUSES))}",
+        )
+    return value
+
+
+def _validate_destination_status_change(current_status: str, next_status: str) -> None:
+    if next_status == current_status:
+        return
+    if current_status == "pending" and next_status == "accepted":
+        return
+    if current_status == "accepted" and next_status == "completed":
+        return
+    if next_status == "cancelled" and current_status in {"pending", "accepted"}:
+        return
+    raise HTTPException(
+        status_code=status.HTTP_400_BAD_REQUEST,
+        detail=f"Cannot change referral status from {current_status} to {next_status}",
+    )
+
+
 def _apply_list_type_filter(query, current_user: User, referral_type: str | None):
     """Restrict rows by role so each stakeholder only sees their queue."""
 
     if current_user.role == UserRole.LABORATORY:
-        return query.filter(Referral.referral_type == REFERRAL_TYPE_LABORATORY)
+        return query.filter(
+            Referral.referral_type == REFERRAL_TYPE_LABORATORY,
+            Referral.destination_provider_id == current_user.id,
+        )
     if current_user.role == UserRole.IMAGING:
-        return query.filter(Referral.referral_type == REFERRAL_TYPE_IMAGING)
+        return query.filter(
+            Referral.referral_type == REFERRAL_TYPE_IMAGING,
+            Referral.destination_provider_id == current_user.id,
+        )
     if current_user.role == UserRole.PHARMACIST:
-        return query.filter(Referral.referral_type == REFERRAL_TYPE_PHARMACY)
+        return query.filter(
+            Referral.referral_type == REFERRAL_TYPE_PHARMACY,
+            Referral.destination_provider_id == current_user.id,
+        )
     if current_user.role == UserRole.ADMIN:
         if referral_type:
             return query.filter(Referral.referral_type == _normalize_type(referral_type))
         return query
     if current_user.role == UserRole.HOSPITAL:
         if referral_type:
-            return query.filter(Referral.referral_type == _normalize_type(referral_type))
-        # Specialist + pharmacy coordination only (lab/imaging use their own workflows)
+            return query.filter(
+                Referral.referral_type == _normalize_type(referral_type),
+                Referral.destination_provider_id == current_user.id,
+            )
         return query.filter(
-            Referral.referral_type.in_([REFERRAL_TYPE_HOSPITAL, REFERRAL_TYPE_PHARMACY])
+            Referral.referral_type == REFERRAL_TYPE_HOSPITAL,
+            Referral.destination_provider_id == current_user.id,
         )
     if current_user.role == UserRole.PROVIDER:
         if referral_type:
@@ -113,22 +158,34 @@ async def create_referral(
         require_verified_workforce_member(current_user, "create referrals")
 
     rtype = _normalize_type(body.referral_type)
+    expected_destination_role = _expected_destination_role(rtype)
 
     patient = db.query(User).filter(User.id == body.patient_id).first()
     if not patient:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Patient not found")
 
+    destination_provider = db.query(User).filter(User.id == body.destination_provider_id).first()
+    if not destination_provider:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Destination provider not found")
+    if destination_provider.role != expected_destination_role:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=f"Destination provider must be a {expected_destination_role.value}",
+        )
+    if not destination_provider.is_active or not destination_provider.is_verified:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Destination provider must be active and verified",
+        )
+
     if current_user.role == UserRole.PROVIDER:
-        if body.patient_id not in _provider_panel_patient_ids(db, current_user.id):
-            raise HTTPException(
-                status_code=status.HTTP_403_FORBIDDEN,
-                detail="You can only refer patients you have an appointment with",
-            )
+        require_provider_panel_access(db, current_user.id, body.patient_id, "create referrals")
 
     ref = Referral(
         patient_id=body.patient_id,
         from_doctor_id=current_user.id,
         referral_type=rtype,
+        destination_provider_id=body.destination_provider_id,
         to_department=body.to_department,
         to_department_id=body.to_department_id,
         reason=body.reason,
@@ -172,7 +229,7 @@ async def list_referrals(
     elif current_user.role in (UserRole.HOSPITAL, UserRole.LABORATORY, UserRole.IMAGING, UserRole.PHARMACIST):
         require_verified_workforce_member(current_user, "view referrals")
         q = db.query(Referral)
-    elif current_user.role == UserRole.ADMIN:
+    elif current_user.is_admin_or_super():
         q = db.query(Referral)
     else:
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Not authorized")
@@ -192,21 +249,26 @@ async def get_referral(
     if not ref:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Referral not found")
 
-    if current_user.role == UserRole.ADMIN:
+    if current_user.is_admin_or_super():
         return referral_to_response(ref, db)
     if current_user.role == UserRole.PATIENT and ref.patient_id != current_user.id:
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Not authorized")
     if current_user.role == UserRole.PROVIDER and ref.from_doctor_id != current_user.id:
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Not authorized")
-    if current_user.role == UserRole.LABORATORY and ref.referral_type != REFERRAL_TYPE_LABORATORY:
+    if current_user.role == UserRole.LABORATORY and (
+        ref.referral_type != REFERRAL_TYPE_LABORATORY or ref.destination_provider_id != current_user.id
+    ):
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Not authorized")
-    if current_user.role == UserRole.IMAGING and ref.referral_type != REFERRAL_TYPE_IMAGING:
+    if current_user.role == UserRole.IMAGING and (
+        ref.referral_type != REFERRAL_TYPE_IMAGING or ref.destination_provider_id != current_user.id
+    ):
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Not authorized")
-    if current_user.role == UserRole.PHARMACIST and ref.referral_type != REFERRAL_TYPE_PHARMACY:
+    if current_user.role == UserRole.PHARMACIST and (
+        ref.referral_type != REFERRAL_TYPE_PHARMACY or ref.destination_provider_id != current_user.id
+    ):
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Not authorized")
-    if current_user.role == UserRole.HOSPITAL and ref.referral_type not in (
-        REFERRAL_TYPE_HOSPITAL,
-        REFERRAL_TYPE_PHARMACY,
+    if current_user.role == UserRole.HOSPITAL and (
+        ref.referral_type != REFERRAL_TYPE_HOSPITAL or ref.destination_provider_id != current_user.id
     ):
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Not authorized")
     if current_user.role in (
@@ -222,6 +284,7 @@ async def get_referral(
         UserRole.PROVIDER,
         UserRole.HOSPITAL,
         UserRole.ADMIN,
+        UserRole.SUPER_ADMIN,
         UserRole.LABORATORY,
         UserRole.IMAGING,
         UserRole.PHARMACIST,
@@ -242,7 +305,7 @@ async def update_referral(
     if not ref:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Referral not found")
 
-    if current_user.role == UserRole.ADMIN:
+    if current_user.is_admin_or_super():
         data = body.model_dump(exclude_unset=True)
         for field, value in data.items():
             setattr(ref, field, value)
@@ -250,15 +313,20 @@ async def update_referral(
         db.refresh(ref)
         return referral_to_response(ref, db)
 
-    if current_user.role == UserRole.LABORATORY and ref.referral_type != REFERRAL_TYPE_LABORATORY:
+    if current_user.role == UserRole.LABORATORY and (
+        ref.referral_type != REFERRAL_TYPE_LABORATORY or ref.destination_provider_id != current_user.id
+    ):
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Not authorized")
-    if current_user.role == UserRole.IMAGING and ref.referral_type != REFERRAL_TYPE_IMAGING:
+    if current_user.role == UserRole.IMAGING and (
+        ref.referral_type != REFERRAL_TYPE_IMAGING or ref.destination_provider_id != current_user.id
+    ):
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Not authorized")
-    if current_user.role == UserRole.PHARMACIST and ref.referral_type != REFERRAL_TYPE_PHARMACY:
+    if current_user.role == UserRole.PHARMACIST and (
+        ref.referral_type != REFERRAL_TYPE_PHARMACY or ref.destination_provider_id != current_user.id
+    ):
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Not authorized")
-    if current_user.role == UserRole.HOSPITAL and ref.referral_type not in (
-        REFERRAL_TYPE_HOSPITAL,
-        REFERRAL_TYPE_PHARMACY,
+    if current_user.role == UserRole.HOSPITAL and (
+        ref.referral_type != REFERRAL_TYPE_HOSPITAL or ref.destination_provider_id != current_user.id
     ):
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Not authorized")
     if current_user.role in (
@@ -286,7 +354,10 @@ async def update_referral(
                 detail="Only pending referrals can be cancelled",
             )
     elif current_user.role in (UserRole.HOSPITAL, UserRole.LABORATORY, UserRole.IMAGING, UserRole.PHARMACIST):
-        pass
+        if "status" in data and data["status"] is not None:
+            next_status = _normalize_status(data["status"])
+            _validate_destination_status_change(ref.status, next_status)
+            data["status"] = next_status
     else:
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Not authorized")
 

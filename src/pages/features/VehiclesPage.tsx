@@ -1,23 +1,55 @@
 import { useState, useMemo } from 'react';
 import { motion } from 'framer-motion';
-import { Ambulance, Wrench, MapPin, Users, Fuel, AlertCircle, CheckCircle, Inbox, Activity, Clock, AlertTriangle, Zap } from 'lucide-react';
+import { Ambulance, Wrench, Users, Fuel, AlertCircle, CheckCircle, Download, Inbox, Activity, Clock, AlertTriangle, Zap, Plus, Search, Trash2, X } from 'lucide-react';
 import { useAuth } from '@/contexts/useAuth';
 import { useAppData } from '@/contexts/useAppData';
 import { Button } from '@/components/ui/button';
+import { toast } from '@/components/ui/use-toast';
 import type { AmbulanceVehicle } from '@/data/mockData';
 
 const VehiclesPage = () => {
   const { user } = useAuth();
-  const { ambulances, updateAmbulance } = useAppData();
+  const { ambulances, addAmbulance, updateAmbulance, deleteAmbulance } = useAppData();
+  const [searchQuery, setSearchQuery] = useState('');
   const [statusFilter, setStatusFilter] = useState('all');
+  const [sortBy, setSortBy] = useState<'callSign' | 'fuel' | 'maintenance'>('callSign');
   const [selectedVehicle, setSelectedVehicle] = useState<string | null>(null);
+  const [showCreate, setShowCreate] = useState(false);
+  const [newVehicle, setNewVehicle] = useState({
+    callSign: '',
+    plateNumber: '',
+    type: 'Type-B' as AmbulanceVehicle['type'],
+    fuel: 100,
+    crew: '',
+    equipment: '',
+    nextMaintenanceDate: '',
+  });
 
   const isAmbulance = user?.role === 'ambulance';
 
   // Filter ambulances
   const filtered = useMemo(() => {
-    return ambulances.filter(v => statusFilter === 'all' || v.status === statusFilter);
-  }, [ambulances, statusFilter]);
+    const needle = searchQuery.trim().toLowerCase();
+    const rows = ambulances.filter((vehicle) => {
+      const matchesStatus = statusFilter === 'all' || vehicle.status === statusFilter;
+      const matchesSearch = !needle
+        || vehicle.callSign.toLowerCase().includes(needle)
+        || vehicle.plateNumber.toLowerCase().includes(needle)
+        || vehicle.crew.some((member) => member.name.toLowerCase().includes(needle))
+        || vehicle.equipment.some((item) => item.toLowerCase().includes(needle));
+      return matchesStatus && matchesSearch;
+    });
+
+    return [...rows].sort((left, right) => {
+      if (sortBy === 'fuel') return right.fuel - left.fuel;
+      if (sortBy === 'maintenance') {
+        const leftTime = left.nextMaintenanceDate ? new Date(left.nextMaintenanceDate).getTime() : Number.MAX_SAFE_INTEGER;
+        const rightTime = right.nextMaintenanceDate ? new Date(right.nextMaintenanceDate).getTime() : Number.MAX_SAFE_INTEGER;
+        return leftTime - rightTime;
+      }
+      return left.callSign.localeCompare(right.callSign);
+    });
+  }, [ambulances, searchQuery, sortBy, statusFilter]);
 
   // Fleet stats
   const stats = useMemo(() => {
@@ -32,10 +64,102 @@ const VehiclesPage = () => {
 
   const handleUpdateStatus = (vehicleId: string, newStatus: AmbulanceVehicle['status']) => {
     updateAmbulance(vehicleId, prev => ({ ...prev, status: newStatus }));
+    const vehicle = ambulances.find((entry) => entry.id === vehicleId);
+    if (vehicle) {
+      toast({
+        title: 'Vehicle status updated',
+        description: `${vehicle.callSign} is now ${newStatus.replace('-', ' ')}.`,
+      });
+    }
   };
 
   const handleRefuel = (vehicleId: string) => {
     updateAmbulance(vehicleId, prev => ({ ...prev, fuel: 100 }));
+    const vehicle = ambulances.find((entry) => entry.id === vehicleId);
+    if (vehicle) {
+      toast({
+        title: 'Vehicle refueled',
+        description: `${vehicle.callSign} fuel was reset to 100%.`,
+      });
+    }
+  };
+
+  const handleCreateVehicle = () => {
+    if (!newVehicle.callSign.trim() || !newVehicle.plateNumber.trim()) {
+      toast({
+        title: 'Missing vehicle details',
+        description: 'Call sign and plate number are required.',
+        variant: 'destructive',
+      });
+      return;
+    }
+    addAmbulance({
+      id: `amb-${crypto.randomUUID()}`,
+      callSign: newVehicle.callSign.trim(),
+      plateNumber: newVehicle.plateNumber.trim(),
+      type: newVehicle.type,
+      status: 'available',
+      fuel: Math.max(0, Math.min(100, newVehicle.fuel)),
+      crew: newVehicle.crew
+        .split(',')
+        .map((member) => member.trim())
+        .filter(Boolean)
+        .map((member, index) => ({ name: member, role: index === 0 ? 'driver' : 'paramedic' as 'driver' | 'paramedic' | 'emt' })),
+      equipment: newVehicle.equipment.split(',').map((item) => item.trim()).filter(Boolean),
+      nextMaintenanceDate: newVehicle.nextMaintenanceDate || undefined,
+      lastMaintenanceDate: new Date().toISOString(),
+    });
+    setNewVehicle({
+      callSign: '',
+      plateNumber: '',
+      type: 'Type-B',
+      fuel: 100,
+      crew: '',
+      equipment: '',
+      nextMaintenanceDate: '',
+    });
+    setShowCreate(false);
+    toast({
+      title: 'Vehicle registered',
+      description: `${newVehicle.callSign.trim()} has been added to the fleet.`,
+    });
+  };
+
+  const handleExportFleet = () => {
+    if (filtered.length === 0) {
+      toast({
+        title: 'Nothing to export',
+        description: 'There are no fleet vehicles in the current view.',
+        variant: 'destructive',
+      });
+      return;
+    }
+
+    const csv = [
+      ['Call Sign', 'Plate Number', 'Type', 'Status', 'Fuel', 'Crew', 'Equipment', 'Next Maintenance'].join(','),
+      ...filtered.map((vehicle) => [
+        vehicle.callSign,
+        vehicle.plateNumber,
+        vehicle.type,
+        vehicle.status,
+        String(vehicle.fuel),
+        vehicle.crew.map((member) => `${member.name} (${member.role})`).join('; '),
+        vehicle.equipment.join('; '),
+        vehicle.nextMaintenanceDate ?? '',
+      ].map((value) => `"${String(value).replace(/"/g, '""')}"`).join(',')),
+    ].join('\n');
+
+    const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    link.href = url;
+    link.download = `fleet-${new Date().toISOString().slice(0, 10)}.csv`;
+    link.click();
+    URL.revokeObjectURL(url);
+    toast({
+      title: 'Fleet exported',
+      description: 'The current fleet view was downloaded as CSV.',
+    });
   };
 
   const getStatusColor = (status: string) => {
@@ -76,7 +200,63 @@ const VehiclesPage = () => {
           <h1 className="text-2xl font-display font-bold text-foreground">Fleet Management</h1>
           <p className="text-muted-foreground mt-1">Monitor and manage ambulance fleet operations</p>
         </div>
+        <button onClick={() => setShowCreate((value) => !value)} className="flex items-center gap-2 px-4 py-2.5 rounded-xl bg-gradient-primary text-primary-foreground text-sm font-semibold hover:opacity-90 transition">
+          {showCreate ? <X className="w-4 h-4" /> : <Plus className="w-4 h-4" />}
+          {showCreate ? 'Close' : 'Add Vehicle'}
+        </button>
+        <button onClick={handleExportFleet} className="ml-2 flex items-center gap-2 rounded-xl border border-input px-4 py-2.5 text-sm font-semibold text-foreground hover:bg-muted/50 transition">
+          <Download className="h-4 w-4" />
+          Export CSV
+        </button>
       </div>
+
+      {showCreate && (
+        <motion.div initial={{ opacity: 0, y: -10 }} animate={{ opacity: 1, y: 0 }} className="bg-card rounded-2xl border border-border p-6 space-y-4">
+          <h2 className="text-lg font-display font-semibold text-card-foreground">Register Ambulance Vehicle</h2>
+          <div className="grid md:grid-cols-2 lg:grid-cols-4 gap-4">
+            <div>
+              <label className="block text-sm font-medium text-foreground mb-1">Call Sign</label>
+              <input value={newVehicle.callSign} onChange={(e) => setNewVehicle((prev) => ({ ...prev, callSign: e.target.value }))} className="w-full h-11 px-4 rounded-xl border border-input bg-background text-foreground focus:outline-none focus:ring-2 focus:ring-primary/30" />
+            </div>
+            <div>
+              <label className="block text-sm font-medium text-foreground mb-1">Plate Number</label>
+              <input value={newVehicle.plateNumber} onChange={(e) => setNewVehicle((prev) => ({ ...prev, plateNumber: e.target.value }))} className="w-full h-11 px-4 rounded-xl border border-input bg-background text-foreground focus:outline-none focus:ring-2 focus:ring-primary/30" />
+            </div>
+            <div>
+              <label className="block text-sm font-medium text-foreground mb-1">Type</label>
+              <select value={newVehicle.type} onChange={(e) => setNewVehicle((prev) => ({ ...prev, type: e.target.value as AmbulanceVehicle['type'] }))} className="w-full h-11 px-4 rounded-xl border border-input bg-background text-foreground focus:outline-none focus:ring-2 focus:ring-primary/30">
+                <option value="Type-A">Type-A</option>
+                <option value="Type-B">Type-B</option>
+                <option value="Type-C">Type-C</option>
+              </select>
+            </div>
+            <div>
+              <label className="block text-sm font-medium text-foreground mb-1">Fuel %</label>
+              <input type="number" min="0" max="100" value={newVehicle.fuel} onChange={(e) => setNewVehicle((prev) => ({ ...prev, fuel: Number(e.target.value) }))} className="w-full h-11 px-4 rounded-xl border border-input bg-background text-foreground focus:outline-none focus:ring-2 focus:ring-primary/30" />
+            </div>
+            <div className="md:col-span-2">
+              <label className="block text-sm font-medium text-foreground mb-1">Crew</label>
+              <input value={newVehicle.crew} onChange={(e) => setNewVehicle((prev) => ({ ...prev, crew: e.target.value }))} placeholder="Comma-separated crew names" className="w-full h-11 px-4 rounded-xl border border-input bg-background text-foreground focus:outline-none focus:ring-2 focus:ring-primary/30" />
+            </div>
+            <div className="md:col-span-2">
+              <label className="block text-sm font-medium text-foreground mb-1">Equipment</label>
+              <input value={newVehicle.equipment} onChange={(e) => setNewVehicle((prev) => ({ ...prev, equipment: e.target.value }))} placeholder="Comma-separated equipment list" className="w-full h-11 px-4 rounded-xl border border-input bg-background text-foreground focus:outline-none focus:ring-2 focus:ring-primary/30" />
+            </div>
+            <div>
+              <label className="block text-sm font-medium text-foreground mb-1">Next Maintenance</label>
+              <input type="date" value={newVehicle.nextMaintenanceDate} onChange={(e) => setNewVehicle((prev) => ({ ...prev, nextMaintenanceDate: e.target.value }))} className="w-full h-11 px-4 rounded-xl border border-input bg-background text-foreground focus:outline-none focus:ring-2 focus:ring-primary/30" />
+            </div>
+          </div>
+          <div className="flex gap-3">
+            <button onClick={handleCreateVehicle} className="px-5 py-2.5 rounded-xl bg-gradient-primary text-primary-foreground text-sm font-semibold hover:opacity-90 transition">
+              Save Vehicle
+            </button>
+            <button onClick={() => setShowCreate(false)} className="px-5 py-2.5 rounded-xl bg-secondary text-secondary-foreground text-sm font-semibold">
+              Cancel
+            </button>
+          </div>
+        </motion.div>
+      )}
 
       {/* Stats Cards */}
       <div className="grid grid-cols-2 md:grid-cols-5 gap-3">
@@ -110,6 +290,27 @@ const VehiclesPage = () => {
         </motion.div>
       </div>
 
+      <div className="grid gap-3 md:grid-cols-[minmax(0,1fr)_220px_220px]">
+        <div className="relative">
+          <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+          <input
+            value={searchQuery}
+            onChange={(event) => setSearchQuery(event.target.value)}
+            placeholder="Search by call sign, plate, crew, or equipment..."
+            className="h-11 w-full rounded-xl border border-input bg-background pl-10 pr-4 text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-primary/30"
+          />
+        </div>
+        <select
+          value={sortBy}
+          onChange={(event) => setSortBy(event.target.value as 'callSign' | 'fuel' | 'maintenance')}
+          className="h-11 rounded-xl border border-input bg-background px-4 text-foreground focus:outline-none focus:ring-2 focus:ring-primary/30"
+        >
+          <option value="callSign">Sort: Call sign</option>
+          <option value="fuel">Sort: Fuel level</option>
+          <option value="maintenance">Sort: Maintenance due</option>
+        </select>
+      </div>
+
       {/* Status Filter */}
       <div className="flex gap-2 flex-wrap">
         {['all', 'available', 'in-transit', 'on-scene', 'returning', 'maintenance'].map(status => (
@@ -131,7 +332,7 @@ const VehiclesPage = () => {
       {filtered.length === 0 ? (
         <div className="flex flex-col items-center justify-center py-12 text-muted-foreground bg-card rounded-2xl border border-border">
           <Inbox className="w-10 h-10 mb-3" />
-          <p className="text-sm">No vehicles in this status</p>
+          <p className="text-sm">{ambulances.length === 0 ? 'No vehicles in the fleet yet' : 'No vehicles match your current search or status filter'}</p>
         </div>
       ) : (
         <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-4">
@@ -248,6 +449,17 @@ const VehiclesPage = () => {
                         )}
                       </>
                     )}
+                    <Button
+                      onClick={e => {
+                        e.stopPropagation();
+                        deleteAmbulance(vehicle.id);
+                      }}
+                      variant="outline"
+                      size="sm"
+                      className="gap-1 text-destructive"
+                    >
+                      <Trash2 className="w-3 h-3" /> Delete
+                    </Button>
                     {vehicle.status === 'maintenance' && (
                       <Button
                         onClick={e => {

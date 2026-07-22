@@ -38,6 +38,17 @@ export const DEFAULT_PHARMACY_REFERRAL_TARGETS = [
   'Hospital outpatient pharmacy',
 ] as const;
 
+export const REFERRAL_DESTINATION_ERROR = 'The destination must be different from service rendered';
+
+const normalizeReferralValue = (value: string) => value.toLowerCase().replace(/[^a-z0-9]+/g, '');
+
+const referralServiceAliases: Record<ReferralKind, readonly string[]> = {
+  hospital: ['hospital', 'specialist', 'specialist care'],
+  laboratory: ['laboratory', 'lab'],
+  imaging: ['imaging', 'radiology'],
+  pharmacy: ['pharmacy'],
+};
+
 /** @deprecated use DEFAULT_HOSPITAL_DEPARTMENTS */
 export const DEFAULT_REFERRAL_DEPARTMENTS = DEFAULT_HOSPITAL_DEPARTMENTS;
 
@@ -82,16 +93,21 @@ export const getVisibleReferrals = (
   if (role === 'doctor') {
     rows = referrals.filter((referral) => referral.fromDoctorId === user.id);
   } else if (role === 'hospital') {
-    rows = referrals;
+    rows = referrals.filter((referral) => referral.referralType === 'hospital' && referral.destinationProviderId === user.id);
+  } else if (role === 'physiotherapist') {
+    rows = referrals.filter(
+      (referral) =>
+        referral.referralType === 'hospital' &&
+        (referral.destinationProviderId === user.id || referral.destinationProviderRole === 'physiotherapist'),
+    );
   } else if (role === 'patient') {
     rows = referrals.filter((referral) => referral.patientId === user.id);
   } else if (role === 'laboratory' || role === 'imaging' || role === 'pharmacy') {
-    rows = referrals;
+    rows = referrals.filter((referral) => referral.referralType === role && referral.destinationProviderId === user.id);
   } else {
     return [];
   }
 
-  // Doctors use separate dashboard URLs per queue; hospital staff see hospital + pharmacy together from the API.
   if (options?.kind && role === 'doctor') {
     rows = rows.filter((r) => r.referralType === options.kind);
   }
@@ -100,6 +116,28 @@ export const getVisibleReferrals = (
 
 export const getReferralDepartmentId = (department: string) =>
   department.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/(^-|-$)/g, '');
+
+export const isReferralDestinationValid = (kind: ReferralKind, destination: string) => {
+  const normalizedDestination = normalizeReferralValue(destination);
+  if (!normalizedDestination) return true;
+  return !referralServiceAliases[kind].some((alias) => normalizeReferralValue(alias) === normalizedDestination);
+};
+
+const referralDestinationRole: Record<ReferralKind, User['role']> = {
+  hospital: 'hospital',
+  laboratory: 'laboratory',
+  imaging: 'imaging',
+  pharmacy: 'pharmacy',
+};
+
+export const getReferralDestinationProviders = (
+  users: User[],
+  kind: ReferralKind,
+) =>
+  users
+    .filter((candidate) => candidate.role === referralDestinationRole[kind])
+    .filter((candidate) => candidate.isActive !== false && candidate.isVerified !== false)
+    .sort((left, right) => left.name.localeCompare(right.name));
 
 export const referralKindLabel = (t: ReferralType): string => {
   switch (t) {
@@ -118,7 +156,10 @@ export const canAcceptReferral = (referral: Referral, role?: User['role'] | stri
   if (referral.status !== 'pending') return false;
   const normalized = normalizeUserRole(role) ?? role;
   if (normalized === 'hospital') {
-    return referral.referralType === 'hospital' || referral.referralType === 'pharmacy';
+    return referral.referralType === 'hospital';
+  }
+  if (normalized === 'physiotherapist') {
+    return referral.referralType === 'hospital' && referral.destinationProviderRole === 'physiotherapist';
   }
   if (normalized === 'laboratory') return referral.referralType === 'laboratory';
   if (normalized === 'imaging') return referral.referralType === 'imaging';
@@ -130,7 +171,10 @@ export const canCompleteReferral = (referral: Referral, role?: User['role'] | st
   if (referral.status !== 'accepted') return false;
   const normalized = normalizeUserRole(role) ?? role;
   if (normalized === 'hospital') {
-    return referral.referralType === 'hospital' || referral.referralType === 'pharmacy';
+    return referral.referralType === 'hospital';
+  }
+  if (normalized === 'physiotherapist') {
+    return referral.referralType === 'hospital' && referral.destinationProviderRole === 'physiotherapist';
   }
   if (normalized === 'laboratory') return referral.referralType === 'laboratory';
   if (normalized === 'imaging') return referral.referralType === 'imaging';

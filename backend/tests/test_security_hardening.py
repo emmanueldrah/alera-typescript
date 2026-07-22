@@ -1,22 +1,29 @@
 from __future__ import annotations
 
 import asyncio
+from io import BytesIO
 from datetime import datetime, timedelta, timezone
 from urllib.parse import parse_qs, urlparse
 
 import pytest
 from fastapi import HTTPException
 from fastapi.security import HTTPAuthorizationCredentials
+from fastapi.testclient import TestClient
 from pydantic import ValidationError
+from starlette.datastructures import UploadFile
 
 from app.models import PatientDocument
 from app.models.additional_features import DocumentType
 from app.models.ambulance import AmbulanceRequest, AmbulanceRequestStatus, EmergencyPriority
 from app.models.appointment import Appointment, AppointmentStatus, AppointmentType
 from app.models.lab_imaging import ImagingScan, ImagingScanStatus, LabTest, LabTestStatus
+from app.models.notification import Notification
 from app.models.user import User, UserRole
+from app.routes.imaging import download_imaging_asset, download_imaging_report, upload_imaging_results
 from app.routes.admin import approve_provider, deactivate_user, list_verifications
-from app.routes.appointments import create_appointment
+from app.routes.admin import change_user_role
+from app.routes.appointments import create_appointment, get_appointment, list_appointments
+from app.routes.audit import get_data_retention_policy
 from app.routes.auth import (
     change_password,
     login,
@@ -28,10 +35,11 @@ from app.routes.auth import (
     verify_email,
 )
 from app.services.email_service import EmailService
-from app.routes.consents import create_consent
-from app.routes.documents import get_document, list_documents
+from app.routes.consents import create_consent, list_consents
+from app.routes.documents import get_document, get_patient_documents, list_documents
+from app.routes.notifications import get_notification
 from app.routes.reminders_templates import create_reminder, list_reminders
-from app.routes.users import list_doctors
+from app.routes.users import get_user, list_accessible_users, list_doctors, list_users
 from app.schemas import (
     AppointmentCreate,
     EmailVerificationConfirmRequest,
@@ -45,17 +53,24 @@ from app.schemas.additional_features import AppointmentReminderCreate, PatientCo
 from app.utils.access import WORKFORCE_ROLES, normalized_enum_text
 from app.utils.dependencies import get_current_user
 from app.utils.db_types import enum_value_renames
+from app.utils.auth import create_access_token
 from app.utils.time import utcnow
 from database import SessionLocal
 import database
+from main import app
 
 
 ADMIN_EMAIL = "admin@alera.health"
 ADMIN_PASSWORD = "admin_alera_2026!"
+ADMIN_PASSWORD_HASH = "$argon2id$v=19$m=65536,t=3,p=4$MgbgnJPyvteaE+L8v5cS4g$VBM/CZaZX34GJGv5NjCI4oQQYqFf/BSbAoqGW4nVjRc"
 
 
 def auth_credentials(token: str) -> HTTPAuthorizationCredentials:
     return HTTPAuthorizationCredentials(scheme="Bearer", credentials=token)
+
+
+def issue_access_token_for_user(user: User) -> str:
+    return create_access_token({"sub": str(user.id), "sv": int(user.session_version or 0)})
 
 
 def run(coro):
@@ -98,6 +113,49 @@ def seed_document(db_session, *, patient_id: int, uploaded_by: int, is_private: 
     db_session.commit()
     db_session.refresh(document)
     return document
+
+
+def seed_user(
+    db_session,
+    *,
+    email: str,
+    role: UserRole,
+    first_name: str,
+    last_name: str,
+    is_verified: bool = True,
+) -> User:
+    user = User(
+        email=email,
+        username=email.split("@", 1)[0],
+        hashed_password=ADMIN_PASSWORD_HASH,
+        first_name=first_name,
+        last_name=last_name,
+        role=role,
+        is_active=True,
+        is_verified=is_verified,
+        email_verified=True,
+        email_verified_at=utcnow(),
+    )
+    db_session.add(user)
+    db_session.commit()
+    db_session.refresh(user)
+    return user
+
+
+def seed_imaging_scan(db_session, *, patient_id: int, ordered_by: int, center_id: int) -> ImagingScan:
+    scan = ImagingScan(
+        patient_id=patient_id,
+        ordered_by=ordered_by,
+        destination_provider_id=center_id,
+        scan_type="MRI",
+        body_part="Head",
+        clinical_indication="Headache",
+        status=ImagingScanStatus.ORDERED,
+    )
+    db_session.add(scan)
+    db_session.commit()
+    db_session.refresh(scan)
+    return scan
 
 
 def _make_email_capture():
@@ -175,6 +233,180 @@ def test_enum_value_renames_detect_legacy_uppercase_labels():
         ("PROVIDER", "provider"),
         ("ADMIN", "admin"),
     ]
+
+
+def test_missing_postgres_enum_labels_detects_new_roles():
+    missing = database._missing_postgres_enum_labels(
+        ["patient", "provider", "pharmacist", "admin", "super_admin"],
+        ["patient", "provider", "pharmacist", "admin", "super_admin", "hospital", "laboratory", "imaging", "ambulance"],
+    )
+
+    assert missing == ["hospital", "laboratory", "imaging", "ambulance"]
+
+
+def test_production_skips_default_admin_seeding_without_explicit_credentials(monkeypatch):
+    monkeypatch.setattr("database.settings.ENVIRONMENT", "production")
+    monkeypatch.setattr("database.settings.DATABASE_URL", "postgresql://localhost/db")
+    monkeypatch.delenv("ADMIN_EMAIL", raising=False)
+    monkeypatch.delenv("ADMIN_PASSWORD", raising=False)
+    monkeypatch.delenv("SUPER_ADMIN_EMAIL", raising=False)
+    monkeypatch.delenv("SUPER_ADMIN_PASSWORD", raising=False)
+
+    assert database._should_seed_default_admin_accounts() is False
+
+
+def test_super_admin_can_list_and_view_users(db_session):
+    super_admin = load_user(db_session, ADMIN_EMAIL)
+    super_admin.role = UserRole.SUPER_ADMIN
+    db_session.commit()
+    db_session.refresh(super_admin)
+
+    patient = seed_user(
+        db_session,
+        email="audited-patient@example.com",
+        role=UserRole.PATIENT,
+        first_name="Audited",
+        last_name="Patient",
+    )
+
+    users = run(list_users(current_user=super_admin, db=db_session, skip=0, limit=500))
+    fetched = run(get_user(user_id=patient.id, current_user=super_admin, db=db_session))
+    accessible = run(list_accessible_users(current_user=super_admin, db=db_session))
+
+    assert any(user.id == patient.id for user in users)
+    assert fetched.id == patient.id
+    assert any(user.id == patient.id for user in accessible)
+
+
+def test_patient_accessible_directory_and_doctors_include_verified_physiotherapists(db_session):
+    patient = seed_user(
+        db_session,
+        email="directory-patient@example.com",
+        role=UserRole.PATIENT,
+        first_name="Directory",
+        last_name="Patient",
+    )
+    physiotherapist = seed_user(
+        db_session,
+        email="physio@example.com",
+        role=UserRole.PHYSIOTHERAPIST,
+        first_name="Physio",
+        last_name="Therapist",
+    )
+
+    accessible = run(list_accessible_users(current_user=patient, db=db_session))
+    doctors = run(list_doctors(current_user=patient, db=db_session))
+
+    assert any(user.id == physiotherapist.id for user in accessible)
+    assert any(user.id == physiotherapist.id for user in doctors)
+
+
+def test_super_admin_can_view_patient_document_collections(db_session):
+    super_admin = load_user(db_session, ADMIN_EMAIL)
+    super_admin.role = UserRole.SUPER_ADMIN
+    db_session.commit()
+    db_session.refresh(super_admin)
+
+    patient = seed_user(
+        db_session,
+        email="document-owner@example.com",
+        role=UserRole.PATIENT,
+        first_name="Document",
+        last_name="Owner",
+    )
+    seed_document(db_session, patient_id=patient.id, uploaded_by=patient.id, is_private=True)
+
+    collection = run(get_patient_documents(patient_id=patient.id, skip=0, limit=20, db=db_session, current_user=super_admin))
+
+    assert collection.total == 1
+    assert collection.items[0].patient_id == patient.id
+
+
+def test_super_admin_can_view_admin_only_audit_and_appointment_resources(db_session):
+    super_admin = load_user(db_session, ADMIN_EMAIL)
+    super_admin.role = UserRole.SUPER_ADMIN
+    db_session.commit()
+    db_session.refresh(super_admin)
+
+    patient = seed_user(
+        db_session,
+        email="appt-patient@example.com",
+        role=UserRole.PATIENT,
+        first_name="Appt",
+        last_name="Patient",
+    )
+    provider = seed_user(
+        db_session,
+        email="appt-provider@example.com",
+        role=UserRole.PROVIDER,
+        first_name="Appt",
+        last_name="Provider",
+    )
+    appointment = Appointment(
+        patient_id=patient.id,
+        provider_id=provider.id,
+        title="Follow-up",
+        description="Routine follow-up",
+        appointment_type=AppointmentType.TELEHEALTH,
+        status=AppointmentStatus.SCHEDULED,
+        scheduled_time=utcnow() + timedelta(days=1),
+        duration_minutes=30,
+    )
+    db_session.add(appointment)
+    db_session.commit()
+    db_session.refresh(appointment)
+
+    retention = run(get_data_retention_policy(db=db_session, current_user=super_admin))
+    appointments = run(list_appointments(current_user=super_admin, db=db_session, skip=0, limit=20))
+    fetched = run(get_appointment(appointment_id=appointment.id, current_user=super_admin, db=db_session))
+
+    assert retention["retention_days"] == 2555
+    assert any(item.id == appointment.id for item in appointments)
+    assert fetched.id == appointment.id
+
+
+def test_super_admin_can_access_admin_level_consent_and_notification_views(db_session):
+    super_admin = load_user(db_session, ADMIN_EMAIL)
+    super_admin.role = UserRole.SUPER_ADMIN
+    db_session.commit()
+    db_session.refresh(super_admin)
+
+    patient = seed_user(
+        db_session,
+        email="consent-patient@example.com",
+        role=UserRole.PATIENT,
+        first_name="Consent",
+        last_name="Patient",
+    )
+    consent = run(
+        create_consent(
+            PatientConsentCreate(
+                consent_type="treatment",
+                title="Treatment Consent",
+                description="Allow treatment",
+            ),
+            patient_id=patient.id,
+            db=db_session,
+            current_user=super_admin,
+        )
+    )
+
+    notification = Notification(
+        user_id=patient.id,
+        title="Private notice",
+        message="Visible to elevated admins",
+        notification_type="system",
+    )
+    db_session.add(notification)
+    db_session.commit()
+    db_session.refresh(notification)
+
+    consents = run(list_consents(skip=0, limit=20, patient_id=patient.id, db=db_session, current_user=super_admin))
+    fetched_notification = run(get_notification(notification_id=notification.id, db=db_session, current_user=super_admin))
+
+    assert consents.total == 1
+    assert consents.items[0].id == consent.id
+    assert fetched_notification.id == notification.id
 
 
 def test_verification_email_hits_sendgrid_api_when_configured(monkeypatch):
@@ -286,19 +518,36 @@ def test_logout_revokes_previous_token(db_session):
         db_session,
     ))
 
-    login_result = run(login(LoginRequest(email="logout@example.com", password="password123"), db_session))
-    token = login_result["access_token"]
+    run(login(LoginRequest(email="logout@example.com", password="password123"), db_session))
+    token = issue_access_token_for_user(load_user(db_session, "logout@example.com"))
 
-    current_user = run(get_current_user(auth_credentials(token), db_session))
+    current_user = run(get_current_user(request=None, credentials=auth_credentials(token), db=db_session))
     assert current_user.email == "logout@example.com"
 
     run(logout(current_user=current_user, db=db_session))
 
     with pytest.raises(HTTPException) as exc_info:
-        run(get_current_user(auth_credentials(token), db_session))
+        run(get_current_user(request=None, credentials=auth_credentials(token), db=db_session))
 
     assert exc_info.value.status_code == 401
     assert exc_info.value.detail == "Session expired"
+
+
+def test_login_sets_http_only_cookies_without_returning_raw_tokens():
+    client = TestClient(app)
+
+    response = client.post(
+        "/api/auth/login",
+        json={"email": ADMIN_EMAIL, "password": ADMIN_PASSWORD},
+    )
+
+    assert response.status_code == 200
+    payload = response.json()
+    assert payload["user"]["email"] == ADMIN_EMAIL
+    assert "access_token" not in payload
+    assert "refresh_token" not in payload
+    assert response.cookies.get("access_token")
+    assert response.cookies.get("refresh_token")
 
 
 def test_password_change_revokes_previous_token(db_session):
@@ -314,9 +563,9 @@ def test_password_change_revokes_previous_token(db_session):
         db_session,
     ))
 
-    login_result = run(login(LoginRequest(email="change@example.com", password="password123"), db_session))
-    token = login_result["access_token"]
-    current_user = run(get_current_user(auth_credentials(token), db_session))
+    run(login(LoginRequest(email="change@example.com", password="password123"), db_session))
+    token = issue_access_token_for_user(load_user(db_session, "change@example.com"))
+    current_user = run(get_current_user(request=None, credentials=auth_credentials(token), db=db_session))
 
     run(change_password(
         PasswordChangeRequest(
@@ -329,7 +578,7 @@ def test_password_change_revokes_previous_token(db_session):
     ))
 
     with pytest.raises(HTTPException) as exc_info:
-        run(get_current_user(auth_credentials(token), db_session))
+        run(get_current_user(request=None, credentials=auth_credentials(token), db=db_session))
 
     assert exc_info.value.status_code == 401
 
@@ -337,7 +586,7 @@ def test_password_change_revokes_previous_token(db_session):
         run(login(LoginRequest(email="change@example.com", password="password123"), db_session))
 
     new_login = run(login(LoginRequest(email="change@example.com", password="newpassword123"), db_session))
-    assert new_login["access_token"]
+    assert new_login["user"].email == "change@example.com"
 
 
 def test_admin_deactivation_revokes_current_tokens(db_session):
@@ -353,17 +602,17 @@ def test_admin_deactivation_revokes_current_tokens(db_session):
         db_session,
     ))
 
-    patient_login = run(login(LoginRequest(email="deactivate@example.com", password="password123"), db_session))
-    patient_token = patient_login["access_token"]
-    patient_user = run(get_current_user(auth_credentials(patient_token), db_session))
+    run(login(LoginRequest(email="deactivate@example.com", password="password123"), db_session))
+    patient_token = issue_access_token_for_user(load_user(db_session, "deactivate@example.com"))
+    patient_user = run(get_current_user(request=None, credentials=auth_credentials(patient_token), db=db_session))
 
-    admin_login = run(login(LoginRequest(email=ADMIN_EMAIL, password=ADMIN_PASSWORD), db_session))
-    admin_user = run(get_current_user(auth_credentials(admin_login["access_token"]), db_session))
+    run(login(LoginRequest(email=ADMIN_EMAIL, password=ADMIN_PASSWORD), db_session))
+    admin_user = run(get_current_user(request=None, credentials=auth_credentials(issue_access_token_for_user(load_user(db_session, ADMIN_EMAIL))), db=db_session))
 
     run(deactivate_user(user_id=patient_user.id, current_user=admin_user, db=db_session))
 
     with pytest.raises(HTTPException) as exc_info:
-        run(get_current_user(auth_credentials(patient_token), db_session))
+        run(get_current_user(request=None, credentials=auth_credentials(patient_token), db=db_session))
 
     assert exc_info.value.status_code == 403
     assert exc_info.value.detail == "User account is inactive"
@@ -505,6 +754,53 @@ def test_verified_provider_filtering_and_scoped_patient_data(db_session):
     assert consent.patient_id == patient_user.id
 
 
+@pytest.mark.parametrize(
+    ("requested_role", "expected_role"),
+    [
+        ("patient", UserRole.PATIENT),
+        ("doctor", UserRole.PROVIDER),
+        ("provider", UserRole.PROVIDER),
+        ("pharmacy", UserRole.PHARMACIST),
+        ("pharmacist", UserRole.PHARMACIST),
+        ("hospital", UserRole.HOSPITAL),
+        ("laboratory", UserRole.LABORATORY),
+        ("imaging", UserRole.IMAGING),
+        ("ambulance", UserRole.AMBULANCE),
+        ("admin", UserRole.ADMIN),
+        ("super_admin", UserRole.SUPER_ADMIN),
+    ],
+)
+def test_super_admin_can_change_user_roles(db_session, requested_role, expected_role):
+    user_result = run(register(
+        UserCreate(
+            email="rolechange@example.com",
+            username="rolechange-user",
+            first_name="Role",
+            last_name="Change",
+            password="password123",
+            role="patient",
+        ),
+        db_session,
+    ))
+
+    target_user = load_user_by_id(db_session, user_result["user"].id)
+    super_admin = load_user(db_session, ADMIN_EMAIL)
+    super_admin.role = UserRole.SUPER_ADMIN
+    db_session.commit()
+    db_session.refresh(super_admin)
+
+    result = run(change_user_role(
+        user_id=target_user.id,
+        new_role=requested_role,
+        current_user=super_admin,
+        db=db_session,
+    ))
+
+    db_session.refresh(target_user)
+    assert result["new_role"] == expected_role.value
+    assert target_user.role == expected_role
+
+
 def test_email_verification_flow_and_resend(db_session, monkeypatch):
     captured, send_verification_email, _ = _make_email_capture()
     monkeypatch.setattr("app.routes.auth.EmailService.send_verification_email", send_verification_email)
@@ -546,6 +842,29 @@ def test_email_verification_flow_and_resend(db_session, monkeypatch):
     assert user.email_verification_expires_at is None
 
 
+def test_registration_rolls_back_when_verification_email_delivery_fails(db_session, monkeypatch):
+    async def failing_send_verification_email(*args, **kwargs):
+        raise RuntimeError("mail provider unavailable")
+
+    monkeypatch.setattr("app.routes.auth.EmailService.send_verification_email", failing_send_verification_email)
+
+    with pytest.raises(HTTPException) as exc_info:
+        run(register(
+            UserCreate(
+                email="cannotverify@example.com",
+                username="cannotverify",
+                first_name="Cannot",
+                last_name="Verify",
+                password="password123",
+                role="patient",
+            ),
+            db_session,
+        ))
+
+    assert exc_info.value.status_code == 503
+    assert db_session.query(User).filter(User.email == "cannotverify@example.com").first() is None
+
+
 def test_admin_resend_verification_is_a_noop(db_session):
     admin = load_user(db_session, ADMIN_EMAIL)
     admin.email_verified = False
@@ -577,8 +896,8 @@ def test_password_reset_flow_revokes_sessions_and_allows_new_login(db_session, m
         db_session,
     ))
 
-    login_result = run(login(LoginRequest(email="resetme@example.com", password="password123"), db_session))
-    token = login_result["access_token"]
+    run(login(LoginRequest(email="resetme@example.com", password="password123"), db_session))
+    token = issue_access_token_for_user(load_user(db_session, "resetme@example.com"))
 
     request_result = run(request_password_reset(PasswordResetRequest(email="resetme@example.com"), db_session))
     assert "reset link has been sent" in request_result["message"].lower()
@@ -598,7 +917,7 @@ def test_password_reset_flow_revokes_sessions_and_allows_new_login(db_session, m
     assert reset_result["message"] == "Password reset successfully"
 
     with pytest.raises(HTTPException) as exc_info:
-        run(get_current_user(auth_credentials(token), db_session))
+        run(get_current_user(request=None, credentials=auth_credentials(token), db=db_session))
 
     assert exc_info.value.status_code == 401
 
@@ -606,4 +925,251 @@ def test_password_reset_flow_revokes_sessions_and_allows_new_login(db_session, m
         run(login(LoginRequest(email="resetme@example.com", password="password123"), db_session))
 
     new_login = run(login(LoginRequest(email="resetme@example.com", password="newpassword123"), db_session))
-    assert new_login["access_token"]
+    assert new_login["user"].email == "resetme@example.com"
+
+
+def test_password_reset_request_rolls_back_token_when_email_delivery_fails(db_session, monkeypatch):
+    async def noop_send_verification_email(*args, **kwargs):
+        return None
+
+    async def failing_send_password_reset(*args, **kwargs):
+        raise RuntimeError("mail provider unavailable")
+
+    monkeypatch.setattr("app.routes.auth.EmailService.send_verification_email", noop_send_verification_email)
+    monkeypatch.setattr("app.routes.auth.EmailService.send_password_reset", failing_send_password_reset)
+
+    run(register(
+        UserCreate(
+            email="resetfail@example.com",
+            username="resetfail",
+            first_name="Reset",
+            last_name="Fail",
+            password="password123",
+            role="patient",
+        ),
+        db_session,
+    ))
+
+    result = run(request_password_reset(PasswordResetRequest(email="resetfail@example.com"), db_session))
+    assert "reset link has been sent" in result["message"].lower()
+
+    user = load_user(db_session, "resetfail@example.com")
+    assert user.password_reset_token_hash is None
+    assert user.password_reset_expires_at is None
+
+
+def test_imaging_center_can_upload_report_and_multiple_scan_files(db_session, monkeypatch):
+    patient = seed_user(
+        db_session,
+        email="patient-imaging@example.com",
+        role=UserRole.PATIENT,
+        first_name="Pat",
+        last_name="Ient",
+    )
+    provider = seed_user(
+        db_session,
+        email="doctor-imaging@example.com",
+        role=UserRole.PROVIDER,
+        first_name="Doc",
+        last_name="Tor",
+    )
+    center = seed_user(
+        db_session,
+        email="center-imaging@example.com",
+        role=UserRole.IMAGING,
+        first_name="Scan",
+        last_name="Center",
+    )
+    center.postdicom_api_url = "https://postdicom.test/api/upload"
+    db_session.commit()
+
+    async def fake_upload_imaging_results(api_url, api_key, scan, report_file, image_files, findings, impression, status):
+        return {
+            "study_id": f"study-{scan.id}",
+            "study_url": f"https://postdicom.test/study/{scan.id}",
+        }
+
+    monkeypatch.setattr(
+        "app.services.postdicom_service.PostDICOMService.upload_imaging_results",
+        fake_upload_imaging_results,
+    )
+
+    scan = seed_imaging_scan(db_session, patient_id=patient.id, ordered_by=provider.id, center_id=center.id)
+
+    response = run(
+        upload_imaging_results(
+            scan.id,
+            findings="No acute intracranial abnormality.",
+            impression="Normal MRI brain.",
+            status_value="completed",
+            report_file=UploadFile(filename="report.pdf", file=BytesIO(b"%PDF-1.4 test"), headers={"content-type": "application/pdf"}),
+            image_files=[
+                UploadFile(filename="study-1.dcm", file=BytesIO(b"DICM study 1"), headers={"content-type": "application/dicom"}),
+                UploadFile(filename="study-2.dcm", file=BytesIO(b"DICM study 2"), headers={"content-type": "application/dicom"}),
+            ],
+            current_user=center,
+            db=db_session,
+        )
+    )
+
+    db_session.refresh(scan)
+    assert response.status == "completed"
+    assert response.report_file is None
+    assert len(response.image_files) == 0
+    assert scan.report_url is None
+    assert scan.image_url is None
+    assert scan.postdicom_study_id == f"study-{scan.id}"
+    assert scan.postdicom_study_url == f"https://postdicom.test/study/{scan.id}"
+    assert scan.completed_at is not None
+
+
+def test_other_imaging_center_cannot_upload_results_for_foreign_scan(db_session):
+    patient = seed_user(
+        db_session,
+        email="patient-foreign@example.com",
+        role=UserRole.PATIENT,
+        first_name="Pat",
+        last_name="Foreign",
+    )
+    provider = seed_user(
+        db_session,
+        email="doctor-foreign@example.com",
+        role=UserRole.PROVIDER,
+        first_name="Doc",
+        last_name="Foreign",
+    )
+    center = seed_user(
+        db_session,
+        email="center-owned@example.com",
+        role=UserRole.IMAGING,
+        first_name="Owned",
+        last_name="Center",
+    )
+    other_center = seed_user(
+        db_session,
+        email="center-other@example.com",
+        role=UserRole.IMAGING,
+        first_name="Other",
+        last_name="Center",
+    )
+    scan = seed_imaging_scan(db_session, patient_id=patient.id, ordered_by=provider.id, center_id=center.id)
+
+    with pytest.raises(HTTPException) as exc_info:
+        run(
+            upload_imaging_results(
+                scan.id,
+                findings="Attempted upload",
+                impression=None,
+                status_value="completed",
+                report_file=None,
+                image_files=[],
+                current_user=other_center,
+                db=db_session,
+            )
+        )
+
+    assert exc_info.value.status_code == 403
+
+
+def test_imaging_center_cannot_upload_without_postdicom_endpoint(db_session):
+    patient = seed_user(
+        db_session,
+        email="patient-no-endpoint@example.com",
+        role=UserRole.PATIENT,
+        first_name="Pat",
+        last_name="NoEndpoint",
+    )
+    provider = seed_user(
+        db_session,
+        email="doctor-no-endpoint@example.com",
+        role=UserRole.PROVIDER,
+        first_name="Doc",
+        last_name="NoEndpoint",
+    )
+    center = seed_user(
+        db_session,
+        email="center-no-endpoint@example.com",
+        role=UserRole.IMAGING,
+        first_name="Scan",
+        last_name="NoEndpoint",
+    )
+    scan = seed_imaging_scan(db_session, patient_id=patient.id, ordered_by=provider.id, center_id=center.id)
+
+    with pytest.raises(HTTPException) as exc_info:
+        run(
+            upload_imaging_results(
+                scan.id,
+                findings="No endpoint provided",
+                impression="No endpoint provided",
+                status_value="completed",
+                report_file=None,
+                image_files=[],
+                current_user=center,
+                db=db_session,
+            )
+        )
+
+    assert exc_info.value.status_code == 400
+    assert "PostDICOM endpoint is required" in str(exc_info.value.detail)
+
+
+def test_imaging_download_endpoints_require_authorized_user(db_session):
+    patient = seed_user(
+        db_session,
+        email="patient-download@example.com",
+        role=UserRole.PATIENT,
+        first_name="Pat",
+        last_name="Download",
+    )
+    provider = seed_user(
+        db_session,
+        email="doctor-download@example.com",
+        role=UserRole.PROVIDER,
+        first_name="Doc",
+        last_name="Download",
+    )
+    center = seed_user(
+        db_session,
+        email="center-download@example.com",
+        role=UserRole.IMAGING,
+        first_name="Scan",
+        last_name="Download",
+    )
+    admin = seed_user(
+        db_session,
+        email="admin-download@example.com",
+        role=UserRole.ADMIN,
+        first_name="Admin",
+        last_name="Download",
+    )
+    outsider = seed_user(
+        db_session,
+        email="patient-outsider@example.com",
+        role=UserRole.PATIENT,
+        first_name="Out",
+        last_name="Sider",
+    )
+    scan = seed_imaging_scan(db_session, patient_id=patient.id, ordered_by=provider.id, center_id=center.id)
+    result = run(
+        upload_imaging_results(
+            scan.id,
+            findings="Stable study",
+            impression="Stable study",
+            status_value="completed",
+            report_file=UploadFile(filename="report.pdf", file=BytesIO(b"%PDF-1.4 ok"), headers={"content-type": "application/pdf"}),
+            image_files=[UploadFile(filename="study.dcm", file=BytesIO(b"DICM"), headers={"content-type": "application/dicom"})],
+            current_user=admin,
+            db=db_session,
+        )
+    )
+
+    report_response = run(download_imaging_report(scan.id, current_user=patient, db=db_session))
+    image_response = run(download_imaging_asset(scan.id, result.image_files[0].file_id, current_user=provider, db=db_session))
+
+    assert report_response.filename == "report.pdf"
+    assert image_response.filename == "study.dcm"
+
+    with pytest.raises(HTTPException) as exc_info:
+        run(download_imaging_report(scan.id, current_user=outsider, db=db_session))
+
+    assert exc_info.value.status_code == 403

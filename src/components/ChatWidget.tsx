@@ -7,11 +7,21 @@ import VideoCall from '@/components/VideoCall';
 
 const ChatWidget = () => {
   const { user } = useAuth();
-  const { threads, contacts, activeThread, messages, setActiveThread, sendMessage, totalUnread } = useChat();
+  const {
+    threads,
+    contacts,
+    activeThread,
+    messages,
+    setActiveThread,
+    sendMessage,
+    totalUnread,
+    currentCall,
+    startVideoCall,
+    dismissCurrentCall,
+  } = useChat();
   const [isOpen, setIsOpen] = useState(false);
   const [newMessage, setNewMessage] = useState('');
   const messagesEndRef = useRef<HTMLDivElement>(null);
-  const [videoCallTarget, setVideoCallTarget] = useState<{ name: string; role: string } | null>(null);
 
   const currentParticipant = contacts.find((contact) => contact.participantId === activeThread)
     ?? threads.find((thread) => thread.participantId === activeThread);
@@ -52,11 +62,12 @@ const ChatWidget = () => {
   return (
     <>
       <AnimatePresence>
-        {videoCallTarget && (
+        {currentCall && (
           <VideoCall
-            participantName={videoCallTarget.name}
-            participantRole={videoCallTarget.role}
-            onEnd={() => setVideoCallTarget(null)}
+            participantName={currentCall.participantName}
+            participantRole={currentCall.participantRole}
+            isIncoming={currentCall.direction === 'incoming' && currentCall.status === 'ringing'}
+            onEnd={dismissCurrentCall}
           />
         )}
       </AnimatePresence>
@@ -99,7 +110,11 @@ const ChatWidget = () => {
                     </div>
                   </div>
                   <button
-                    onClick={() => currentParticipant && setVideoCallTarget({ name: currentParticipant.participantName, role: currentParticipant.participantRole })}
+                    onClick={() => currentParticipant && startVideoCall(
+                      currentParticipant.participantId,
+                      currentParticipant.participantName,
+                      currentParticipant.participantRole,
+                    )}
                     className="w-8 h-8 rounded-lg bg-primary/10 text-primary flex items-center justify-center hover:bg-primary/20 transition"
                     title="Video call"
                   >

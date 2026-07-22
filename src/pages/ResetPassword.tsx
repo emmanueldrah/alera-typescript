@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react';
 import { Link, useNavigate, useSearchParams } from 'react-router-dom';
 import { motion } from 'framer-motion';
-import { Heart, ArrowRight, Eye, EyeOff, Lock } from 'lucide-react';
+import { Heart, ArrowLeft, ArrowRight, Eye, EyeOff, Lock } from 'lucide-react';
 import { authApi } from '@/lib/apiService';
 import { handleApiError } from '@/lib/errorHandler';
 
@@ -80,6 +80,10 @@ const ResetPassword = () => {
       <div className="flex-1 flex items-center justify-center p-6">
         <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.5 }}
           className="w-full max-w-md bg-card rounded-2xl shadow-lg p-8">
+          <Link to="/" className="mb-5 inline-flex items-center gap-2 text-sm font-medium text-muted-foreground transition hover:text-foreground">
+            <ArrowLeft className="h-4 w-4" />
+            Back to home
+          </Link>
           <h2 className="text-2xl font-display font-bold text-card-foreground mb-1">Reset password</h2>
           <p className="text-muted-foreground mb-6">Enter your new password below</p>
 

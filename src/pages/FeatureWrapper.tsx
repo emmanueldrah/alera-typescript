@@ -1,110 +1,83 @@
+import { Suspense } from 'react';
+import { Link } from 'react-router-dom';
+import { AlertTriangle, ArrowLeft, ShieldAlert } from 'lucide-react';
+import { featurePageMap } from '@/app/featureRegistry';
 import DashboardLayout from '@/components/DashboardLayout';
+import RouteLoader from '@/components/RouteLoader';
 import { useAuth } from '@/contexts/useAuth';
-import { canAccessFeature, featureAccessMap } from '@/lib/featureAccess';
-import AppointmentsPage from '@/pages/features/AppointmentsPage';
-import PrescriptionsPage from '@/pages/features/PrescriptionsPage';
-import LabResultsPage from '@/pages/features/LabResultsPage';
-import ImagingPage from '@/pages/features/ImagingPage';
-import AmbulancePage from '@/pages/features/AmbulancePage';
-import TimelinePage from '@/pages/features/TimelinePage';
-import InventoryPage from '@/pages/features/InventoryPage';
-import VehiclesPage from '@/pages/features/VehiclesPage';
-import UsersPage from '@/pages/features/UsersPage';
-import ProfilePage from '@/pages/features/ProfilePage';
-import VerificationsPage from '@/pages/features/VerificationsPage';
-import AnalyticsPage from '@/pages/features/AnalyticsPage';
-import PatientsPage from '@/pages/features/PatientsPage';
-import DoctorsPage from '@/pages/features/DoctorsPage';
-import ReferralsPage from '@/pages/features/ReferralsPage';
-import type { ReferralKind } from '@/lib/referralUtils';
-import MessagesPage from '@/pages/features/MessagesPage';
-import HealthMetricsPage from '@/pages/features/HealthMetricsPage';
-import NotificationCenterPage from '@/pages/features/NotificationCenterPage';
-import AppointmentRemindersPage from '@/pages/features/AppointmentRemindersPage';
-import AllergyManagementPage from '@/pages/features/AllergyManagementPage';
-import PrescriptionRefillPage from '@/pages/features/PrescriptionRefillPage';
-import MedicalHistoryPage from '@/pages/features/MedicalHistoryPage';
-import PatientConsentPage from '@/pages/features/PatientConsentPage';
-import ClinicalNotesPage from '@/pages/features/ClinicalNotesPage';
-import PatientProblemListPage from '@/pages/features/PatientProblemListPage';
-import MedicationAdherencePage from '@/pages/features/MedicationAdherencePage';
-import LabResultsManagementPage from '@/pages/features/LabResultsManagementPage';
-import { SmartAppointmentRemindersPage } from '@/pages/features/SmartAppointmentRemindersPage';
-import PricingSettingsPage from '@/pages/features/PricingSettingsPage';
-import BillingPage from '@/pages/features/BillingPage';
-import AdminBillingDashboard from '@/pages/features/AdminBillingDashboard';
-import AuditLogsPage from '@/pages/features/AuditLogsPage';
-import CreateAdminPage from '@/pages/features/CreateAdminPage';
+import { canAccessFeature } from '@/lib/featureAccess';
 
 interface FeatureWrapperProps {
   page: string;
 }
 
-interface FeatureConfig {
-  component: React.ComponentType;
-  /** Passed to pages that need route-specific props (e.g. referral queue). */
-  props?: Record<string, unknown>;
-}
-
-const pageMap: Record<string, FeatureConfig> = {
-  appointments: { component: AppointmentsPage },
-  prescriptions: { component: PrescriptionsPage },
-  'lab-results': { component: LabResultsPage },
-  'lab-referrals': { component: ReferralsPage, props: { referralKind: 'laboratory' as ReferralKind } },
-  'test-requests': { component: LabResultsPage },
-  imaging: { component: ImagingPage },
-  'imaging-referrals': { component: ReferralsPage, props: { referralKind: 'imaging' as ReferralKind } },
-  'scan-requests': { component: ImagingPage },
-  ambulance: { component: AmbulancePage },
-  requests: { component: AmbulancePage },
-  timeline: { component: TimelinePage },
-  inventory: { component: InventoryPage },
-  vehicles: { component: VehiclesPage },
-  users: { component: UsersPage },
-  profile: { component: ProfilePage },
-  verifications: { component: VerificationsPage },
-  analytics: { component: AnalyticsPage },
-  patients: { component: PatientsPage },
-  doctors: { component: DoctorsPage },
-  referrals: { component: ReferralsPage, props: { referralKind: 'hospital' as ReferralKind } },
-  'pharmacy-referrals': { component: ReferralsPage, props: { referralKind: 'pharmacy' as ReferralKind } },
-  results: { component: LabResultsPage },
-  messages: { component: MessagesPage },
-  'health-metrics': { component: HealthMetricsPage },
-  notifications: { component: NotificationCenterPage },
-  'appointment-reminders': { component: AppointmentRemindersPage },
-  allergies: { component: AllergyManagementPage },
-  'prescription-refills': { component: PrescriptionRefillPage },
-  'medical-history': { component: MedicalHistoryPage },
-  consent: { component: PatientConsentPage },
-  'clinical-notes': { component: ClinicalNotesPage },
-  'problem-list': { component: PatientProblemListPage },
-  'medication-adherence': { component: MedicationAdherencePage },
-  'lab-results-management': { component: LabResultsManagementPage },
-  'smart-appointment-reminders': { component: SmartAppointmentRemindersPage },
-  'pricing-settings': { component: PricingSettingsPage },
-  billing: { component: BillingPage },
-  'admin-billing': { component: AdminBillingDashboard },
-  audit: { component: AuditLogsPage },
-  'admin/create': { component: CreateAdminPage },
-};
-
 const FeatureWrapper = ({ page }: FeatureWrapperProps) => {
   const { user } = useAuth();
-  const config = pageMap[page];
-  const Page = page === 'results' && user?.role === 'imaging' ? ImagingPage : config?.component;
+  const config = featurePageMap[page];
+  const Page = page === 'results' && user?.role === 'imaging' ? featurePageMap.imaging.component : config?.component;
+  const pageProps = {
+    ...(config?.props ?? {}),
+    ...(page === 'results' && user?.role === 'imaging' ? { page: 'results' } : {}),
+  };
 
-  if (!config) return <DashboardLayout><div className="text-center py-12 text-muted-foreground">Page not found</div></DashboardLayout>;
+  if (!config) return (
+    <DashboardLayout>
+      <div className="flex min-h-[60vh] items-center justify-center">
+        <div className="max-w-md rounded-3xl border border-border bg-card p-8 text-center shadow-sm">
+          <AlertTriangle className="mx-auto mb-4 h-10 w-10 text-warning" />
+          <h1 className="text-2xl font-display font-bold text-foreground">Workspace not found</h1>
+          <p className="mt-2 text-sm text-muted-foreground">The page you requested is not part of this dashboard workspace.</p>
+          <div className="mt-6 flex justify-center">
+            <Link to="/dashboard" className="inline-flex items-center gap-2 rounded-xl bg-primary px-4 py-2 text-sm font-semibold text-primary-foreground hover:opacity-90">
+              <ArrowLeft className="h-4 w-4" />
+              Back to dashboard
+            </Link>
+          </div>
+        </div>
+      </div>
+    </DashboardLayout>
+  );
   if (!canAccessFeature(page, user?.role)) {
+    const patientOnlyWorkspaces = new Set([
+      'health-metrics',
+      'prescription-refills',
+      'consent',
+      'problem-list',
+      'medication-adherence',
+      'billing',
+    ]);
+    const shouldUsePatientAccountMessage =
+      user?.role &&
+      user.role !== 'patient' &&
+      patientOnlyWorkspaces.has(page);
+
     return (
       <DashboardLayout>
-        <div className="text-center py-12 text-muted-foreground">You do not have access to this page.</div>
+        <div className="flex min-h-[60vh] items-center justify-center">
+          <div className="max-w-md rounded-3xl border border-border bg-card p-8 text-center shadow-sm">
+            <ShieldAlert className="mx-auto mb-4 h-10 w-10 text-destructive" />
+            <h1 className="text-2xl font-display font-bold text-foreground">Access restricted</h1>
+            <p className="mt-2 text-sm text-muted-foreground">
+              {shouldUsePatientAccountMessage
+                ? 'This workspace is for patient accounts. If you also use Alera as a patient, sign in with your separate patient account to continue.'
+                : 'Your current role does not have access to this workspace. Return to the dashboard to continue.'}
+            </p>
+            <div className="mt-6 flex justify-center">
+              <Link to="/dashboard" className="inline-flex items-center gap-2 rounded-xl bg-primary px-4 py-2 text-sm font-semibold text-primary-foreground hover:opacity-90">
+                <ArrowLeft className="h-4 w-4" />
+                Return to dashboard
+              </Link>
+            </div>
+          </div>
+        </div>
       </DashboardLayout>
     );
   }
   return (
     <DashboardLayout>
-      <Page {...(config.props ?? {})} />
+      <Suspense fallback={<RouteLoader compact label="Loading workspace..." />}>
+        <Page {...pageProps} />
+      </Suspense>
     </DashboardLayout>
   );
 };

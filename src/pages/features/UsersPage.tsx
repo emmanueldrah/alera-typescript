@@ -1,12 +1,14 @@
 import { useState, useEffect, useMemo, useCallback } from 'react';
 import { motion } from 'framer-motion';
-import { Users, Search, Heart, FlaskConical, ScanLine, Pill, Ambulance, Building2, ShieldCheck, Ban, CheckCircle, Inbox, Plus, Loader, Mail, Calendar } from 'lucide-react';
-import type { UserRole, SignupRole } from '@/contexts/AuthContext';
+import { Users, Search, Heart, FlaskConical, ScanLine, Pill, Ambulance, Building2, ShieldCheck, Ban, CheckCircle, Inbox, Plus, Loader, Mail, Calendar, Activity, Trash2 } from 'lucide-react';
+import type { UserRole } from '@/contexts/AuthContext';
 import { useAuth } from '@/contexts/useAuth';
+import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from '@/components/ui/alert-dialog';
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { api, authApi, type AdminUserRow, type ApiUser } from '@/lib/apiService';
+import { toast } from '@/components/ui/use-toast';
+import { api, type AdminUserRow, type ApiUser } from '@/lib/apiService';
 import { handleApiError } from '@/lib/errorHandler';
 import { normalizeUserRole } from '@/lib/roleUtils';
 import {
@@ -34,6 +36,7 @@ const roleIcons: Record<string, React.ReactNode> = {
   imaging: <ScanLine className="w-4 h-4" />,
   pharmacy: <Pill className="w-4 h-4" />,
   ambulance: <Ambulance className="w-4 h-4" />,
+  physiotherapist: <Activity className="w-4 h-4" />,
   admin: <ShieldCheck className="w-4 h-4" />,
   super_admin: <ShieldCheck className="w-4 h-4 text-destructive" />,
 };
@@ -46,6 +49,7 @@ const roleLabels: Record<string, string> = {
   imaging: 'Imaging Center',
   pharmacy: 'Pharmacy',
   ambulance: 'Ambulance',
+  physiotherapist: 'Physiotherapist',
   admin: 'Admin',
   super_admin: 'Super Admin',
 };
@@ -56,7 +60,11 @@ const statusStyles: Record<ProfessionalVerificationStatus, string> = {
   suspended: 'bg-destructive/10 text-destructive',
 };
 
-const signupRoleToBackend: Record<SignupRole, ApiUser['role']> = {
+const nonElevatedRoles: UserRole[] = ['patient', 'doctor', 'hospital', 'laboratory', 'imaging', 'pharmacy', 'ambulance', 'physiotherapist'];
+const elevatedRoles: UserRole[] = ['admin', 'super_admin'];
+const allUserRoles: UserRole[] = [...nonElevatedRoles, ...elevatedRoles];
+
+const backendRoleMap: Record<UserRole, ApiUser['role']> = {
   patient: 'patient',
   doctor: 'provider',
   hospital: 'hospital',
@@ -64,7 +72,12 @@ const signupRoleToBackend: Record<SignupRole, ApiUser['role']> = {
   imaging: 'imaging',
   pharmacy: 'pharmacist',
   ambulance: 'ambulance',
+  physiotherapist: 'physiotherapist',
+  admin: 'admin',
+  super_admin: 'super_admin',
 };
+
+const isProfessionalRole = (role: UserRole) => role !== 'patient' && !elevatedRoles.includes(role);
 
 const mapRowToDisplay = (u: AdminUserRow): DisplayUser => {
   const uiRole = normalizeUserRole(u.role) ?? 'patient';
@@ -94,11 +107,12 @@ const UsersPage = () => {
   const [listLoading, setListLoading] = useState(true);
   const [listError, setListError] = useState('');
   const [actionId, setActionId] = useState<string | null>(null);
+  const [pendingDeleteUser, setPendingDeleteUser] = useState<DisplayUser | null>(null);
   const [formData, setFormData] = useState({
     name: '',
     email: '',
     password: '',
-    role: 'patient' as SignupRole,
+    role: 'patient' as UserRole,
     licenseNumber: '',
     licenseState: '',
     specialty: '',
@@ -140,7 +154,7 @@ const UsersPage = () => {
 
   const usersByRole = useMemo(() => {
     return Object.fromEntries(
-      (['patient', 'doctor', 'hospital', 'laboratory', 'imaging', 'pharmacy', 'ambulance', 'admin', 'super_admin'] as UserRole[]).map(role => [
+      (['patient', 'doctor', 'hospital', 'laboratory', 'imaging', 'pharmacy', 'ambulance', 'physiotherapist', 'admin', 'super_admin'] as UserRole[]).map(role => [
         role,
         users.filter(u => u.role === role).length,
       ]),
@@ -150,8 +164,10 @@ const UsersPage = () => {
   const changeUserRole = async (id: string, newRole: string) => {
     setActionId(id);
     try {
-      await api.admin.changeUserRole(id, newRole);
+      const backendRole = backendRoleMap[newRole as UserRole] ?? newRole;
+      await api.admin.changeUserRole(id, backendRole);
       await fetchUsers();
+      toast({ title: 'Role updated', description: 'The user role was updated successfully.' });
     } catch (err) {
       setListError(handleApiError(err));
     } finally {
@@ -160,13 +176,12 @@ const UsersPage = () => {
   };
 
   const deleteUser = async (id: string) => {
-    if (!confirm('Are you sure you want to permanently delete this user? This action cannot be undone.')) {
-      return;
-    }
     setActionId(id);
     try {
       await api.admin.deleteUser(id);
       await fetchUsers();
+      setPendingDeleteUser(null);
+      toast({ title: 'User deleted', description: 'The account has been permanently removed.' });
     } catch (err) {
       setListError(handleApiError(err));
     } finally {
@@ -194,28 +209,43 @@ const UsersPage = () => {
       const [firstName = '', ...lastNameParts] = formData.name.split(' ');
       const lastName = lastNameParts.join(' ') || 'User';
       const username = formData.email.split('@')[0] || formData.name.toLowerCase().replace(/\s+/g, '.');
-      const backendRole = signupRoleToBackend[formData.role] ?? 'patient';
-      if (formData.role !== 'patient' && (!formData.licenseNumber.trim() || !formData.licenseState.trim())) {
+
+      if (isProfessionalRole(formData.role) && (!formData.licenseNumber.trim() || !formData.licenseState.trim())) {
         setError('License number and license state are required for professional accounts');
         setIsLoading(false);
         return;
       }
 
-      await authApi.register({
-        email: formData.email,
-        password: formData.password,
-        username,
-        first_name: firstName,
-        last_name: lastName,
-        role: backendRole,
-        license_number: formData.role === 'patient' ? undefined : formData.licenseNumber.trim(),
-        license_state: formData.role === 'patient' ? undefined : formData.licenseState.trim(),
-        specialty: formData.role === 'patient' ? undefined : formData.specialty.trim() || undefined,
-      });
+      if (formData.role === 'admin' || formData.role === 'super_admin') {
+        await api.admin.createAdmin({
+          email: formData.email,
+          username,
+          password: formData.password,
+          first_name: firstName,
+          last_name: lastName,
+          phone: undefined,
+          role: formData.role,
+        });
+      } else {
+        const backendRole = backendRoleMap[formData.role] ?? 'patient';
+        await api.admin.createUser({
+          email: formData.email,
+          username,
+          password: formData.password,
+          first_name: firstName,
+          last_name: lastName,
+          phone: undefined,
+          role: backendRole,
+          license_number: formData.role === 'patient' ? undefined : formData.licenseNumber.trim(),
+          license_state: formData.role === 'patient' ? undefined : formData.licenseState.trim(),
+          specialty: formData.role === 'patient' ? undefined : formData.specialty.trim() || undefined,
+        });
+      }
 
       setFormData({ name: '', email: '', password: '', role: 'patient', licenseNumber: '', licenseState: '', specialty: '' });
       setIsDialogOpen(false);
       await fetchUsers();
+      toast({ title: 'User created', description: `${formData.email} has been added successfully.` });
     } catch (err) {
       setError(handleApiError(err));
     } finally {
@@ -223,11 +253,33 @@ const UsersPage = () => {
     }
   };
 
-  const isAdmin = currentUser?.role === 'admin';
+  const toggleStatus = async (userId: string) => {
+    setActionId(userId);
+    try {
+      const user = users.find(u => u.id === userId);
+      if (!user) return;
+
+      if (user.status === 'suspended') {
+        await api.admin.reactivateUser(userId);
+        toast({ title: 'User reactivated', description: `${user.name} can access the platform again.` });
+      } else {
+        await api.admin.deactivateUser(userId);
+        toast({ title: 'User suspended', description: `${user.name} has been suspended.` });
+      }
+      await fetchUsers();
+    } catch (err) {
+      setListError(handleApiError(err));
+    } finally {
+      setActionId(null);
+    }
+  };
+
+  const isAdminOrSuperAdmin = currentUser?.role === 'admin' || currentUser?.role === 'super_admin';
+  const isSuperAdmin = currentUser?.role === 'super_admin';
 
   const card = (i: number) => ({ initial: { opacity: 0, y: 15 }, animate: { opacity: 1, y: 0 }, transition: { delay: i * 0.05 } });
 
-  if (!isAdmin) {
+  if (!isAdminOrSuperAdmin) {
     return (
       <div className="space-y-6">
         <div>
@@ -300,7 +352,7 @@ const UsersPage = () => {
                 </div>
                 <div>
                   <label className="block text-sm font-medium text-foreground mb-1">User Role</label>
-                  <Select value={formData.role} onValueChange={role => setFormData({ ...formData, role: role as SignupRole })}>
+                  <Select value={formData.role} onValueChange={role => setFormData({ ...formData, role: role as UserRole })}>
                     <SelectTrigger className="h-10">
                       <SelectValue placeholder="Select a role" />
                     </SelectTrigger>
@@ -312,10 +364,13 @@ const UsersPage = () => {
                       <SelectItem value="imaging">Imaging Center</SelectItem>
                       <SelectItem value="pharmacy">Pharmacy</SelectItem>
                       <SelectItem value="ambulance">Ambulance</SelectItem>
+                      <SelectItem value="physiotherapist">Physiotherapist</SelectItem>
+                      {isSuperAdmin && <SelectItem value="admin">Admin</SelectItem>}
+                      {isSuperAdmin && <SelectItem value="super_admin">Super Admin</SelectItem>}
                     </SelectContent>
                   </Select>
                 </div>
-                {formData.role !== 'patient' && (
+                {isProfessionalRole(formData.role) && (
                   <div className="space-y-4 rounded-xl border border-border bg-secondary/30 p-4">
                     <div className="text-sm font-semibold text-foreground">License details</div>
                     <div>
@@ -369,8 +424,27 @@ const UsersPage = () => {
         <div className="text-sm text-destructive bg-destructive/10 border border-destructive/20 p-4 rounded-xl">{listError}</div>
       )}
 
+      <AlertDialog open={Boolean(pendingDeleteUser)} onOpenChange={(open) => { if (!open) setPendingDeleteUser(null); }}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Delete user account?</AlertDialogTitle>
+            <AlertDialogDescription>
+              {pendingDeleteUser
+                ? `This will permanently remove ${pendingDeleteUser.name} (${pendingDeleteUser.email}). This action cannot be undone.`
+                : 'This action cannot be undone.'}
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancel</AlertDialogCancel>
+            <AlertDialogAction className="bg-destructive text-destructive-foreground hover:bg-destructive/90" onClick={() => pendingDeleteUser ? void deleteUser(pendingDeleteUser.id) : undefined}>
+              Delete user
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+
       <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-9 gap-3">
-        {(['patient', 'doctor', 'hospital', 'laboratory', 'imaging', 'pharmacy', 'ambulance', 'admin', 'super_admin'] as UserRole[]).map((role, i) => (
+        {(['patient', 'doctor', 'hospital', 'laboratory', 'imaging', 'pharmacy', 'ambulance', 'physiotherapist', 'admin', 'super_admin'] as UserRole[]).map((role, i) => (
           <motion.button
             key={role}
             {...card(i)}
@@ -473,8 +547,9 @@ const UsersPage = () => {
                   </td>
                   <td className="px-5 py-4 text-right">
                     <div className="flex items-center justify-end gap-2">
-                      {/* Role Change - Only for super_admin */}
-                      {currentUser?.role === 'super_admin' && u.role !== 'super_admin' && (
+                      {/* Role Change */}
+                      {((isSuperAdmin && u.id !== String(currentUser?.id)) ||
+                        (currentUser?.role === 'admin' && !elevatedRoles.includes(u.role) && u.id !== String(currentUser?.id))) && (
                         <Select
                           value={u.role}
                           onValueChange={(newRole) => void changeUserRole(u.id, newRole)}
@@ -484,47 +559,49 @@ const UsersPage = () => {
                             <SelectValue />
                           </SelectTrigger>
                           <SelectContent>
-                            <SelectItem value="patient">Patient</SelectItem>
-                            <SelectItem value="doctor">Doctor</SelectItem>
-                            <SelectItem value="hospital">Hospital</SelectItem>
-                            <SelectItem value="laboratory">Laboratory</SelectItem>
-                            <SelectItem value="imaging">Imaging</SelectItem>
-                            <SelectItem value="pharmacy">Pharmacy</SelectItem>
-                            <SelectItem value="ambulance">Ambulance</SelectItem>
-                            <SelectItem value="admin">Admin</SelectItem>
+                            {(isSuperAdmin ? allUserRoles : nonElevatedRoles).map(role => (
+                              <SelectItem key={role} value={role}>
+                                {roleLabels[role]}
+                              </SelectItem>
+                            ))}
                           </SelectContent>
                         </Select>
                       )}
 
                       {/* Status Toggle */}
-                      <button
-                        onClick={() => void toggleStatus(u.id)}
-                        disabled={actionId === u.id || u.id === String(currentUser?.id)}
-                        className={`inline-flex items-center gap-1 px-3 py-1.5 rounded-lg text-xs font-medium transition disabled:opacity-40 ${
-                          u.status === 'suspended'
-                            ? 'bg-success/10 text-success hover:bg-success/20'
-                            : 'bg-destructive/10 text-destructive hover:bg-destructive/20'
-                        }`}
-                      >
-                        {actionId === u.id ? (
-                          <Loader className="w-3 h-3 animate-spin" />
-                        ) : u.status === 'suspended' ? (
-                          <>
-                            <CheckCircle className="w-3 h-3" />
-                            Reactivate
-                          </>
-                        ) : (
-                          <>
-                            <Ban className="w-3 h-3" />
-                            Suspend
-                          </>
-                        )}
-                      </button>
+                      {(
+                        isSuperAdmin ||
+                        (currentUser?.role === 'admin' && !elevatedRoles.includes(u.role))
+                      ) && (
+                        <button
+                          onClick={() => void toggleStatus(u.id)}
+                          disabled={actionId === u.id || u.id === String(currentUser?.id)}
+                          className={`inline-flex items-center gap-1 px-3 py-1.5 rounded-lg text-xs font-medium transition disabled:opacity-40 ${
+                            u.status === 'suspended'
+                              ? 'bg-success/10 text-success hover:bg-success/20'
+                              : 'bg-destructive/10 text-destructive hover:bg-destructive/20'
+                          }`}
+                        >
+                          {actionId === u.id ? (
+                            <Loader className="w-3 h-3 animate-spin" />
+                          ) : u.status === 'suspended' ? (
+                            <>
+                              <CheckCircle className="w-3 h-3" />
+                              Reactivate
+                            </>
+                          ) : (
+                            <>
+                              <Ban className="w-3 h-3" />
+                              Suspend
+                            </>
+                          )}
+                        </button>
+                      )}
 
                       {/* Delete - Only for super_admin */}
                       {currentUser?.role === 'super_admin' && u.role !== 'super_admin' && (
                         <button
-                          onClick={() => void deleteUser(u.id)}
+                          onClick={() => setPendingDeleteUser(u)}
                           disabled={actionId === u.id || u.id === String(currentUser?.id)}
                           className="inline-flex items-center gap-1 px-3 py-1.5 rounded-lg text-xs font-medium bg-destructive/10 text-destructive hover:bg-destructive/20 transition disabled:opacity-40"
                         >
@@ -532,7 +609,7 @@ const UsersPage = () => {
                             <Loader className="w-3 h-3 animate-spin" />
                           ) : (
                             <>
-                              <Ban className="w-3 h-3" />
+                              <Trash2 className="w-3 h-3" />
                               Delete
                             </>
                           )}

@@ -1,16 +1,29 @@
 import { useState, useMemo } from 'react';
 import { motion } from 'framer-motion';
-import { Package, Search, AlertTriangle, Check, TrendingDown, DollarSign, Calendar, Inbox, Pill, Zap } from 'lucide-react';
+import { Package, Search, AlertTriangle, Check, Download, TrendingDown, DollarSign, Calendar, Inbox, Pill, Zap, Plus, Trash2, X } from 'lucide-react';
 import { useAuth } from '@/contexts/useAuth';
 import { useAppData } from '@/contexts/useAppData';
+import { toast } from '@/components/ui/use-toast';
 import type { InventoryItem } from '@/data/mockData';
 
 const InventoryPage = () => {
   const { user } = useAuth();
-  const { inventoryItems, updateInventoryItem } = useAppData();
+  const { inventoryItems, addInventoryItem, updateInventoryItem, deleteInventoryItem } = useAppData();
   const [search, setSearch] = useState('');
   const [categoryFilter, setCategoryFilter] = useState('all');
   const [statusFilter, setStatusFilter] = useState('all');
+  const [sortBy, setSortBy] = useState<'name' | 'stock' | 'value' | 'expiry'>('name');
+  const [showCreate, setShowCreate] = useState(false);
+  const [newItem, setNewItem] = useState({
+    name: '',
+    category: 'medication' as InventoryItem['category'],
+    stock: 0,
+    reorderLevel: 10,
+    price: 0,
+    unit: 'packs',
+    expiryDate: '',
+    supplier: '',
+  });
 
   const isPharmacy = user?.role === 'pharmacy';
 
@@ -36,13 +49,23 @@ const InventoryPage = () => {
 
   // Filter inventory
   const filtered = useMemo(() => {
-    return inventoryItems.filter(item => {
+    const rows = inventoryItems.filter(item => {
       const matchesSearch = item.name.toLowerCase().includes(search.toLowerCase());
       const matchesCategory = categoryFilter === 'all' || item.category === categoryFilter;
       const matchesStatus = statusFilter === 'all' || item.status === statusFilter;
       return matchesSearch && matchesCategory && matchesStatus;
     });
-  }, [inventoryItems, search, categoryFilter, statusFilter]);
+    return [...rows].sort((left, right) => {
+      if (sortBy === 'stock') return right.stock - left.stock;
+      if (sortBy === 'value') return (right.stock * right.price) - (left.stock * left.price);
+      if (sortBy === 'expiry') {
+        const leftTime = left.expiryDate ? new Date(left.expiryDate).getTime() : Number.MAX_SAFE_INTEGER;
+        const rightTime = right.expiryDate ? new Date(right.expiryDate).getTime() : Number.MAX_SAFE_INTEGER;
+        return leftTime - rightTime;
+      }
+      return left.name.localeCompare(right.name);
+    });
+  }, [inventoryItems, search, categoryFilter, statusFilter, sortBy]);
 
   // Inventory stats
   const stats = useMemo(() => {
@@ -63,6 +86,92 @@ const InventoryPage = () => {
       lastRestocked: newStock > item.stock ? new Date().toISOString() : item.lastRestocked,
       status,
     }));
+    toast({
+      title: 'Inventory updated',
+      description: `${item.name} stock is now ${newStock} ${item.unit}.`,
+    });
+  };
+
+  const handleCreateItem = () => {
+    if (!newItem.name.trim() || newItem.price <= 0 || newItem.stock < 0 || newItem.reorderLevel < 0) {
+      toast({
+        title: 'Invalid inventory item',
+        description: 'Add a name, valid stock, reorder level, and price before saving.',
+        variant: 'destructive',
+      });
+      return;
+    }
+    const status: InventoryItem['status'] =
+      newItem.stock === 0 ? 'out-of-stock' : newItem.stock < newItem.reorderLevel ? 'low-stock' : 'in-stock';
+
+    addInventoryItem({
+      id: `inv-${crypto.randomUUID()}`,
+      name: newItem.name.trim(),
+      category: newItem.category,
+      stock: newItem.stock,
+      reorderLevel: newItem.reorderLevel,
+      price: newItem.price,
+      unit: newItem.unit.trim() || 'packs',
+      expiryDate: newItem.expiryDate || undefined,
+      supplier: newItem.supplier.trim() || undefined,
+      lastRestocked: new Date().toISOString(),
+      status,
+    });
+    setNewItem({
+      name: '',
+      category: 'medication',
+      stock: 0,
+      reorderLevel: 10,
+      price: 0,
+      unit: 'packs',
+      expiryDate: '',
+      supplier: '',
+    });
+    setShowCreate(false);
+    toast({
+      title: 'Inventory item created',
+      description: `${newItem.name.trim()} was added to inventory.`,
+    });
+  };
+
+  const handleExportCsv = () => {
+    if (filtered.length === 0) {
+      toast({
+        title: 'Nothing to export',
+        description: 'There are no inventory rows in the current view.',
+        variant: 'destructive',
+      });
+      return;
+    }
+
+    const rows = filtered.map((item) => [
+      item.name,
+      item.category,
+      item.stock,
+      item.unit,
+      item.reorderLevel,
+      item.price.toFixed(2),
+      (item.stock * item.price).toFixed(2),
+      item.status,
+      item.expiryDate ?? '',
+      item.supplier ?? '',
+    ]);
+    const csv = [
+      ['Name', 'Category', 'Stock', 'Unit', 'Reorder Level', 'Unit Price', 'Total Value', 'Status', 'Expiry Date', 'Supplier'].join(','),
+      ...rows.map((row) => row.map((value) => `"${String(value).replace(/"/g, '""')}"`).join(',')),
+    ].join('\n');
+
+    const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    link.href = url;
+    link.download = `inventory-${new Date().toISOString().slice(0, 10)}.csv`;
+    link.click();
+    URL.revokeObjectURL(url);
+    toast({
+      title: 'Inventory exported',
+      description: 'The current inventory view was downloaded as CSV.',
+    });
   };
 
   const categoryIcons = { medication: <Pill className="w-4 h-4" />, supply: <Package className="w-4 h-4" />, equipment: <Zap className="w-4 h-4" /> };
@@ -88,7 +197,67 @@ const InventoryPage = () => {
           <h1 className="text-2xl font-display font-bold text-foreground">Inventory Management</h1>
           <p className="text-muted-foreground mt-1">Manage pharmacy stock and inventory levels</p>
         </div>
+        <button onClick={() => setShowCreate((value) => !value)} className="flex items-center gap-2 px-4 py-2.5 rounded-xl bg-gradient-primary text-primary-foreground text-sm font-semibold hover:opacity-90 transition">
+          {showCreate ? <X className="w-4 h-4" /> : <Plus className="w-4 h-4" />}
+          {showCreate ? 'Close' : 'Add Drug'}
+        </button>
+        <button onClick={handleExportCsv} className="ml-2 flex items-center gap-2 rounded-xl border border-input px-4 py-2.5 text-sm font-semibold text-foreground hover:bg-muted/50 transition">
+          <Download className="h-4 w-4" />
+          Export CSV
+        </button>
       </div>
+
+      {showCreate && (
+        <motion.div initial={{ opacity: 0, y: -10 }} animate={{ opacity: 1, y: 0 }} className="bg-card rounded-2xl border border-border p-6 space-y-4">
+          <h2 className="text-lg font-display font-semibold text-card-foreground">Add Inventory Item</h2>
+          <div className="grid md:grid-cols-2 lg:grid-cols-4 gap-4">
+            <div className="lg:col-span-2">
+              <label className="block text-sm font-medium text-foreground mb-1">Drug / Item Name</label>
+              <input value={newItem.name} onChange={(e) => setNewItem((prev) => ({ ...prev, name: e.target.value }))} className="w-full h-11 px-4 rounded-xl border border-input bg-background text-foreground focus:outline-none focus:ring-2 focus:ring-primary/30" />
+            </div>
+            <div>
+              <label className="block text-sm font-medium text-foreground mb-1">Category</label>
+              <select value={newItem.category} onChange={(e) => setNewItem((prev) => ({ ...prev, category: e.target.value as InventoryItem['category'] }))} className="w-full h-11 px-4 rounded-xl border border-input bg-background text-foreground focus:outline-none focus:ring-2 focus:ring-primary/30">
+                <option value="medication">Medication</option>
+                <option value="supply">Supply</option>
+                <option value="equipment">Equipment</option>
+              </select>
+            </div>
+            <div>
+              <label className="block text-sm font-medium text-foreground mb-1">Unit</label>
+              <input value={newItem.unit} onChange={(e) => setNewItem((prev) => ({ ...prev, unit: e.target.value }))} className="w-full h-11 px-4 rounded-xl border border-input bg-background text-foreground focus:outline-none focus:ring-2 focus:ring-primary/30" />
+            </div>
+            <div>
+              <label className="block text-sm font-medium text-foreground mb-1">Stock</label>
+              <input type="number" min="0" value={newItem.stock} onChange={(e) => setNewItem((prev) => ({ ...prev, stock: Number(e.target.value) }))} className="w-full h-11 px-4 rounded-xl border border-input bg-background text-foreground focus:outline-none focus:ring-2 focus:ring-primary/30" />
+            </div>
+            <div>
+              <label className="block text-sm font-medium text-foreground mb-1">Reorder Level</label>
+              <input type="number" min="0" value={newItem.reorderLevel} onChange={(e) => setNewItem((prev) => ({ ...prev, reorderLevel: Number(e.target.value) }))} className="w-full h-11 px-4 rounded-xl border border-input bg-background text-foreground focus:outline-none focus:ring-2 focus:ring-primary/30" />
+            </div>
+            <div>
+              <label className="block text-sm font-medium text-foreground mb-1">Price</label>
+              <input type="number" min="0" step="0.01" value={newItem.price} onChange={(e) => setNewItem((prev) => ({ ...prev, price: Number(e.target.value) }))} className="w-full h-11 px-4 rounded-xl border border-input bg-background text-foreground focus:outline-none focus:ring-2 focus:ring-primary/30" />
+            </div>
+            <div>
+              <label className="block text-sm font-medium text-foreground mb-1">Expiry Date</label>
+              <input type="date" value={newItem.expiryDate} onChange={(e) => setNewItem((prev) => ({ ...prev, expiryDate: e.target.value }))} className="w-full h-11 px-4 rounded-xl border border-input bg-background text-foreground focus:outline-none focus:ring-2 focus:ring-primary/30" />
+            </div>
+            <div className="md:col-span-2">
+              <label className="block text-sm font-medium text-foreground mb-1">Supplier</label>
+              <input value={newItem.supplier} onChange={(e) => setNewItem((prev) => ({ ...prev, supplier: e.target.value }))} className="w-full h-11 px-4 rounded-xl border border-input bg-background text-foreground focus:outline-none focus:ring-2 focus:ring-primary/30" />
+            </div>
+          </div>
+          <div className="flex gap-3">
+            <button onClick={handleCreateItem} className="px-5 py-2.5 rounded-xl bg-gradient-primary text-primary-foreground text-sm font-semibold hover:opacity-90 transition">
+              Save Item
+            </button>
+            <button onClick={() => setShowCreate(false)} className="px-5 py-2.5 rounded-xl bg-secondary text-secondary-foreground text-sm font-semibold">
+              Cancel
+            </button>
+          </div>
+        </motion.div>
+      )}
 
       {/* Stats Cards */}
       <div className="grid grid-cols-2 md:grid-cols-5 gap-3">
@@ -182,6 +351,16 @@ const InventoryPage = () => {
           <option value="in-stock">In Stock</option>
           <option value="low-stock">Low Stock</option>
           <option value="out-of-stock">Out of Stock</option>
+        </select>
+        <select
+          value={sortBy}
+          onChange={e => setSortBy(e.target.value as 'name' | 'stock' | 'value' | 'expiry')}
+          className="h-11 px-4 rounded-xl border border-input bg-background text-foreground focus:outline-none focus:ring-2 focus:ring-primary/30"
+        >
+          <option value="name">Sort: Name</option>
+          <option value="stock">Sort: Stock</option>
+          <option value="value">Sort: Inventory value</option>
+          <option value="expiry">Sort: Expiry date</option>
         </select>
       </div>
 
@@ -279,6 +458,12 @@ const InventoryPage = () => {
                           -1
                         </button>
                       )}
+                      <button
+                        onClick={() => deleteInventoryItem(item.id)}
+                        className="px-2 py-1 rounded-lg text-xs font-medium bg-destructive/10 text-destructive hover:bg-destructive/20 transition"
+                      >
+                        <span className="inline-flex items-center gap-1"><Trash2 className="w-3 h-3" /> Delete</span>
+                      </button>
                     </div>
                   </td>
                 </motion.tr>

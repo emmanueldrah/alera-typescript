@@ -35,7 +35,7 @@ describe('Recovery flows', () => {
 
   it('submits the forgot-password request', async () => {
     render(
-      <MemoryRouter>
+      <MemoryRouter future={{ v7_startTransition: true, v7_relativeSplatPath: true }}>
         <ForgotPassword />
       </MemoryRouter>
     );
@@ -52,7 +52,7 @@ describe('Recovery flows', () => {
 
   it('submits a reset-password token exchange', async () => {
     render(
-      <MemoryRouter initialEntries={['/reset-password?token=reset-token-123']}>
+      <MemoryRouter initialEntries={['/reset-password?token=reset-token-123']} future={{ v7_startTransition: true, v7_relativeSplatPath: true }}>
         <Routes>
           <Route path="/reset-password" element={<ResetPassword />} />
         </Routes>
@@ -72,7 +72,7 @@ describe('Recovery flows', () => {
 
   it('verifies an email token on load', async () => {
     render(
-      <MemoryRouter initialEntries={['/verify-email?token=verify-token-123']}>
+      <MemoryRouter initialEntries={['/verify-email?token=verify-token-123']} future={{ v7_startTransition: true, v7_relativeSplatPath: true }}>
         <Routes>
           <Route path="/verify-email" element={<VerifyEmail />} />
         </Routes>

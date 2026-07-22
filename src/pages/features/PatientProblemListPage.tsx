@@ -9,6 +9,8 @@ import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
 import type { PatientProblem } from '@/data/mockData';
 
+type ProblemStatus = 'all' | 'active' | 'resolved';
+
 const problemSeverities = ['mild', 'moderate', 'severe'] as const;
 
 const PatientProblemListPage = () => {
@@ -191,10 +193,10 @@ const PatientProblemListPage = () => {
       </div>
 
       <div className="flex gap-2">
-        {['all', 'active', 'resolved'].map((status) => (
+        {(['all', 'active', 'resolved'] as ProblemStatus[]).map((status) => (
           <button
             key={status}
-            onClick={() => setStatusFilter(status as ProblemStatus)}
+            onClick={() => setStatusFilter(status)}
             className={`px-4 py-2 rounded-lg text-sm font-medium transition ${
               statusFilter === status
                 ? 'bg-primary text-primary-foreground'

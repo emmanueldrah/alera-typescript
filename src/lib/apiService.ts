@@ -6,7 +6,7 @@ export interface ApiUser {
   full_name?: string;
   first_name?: string;
   last_name?: string;
-  role: 'patient' | 'provider' | 'pharmacist' | 'admin' | 'super_admin' | 'hospital' | 'laboratory' | 'imaging' | 'ambulance';
+  role: 'patient' | 'provider' | 'pharmacist' | 'admin' | 'super_admin' | 'hospital' | 'laboratory' | 'imaging' | 'ambulance' | 'physiotherapist';
   is_active?: boolean;
   is_verified?: boolean;
   email_verified?: boolean;
@@ -28,14 +28,31 @@ export interface ApiUser {
   license_number?: string;
   license_state?: string;
   specialty?: string;
+  organization_id?: number | null;
+  postdicom_api_url?: string;
+  has_linked_account?: boolean;
+  linked_accounts?: ApiLinkedAccountSummary[];
+}
+
+export interface ApiLinkedAccountSummary {
+  id: number;
+  role: string;
+  masked_email?: string | null;
+  created_at?: string | null;
+  link_type?: string;
 }
 
 export interface ApiAuthResponse {
-  access_token: string;
-  refresh_token?: string;
-  token_type?: string;
-  expires_in?: number;
-  user: ApiUser;
+  message: string;
+  csrf_token?: string;
+  user?: ApiUser;
+  needs_registration?: boolean;
+  google_data?: {
+    email: string;
+    first_name: string;
+    last_name: string;
+    credential: string;
+  };
 }
 
 export interface ApiListResponse<T> {
@@ -53,6 +70,196 @@ export interface StructuredRecordResponse<T = Record<string, unknown>> {
   payload: T;
   created_at: string;
   updated_at: string;
+}
+
+export interface SystemSettings {
+  id: number;
+  is_maintenance_mode: boolean;
+  maintenance_message: string;
+  notification_banner_active: boolean;
+  notification_banner_message: string;
+  notification_banner_type: string;
+  updated_at: string;
+}
+
+export interface SystemSettingsUpdate {
+  is_maintenance_mode?: boolean;
+  maintenance_message?: string;
+  notification_banner_active?: boolean;
+  notification_banner_message?: string;
+  notification_banner_type?: string;
+}
+
+export interface GlobalNotificationRequest {
+  title: string;
+  message: string;
+  notification_type?: string;
+  action_url?: string;
+}
+
+/**
+ * Authentication & Account API
+ */
+export interface SynchronizedHistoryParticipant {
+  user_id: number;
+  role: string;
+  name: string;
+}
+
+export interface SynchronizedHistoryCounts {
+  appointments: number;
+  allergies: number;
+  medical_history_entries: number;
+  prescriptions: number;
+  lab_tests: number;
+  imaging_scans: number;
+  structured_records: number;
+}
+
+export interface SynchronizedHistoryTimelineEntry {
+  source: string;
+  source_id: string;
+  title: string;
+  status?: string | null;
+  timestamp?: string | null;
+  provider_id?: number | null;
+  provider_name?: string | null;
+  payload: Record<string, unknown>;
+}
+
+export interface SynchronizedHistoryResponse {
+  patient_id: number;
+  access_scope: string;
+  has_shared_history_consent: boolean;
+  interacting_organizations: SynchronizedHistoryParticipant[];
+  counts: SynchronizedHistoryCounts;
+  appointments: Record<string, unknown>[];
+  allergies: Record<string, unknown>[];
+  medical_history: Record<string, unknown>[];
+  prescriptions: Record<string, unknown>[];
+  lab_tests: Record<string, unknown>[];
+  imaging_scans: Record<string, unknown>[];
+  structured_records: StructuredRecordResponse[];
+  timeline: SynchronizedHistoryTimelineEntry[];
+}
+
+export interface OrganizationApiResponse {
+  id: number;
+  name: string;
+  slug: string;
+  organization_type: string;
+  description?: string | null;
+  is_active: boolean;
+  created_by?: number | null;
+  created_at?: string | null;
+  updated_at?: string | null;
+}
+
+export interface PatientPermissionResponse {
+  id: string;
+  patient_id: number;
+  organization_id: number;
+  requested_by?: number | null;
+  granted_by?: number | null;
+  revoked_by?: number | null;
+  scope: string[];
+  status: string;
+  reason?: string | null;
+  requested_at?: string | null;
+  granted_at?: string | null;
+  revoked_at?: string | null;
+  expires_at?: string | null;
+  created_at?: string | null;
+  updated_at?: string | null;
+}
+
+export interface MedicalDocumentApiResponse {
+  id: string;
+  medical_record_id: string;
+  patient_id: number;
+  organization_id?: number | null;
+  uploaded_by?: number | null;
+  file_id: string;
+  filename: string;
+  mime_type: string;
+  file_size: number;
+  document_type: string;
+  storage_subpath: string;
+  description?: string | null;
+  is_external: boolean;
+  source_system: string;
+  source_document_id?: string | null;
+  created_at?: string | null;
+  updated_at?: string | null;
+}
+
+export interface MedicalRecordApiResponse {
+  id: string;
+  patient_id: number;
+  organization_id?: number | null;
+  provider_id?: number | null;
+  parent_record_id?: string | null;
+  record_type: string;
+  category?: string | null;
+  title: string;
+  summary?: string | null;
+  status?: string | null;
+  event_time?: string | null;
+  source_system: string;
+  source_record_id?: string | null;
+  source_version?: string | null;
+  is_external: boolean;
+  is_deleted: boolean;
+  sync_status: string;
+  payload: Record<string, unknown>;
+  created_at?: string | null;
+  updated_at?: string | null;
+  documents: MedicalDocumentApiResponse[];
+}
+
+export interface UnifiedPatientRecordApiResponse {
+  patient_id: number;
+  organization_access: OrganizationApiResponse[];
+  permissions: PatientPermissionResponse[];
+  records: MedicalRecordApiResponse[];
+  timeline: MedicalRecordApiResponse[];
+  document_count: number;
+}
+
+export interface ImagingFileAsset {
+  file_id: string;
+  filename: string;
+  mime_type: string;
+  file_size: number;
+  upload_time?: string | null;
+  download_url?: string | null;
+}
+
+export interface ImagingScanApiResponse {
+  id: number;
+  patient_id: number;
+  ordered_by: number;
+  destination_provider_id?: number | null;
+  destination_provider_name?: string | null;
+  processed_by?: number | null;
+  scan_type: string;
+  body_part?: string | null;
+  clinical_indication?: string | null;
+  status: string;
+  findings?: string | null;
+  impression?: string | null;
+  report_url?: string | null;
+  image_url?: string | null;
+  report_file?: ImagingFileAsset | null;
+  image_files?: ImagingFileAsset[];
+  postdicom_study_id?: string | null;
+  postdicom_study_url?: string | null;
+  scheduled_at?: string | null;
+  ordered_at: string;
+  completed_at?: string | null;
+  created_at: string;
+  patient_name?: string | null;
+  ordered_by_name?: string | null;
 }
 
 /** Row from `GET /api/admin/users/` (matches backend UserResponse). */
@@ -82,6 +289,61 @@ export interface AdminUserRow {
   last_login?: string | null;
 }
 
+export interface AuditLogEntry {
+  id: number;
+  user_id?: number | null;
+  role?: string | null;
+  action: string;
+  resource?: string | null;
+  resource_type?: string | null;
+  resource_id?: string | null;
+  old_value?: string | null;
+  new_value?: string | null;
+  changes?: string | null;
+  description?: string | null;
+  ip_address?: string | null;
+  user_agent?: string | null;
+  device_info?: string | null;
+  metadata?: Record<string, unknown>;
+  reason?: string | null;
+  severity: 'info' | 'warning' | 'critical';
+  status?: string | null;
+  error_message?: string | null;
+  request_id?: string | null;
+  request_method?: string | null;
+  request_path?: string | null;
+  duration_ms?: number | null;
+  timestamp: string;
+  created_at?: string | null;
+}
+
+export interface AuditLogListApiResponse {
+  total: number;
+  items: AuditLogEntry[];
+}
+
+export interface AuditSummaryApiResponse {
+  period_days: number;
+  total_logs: number;
+  failed_logins: number;
+  critical_events: number;
+  top_actions: Array<{ action: string; count: number }>;
+  recent_suspicious: AuditLogEntry[];
+}
+
+export interface LinkedAccountSummaryResponse {
+  id: number;
+  role: string;
+  masked_email?: string | null;
+  created_at?: string | null;
+  link_type?: string;
+}
+
+export interface LinkedAccountListResponse {
+  has_linked_account: boolean;
+  linked_accounts: LinkedAccountSummaryResponse[];
+}
+
 // ============================================================================
 // AUTH ENDPOINTS
 // ============================================================================
@@ -93,8 +355,12 @@ export const authApi = {
     username: string;
     first_name: string;
     last_name: string;
-    role: 'patient' | 'provider' | 'pharmacist' | 'hospital' | 'laboratory' | 'imaging' | 'ambulance';
+    role: 'patient' | 'provider' | 'pharmacist' | 'hospital' | 'laboratory' | 'imaging' | 'ambulance' | 'physiotherapist';
     phone?: string;
+    address?: string;
+    city?: string;
+    state?: string;
+    zip_code?: string;
     license_number?: string;
     license_state?: string;
     specialty?: string;
@@ -105,6 +371,27 @@ export const authApi = {
 
   login: async (email: string, password: string) => {
     const response = await apiClient.post<ApiAuthResponse>('/auth/login', { email, password });
+    return response.data;
+  },
+
+  loginWithGoogle: async (credential: string) => {
+    const response = await apiClient.post<ApiAuthResponse>('/auth/oauth/google', { credential });
+    return response.data;
+  },
+
+  registerWithGoogle: async (userData: {
+    credential: string;
+    role: 'patient' | 'provider' | 'pharmacist' | 'hospital' | 'laboratory' | 'imaging' | 'ambulance' | 'physiotherapist';
+    phone?: string;
+    address?: string;
+    city?: string;
+    state?: string;
+    zip_code?: string;
+    license_number?: string;
+    license_state?: string;
+    specialty?: string;
+  }) => {
+    const response = await apiClient.post<ApiAuthResponse>('/auth/oauth/google/register', userData);
     return response.data;
   },
 
@@ -126,6 +413,8 @@ export const authApi = {
     zip_code?: string;
     bio?: string;
     profile_image_url?: string;
+    postdicom_api_url?: string;
+    postdicom_api_key?: string;
     notification_email?: boolean;
     notification_sms?: boolean;
     privacy_public_profile?: boolean;
@@ -135,8 +424,8 @@ export const authApi = {
     return response.data;
   },
 
-  refreshToken: async (refreshToken: string) => {
-    const response = await apiClient.post<{ access_token: string; refresh_token?: string; token_type?: string; expires_in?: number }>('/auth/refresh', { refresh_token: refreshToken });
+  refreshToken: async () => {
+    const response = await apiClient.post<{ message: string; csrf_token: string }>('/auth/refresh');
     return response.data;
   },
 
@@ -212,6 +501,8 @@ export const usersApi = {
     zip_code?: string;
     bio?: string;
     profile_image_url?: string;
+    postdicom_api_url?: string;
+    postdicom_api_key?: string;
     notification_email?: boolean;
     notification_sms?: boolean;
     privacy_public_profile?: boolean;
@@ -231,8 +522,24 @@ export const usersApi = {
     return response.data;
   },
 
-  getAccessibleUsers: async () => {
-    const response = await apiClient.get<ApiUser[]>('/users/accessible');
+  getAccessibleUsers: async (skip: number = 0, limit: number = 100) => {
+    const response = await apiClient.get<ApiUser[]>('/users/accessible', { params: { skip, limit } });
+    return response.data;
+  },
+};
+
+export const accountLinksApi = {
+  getMine: async () => {
+    const response = await apiClient.get<LinkedAccountListResponse>('/account-links/me');
+    return response.data;
+  },
+
+  create: async (payload: {
+    current_password: string;
+    linked_email: string;
+    linked_password: string;
+  }) => {
+    const response = await apiClient.post<LinkedAccountListResponse>('/account-links', payload);
     return response.data;
   },
 };
@@ -323,7 +630,10 @@ export const ambulanceApi = {
     updateData: {
       status?: string;
       priority?: string;
+      assigned_ambulance_id?: number;
+      accepted_at?: string;
       dispatched_at?: string;
+      arrived_at?: string;
       completed_at?: string;
       location_name?: string;
       address?: string;
@@ -337,6 +647,47 @@ export const ambulanceApi = {
   },
 };
 
+export type LiveLocationSnapshot = {
+  user_id: number;
+  role: string;
+  latitude?: number | null;
+  longitude?: number | null;
+  last_updated?: string | null;
+  sharing_enabled: boolean;
+};
+
+export type EmergencyTrackingSnapshot = {
+  request_id: number;
+  status: string;
+  priority: string;
+  patient_id?: number | null;
+  assigned_ambulance_id?: number | null;
+  patient_location?: LiveLocationSnapshot | null;
+  ambulance_location?: LiveLocationSnapshot | null;
+};
+
+export const liveLocationApi = {
+  updateMine: async (payload: { latitude: number; longitude: number; sharing_enabled?: boolean }) => {
+    const response = await apiClient.post('/live-locations/me', payload);
+    return response.data as LiveLocationSnapshot;
+  },
+
+  getMine: async () => {
+    const response = await apiClient.get('/live-locations/me');
+    return response.data as LiveLocationSnapshot;
+  },
+
+  disableMine: async () => {
+    const response = await apiClient.post('/live-locations/me/disable');
+    return response.data as LiveLocationSnapshot;
+  },
+
+  getRequestTracking: async (requestId: string | number) => {
+    const response = await apiClient.get(`/live-locations/request/${requestId}`);
+    return response.data as EmergencyTrackingSnapshot;
+  },
+};
+
 // ============================================================================
 // PRESCRIPTION ENDPOINTS
 // ============================================================================
@@ -344,6 +695,7 @@ export const ambulanceApi = {
 export const prescriptionsApi = {
   createPrescription: async (prescriptionData: {
     patient_id: number;
+    pharmacy_id: number;
     medication_name: string;
     dosage: string;
     dosage_unit: string;
@@ -383,6 +735,11 @@ export const prescriptionsApi = {
     },
   ) => {
     const response = await apiClient.put(`/prescriptions/${prescriptionId}`, updateData);
+    return response.data;
+  },
+
+  deletePrescription: async (prescriptionId: string | number) => {
+    const response = await apiClient.delete(`/prescriptions/${prescriptionId}`);
     return response.data;
   },
 };
@@ -660,7 +1017,9 @@ export const adminApi = {
 
   /** `newRole` is backend role string, e.g. `patient`, `provider`, `pharmacist` (passed as query param). */
   changeUserRole: async (userId: string | number, newRole: string) => {
-    const response = await apiClient.put(`/admin/users/${userId}/change-role`, undefined, {
+    const response = await apiClient.put(`/admin/users/${userId}/change-role`, {
+      new_role: newRole,
+    }, {
       params: { new_role: newRole },
     });
     return response.data;
@@ -732,6 +1091,22 @@ export const adminApi = {
     return response.data;
   },
 
+  createUser: async (userData: {
+    email: string;
+    username: string;
+    password: string;
+    first_name: string;
+    last_name: string;
+    phone?: string;
+    role: string;
+    license_number?: string;
+    license_state?: string;
+    specialty?: string;
+  }) => {
+    const response = await apiClient.post('/admin/users/create', userData);
+    return response.data;
+  },
+
   deleteUser: async (userId: string | number) => {
     const response = await apiClient.delete(`/admin/users/${userId}`);
     return response.data;
@@ -748,6 +1123,63 @@ export const adminApi = {
   },
 };
 
+export const auditApi = {
+  getLogs: async (params?: {
+    skip?: number;
+    limit?: number;
+    user_id?: number;
+    role?: string;
+    action?: string;
+    resource_type?: string;
+    status_filter?: string;
+    search?: string;
+    start_date?: string;
+    end_date?: string;
+  }) => {
+    const response = await apiClient.get<AuditLogListApiResponse>('/audit', { params });
+    return response.data;
+  },
+
+  getSummary: async (days: number = 7) => {
+    const response = await apiClient.get<AuditSummaryApiResponse>('/audit/summary/overview', { params: { days } });
+    return response.data;
+  },
+
+  getUserHistory: async (userId: number, params?: { skip?: number; limit?: number; days?: number }) => {
+    const response = await apiClient.get<AuditLogListApiResponse>(`/audit/user/${userId}/history`, { params });
+    return response.data;
+  },
+
+  exportLogs: async (body: {
+    user_id?: number;
+    role?: string;
+    action?: string;
+    resource_type?: string;
+    status?: string;
+    search?: string;
+    start_date?: string;
+    end_date?: string;
+  }) => {
+    const response = await apiClient.post('/audit/export', body, { responseType: 'blob' });
+    return response.data as Blob;
+  },
+
+  getSystemSettings: async (): Promise<SystemSettings> => {
+    const response = await apiClient.get<SystemSettings>("/admin/system/settings");
+    return response.data;
+  },
+
+  updateSystemSettings: async (settings: SystemSettingsUpdate): Promise<SystemSettings> => {
+    const response = await apiClient.put<SystemSettings>("/admin/system/settings", settings);
+    return response.data;
+  },
+
+  notifyAllUsers: async (payload: GlobalNotificationRequest): Promise<{ message: string }> => {
+    const response = await apiClient.post<{ message: string }>("/admin/system/notify-all", payload);
+    return response.data;
+  },
+};
+
 // ============================================================================
 // LAB TEST ENDPOINTS
 // ============================================================================
@@ -755,6 +1187,7 @@ export const adminApi = {
 export const labTestsApi = {
   createLabTest: async (testData: {
     patient_id: number;
+    destination_provider_id: number;
     test_name: string;
     test_code?: string;
     description?: string;
@@ -777,6 +1210,11 @@ export const labTestsApi = {
     const response = await apiClient.put(`/lab-tests/${id}`, updateData);
     return response.data;
   },
+
+  deleteLabTest: async (id: string | number) => {
+    const response = await apiClient.delete(`/lab-tests/${id}`);
+    return response.data;
+  },
 };
 
 // ============================================================================
@@ -786,6 +1224,7 @@ export const labTestsApi = {
 export const imagingApi = {
   orderImagingScan: async (scanData: {
     patient_id: number;
+    destination_provider_id: number;
     scan_type: string;
     body_part?: string;
     clinical_indication?: string;
@@ -808,6 +1247,34 @@ export const imagingApi = {
     const response = await apiClient.put(`/imaging/${id}`, updateData);
     return response.data;
   },
+
+  uploadImagingResults: async (
+    id: string | number,
+    payload: {
+      findings?: string;
+      impression?: string;
+      status?: string;
+      reportFile?: File | null;
+      imageFiles?: File[];
+    },
+  ) => {
+    const formData = new FormData();
+    if (payload.findings?.trim()) formData.append('findings', payload.findings.trim());
+    if (payload.impression?.trim()) formData.append('impression', payload.impression.trim());
+    if (payload.status?.trim()) formData.append('status', payload.status.trim());
+    if (payload.reportFile) formData.append('report_file', payload.reportFile);
+    for (const file of payload.imageFiles ?? []) {
+      formData.append('image_files', file);
+    }
+
+    const response = await apiClient.post(`/imaging/${id}/results`, formData);
+    return response.data;
+  },
+
+  deleteImagingScan: async (id: string | number) => {
+    const response = await apiClient.delete(`/imaging/${id}`);
+    return response.data;
+  },
 };
 
 export const referralsApi = {
@@ -819,6 +1286,7 @@ export const referralsApi = {
   createReferral: async (body: {
     patient_id: number;
     referral_type: 'hospital' | 'laboratory' | 'imaging' | 'pharmacy';
+    destination_provider_id: number;
     to_department: string;
     to_department_id?: string;
     reason: string;
@@ -883,6 +1351,69 @@ export const recordsApi = {
     const response = await apiClient.delete(`/records/${recordId}`);
     return response.data;
   },
+
+  getSynchronizedHistory: async (patientId: string | number) => {
+    const response = await apiClient.get<SynchronizedHistoryResponse>(`/records/synchronized-history/${patientId}`);
+    return response.data;
+  },
+};
+
+export const organizationsApi = {
+  listOrganizations: async () => {
+    const response = await apiClient.get<{ total: number; items: OrganizationApiResponse[] }>('/organizations');
+    return response.data;
+  },
+};
+
+export const patientPermissionsApi = {
+  listPermissions: async (patientId?: string | number) => {
+    const response = await apiClient.get<{ total: number; items: PatientPermissionResponse[] }>('/patient-permissions', {
+      params: patientId ? { patient_id: patientId } : undefined,
+    });
+    return response.data;
+  },
+
+  requestAccess: async (body: {
+    patient_id: number;
+    organization_id: number;
+    scope?: string[];
+    reason?: string;
+  }) => {
+    const response = await apiClient.post<PatientPermissionResponse>('/patient-permissions/request', body);
+    return response.data;
+  },
+
+  grantAccess: async (body: {
+    patient_id: number;
+    organization_id: number;
+    scope?: string[];
+    reason?: string;
+  }) => {
+    const response = await apiClient.post<PatientPermissionResponse>('/patient-permissions/grant', body);
+    return response.data;
+  },
+
+  approveAccess: async (permissionId: string, body?: { reason?: string; expires_at?: string | null }) => {
+    const response = await apiClient.post<PatientPermissionResponse>(`/patient-permissions/${permissionId}/approve`, body || {});
+    return response.data;
+  },
+
+  denyAccess: async (permissionId: string, body?: { reason?: string }) => {
+    const response = await apiClient.post<PatientPermissionResponse>(`/patient-permissions/${permissionId}/deny`, body || {});
+    return response.data;
+  },
+
+  revokeAccess: async (permissionId: string, body?: { reason?: string }) => {
+    const response = await apiClient.post<PatientPermissionResponse>(`/patient-permissions/${permissionId}/revoke`, body || {});
+    return response.data;
+  },
+};
+
+export const medicalRecordsApi = {
+  getUnifiedRecord: async (patientId: string | number) => {
+    const response = await apiClient.get<UnifiedPatientRecordApiResponse>(`/medical-records/unified/${patientId}`);
+    return response.data;
+  },
 };
 
 // ============================================================================
@@ -892,6 +1423,7 @@ export const recordsApi = {
 export const api = {
   auth: authApi,
   users: usersApi,
+  accountLinks: accountLinksApi,
   appointments: appointmentsApi,
   prescriptions: prescriptionsApi,
   allergies: allergiesApi,
@@ -900,9 +1432,18 @@ export const api = {
   videoCalls: videoCallsApi,
   messaging: messagingApi,
   admin: adminApi,
+  audit: auditApi,
   labTests: labTestsApi,
   imaging: imagingApi,
   referrals: referralsApi,
   ambulance: ambulanceApi,
+  liveLocation: liveLocationApi,
   records: recordsApi,
+  organizations: organizationsApi,
+  patientPermissions: patientPermissionsApi,
+  medicalRecords: medicalRecordsApi,
+  getSystemStatus: async (): Promise<Partial<SystemSettings>> => {
+    const response = await apiClient.get<Partial<SystemSettings>>("/system/status");
+    return response.data;
+  },
 };

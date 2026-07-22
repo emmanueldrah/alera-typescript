@@ -6,6 +6,7 @@ from app.models.user import User
 from app.schemas import PrescriptionResponse, PrescriptionCreate, PrescriptionUpdate
 from app.utils.dependencies import get_current_user
 from app.utils.access import require_verified_workforce_member
+from app.services.medical_record_sync import create_db_notification, upsert_medical_record
 
 router = APIRouter(prefix="/api/prescriptions", tags=["prescriptions"])
 
@@ -21,6 +22,7 @@ def serialize_prescription(rx: Prescription) -> PrescriptionResponse:
         id=rx.id,
         patient_id=rx.patient_id,
         provider_id=rx.provider_id,
+        pharmacy_id=rx.pharmacy_id,
         medication_name=rx.medication_name,
         dosage=rx.dosage,
         dosage_unit=rx.dosage_unit,
@@ -37,13 +39,14 @@ def serialize_prescription(rx: Prescription) -> PrescriptionResponse:
         refills_remaining=rx.refills_remaining,
         patient_name=_display_name(rx.patient),
         provider_name=_display_name(rx.provider),
+        pharmacy_name=_display_name(rx.pharmacy),
     )
 
 
 def _load_prescription(db: Session, prescription_id: int) -> Prescription | None:
     return (
         db.query(Prescription)
-        .options(joinedload(Prescription.patient), joinedload(Prescription.provider))
+        .options(joinedload(Prescription.patient), joinedload(Prescription.provider), joinedload(Prescription.pharmacy))
         .filter(Prescription.id == prescription_id)
         .first()
     )
@@ -72,9 +75,22 @@ async def create_prescription(
             detail="Patient not found",
         )
 
+    pharmacy = db.query(User).filter(User.id == prescription.pharmacy_id).first()
+    if not pharmacy or pharmacy.role.value != "pharmacist":
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Destination provider must be a pharmacy",
+        )
+    if not pharmacy.is_active or not pharmacy.is_verified:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Destination pharmacy must be active and verified",
+        )
+
     db_prescription = Prescription(
         patient_id=prescription.patient_id,
         provider_id=current_user.id,
+        pharmacy_id=prescription.pharmacy_id,
         medication_name=prescription.medication_name,
         dosage=prescription.dosage,
         dosage_unit=prescription.dosage_unit,
@@ -115,6 +131,30 @@ async def create_prescription(
         medication_name=loaded.medication_name,
         provider_name=_display_name(loaded.provider),
     )
+    upsert_medical_record(
+        db,
+        patient_id=loaded.patient_id,
+        provider=loaded.provider,
+        record_type="prescription",
+        category="medication",
+        title=loaded.medication_name,
+        summary=loaded.instructions,
+        status=loaded.status,
+        event_time=loaded.prescribed_date,
+        source_record_id=f"prescription:{loaded.id}",
+        payload={
+            "dosage": loaded.dosage,
+            "dosage_unit": loaded.dosage_unit,
+            "frequency": loaded.frequency,
+            "route": loaded.route,
+            "quantity": loaded.quantity,
+            "pharmacy_id": loaded.pharmacy_id,
+            "pharmacy_name": loaded.pharmacy_name,
+            "refills": loaded.refills,
+            "refills_remaining": loaded.refills_remaining,
+        },
+    )
+    db.commit()
 
     return serialize_prescription(loaded)
 
@@ -135,7 +175,7 @@ async def list_prescriptions(
     elif current_user.role.value in ("pharmacist", "admin"):
         if current_user.role.value == "pharmacist":
             require_verified_workforce_member(current_user, "view prescriptions")
-        pass  # pharmacy / admin: workflow queue (all prescriptions)
+            q = q.filter(Prescription.pharmacy_id == current_user.id)
     elif current_user.role.value in ("provider",):
         require_verified_workforce_member(current_user, "view prescriptions")
         q = q.filter(Prescription.provider_id == current_user.id)
@@ -197,7 +237,7 @@ async def update_prescription(
 
     is_owner = prescription.provider_id == current_user.id
     is_admin = current_user.role.value == "admin"
-    is_pharmacist = current_user.role.value == "pharmacist"
+    is_pharmacist = current_user.role.value == "pharmacist" and prescription.pharmacy_id == current_user.id
 
     if current_user.role.value in ("provider", "pharmacist"):
         require_verified_workforce_member(current_user, "update prescriptions")
@@ -233,4 +273,67 @@ async def update_prescription(
         description=f"Updated prescription {loaded.id}",
         status="updated",
     )
+    upsert_medical_record(
+        db,
+        patient_id=loaded.patient_id,
+        provider=loaded.provider,
+        record_type="prescription",
+        category="medication",
+        title=loaded.medication_name,
+        summary=loaded.instructions,
+        status=loaded.status,
+        event_time=loaded.prescribed_date,
+        source_record_id=f"prescription:{loaded.id}",
+        payload={
+            "dosage": loaded.dosage,
+            "dosage_unit": loaded.dosage_unit,
+            "frequency": loaded.frequency,
+            "route": loaded.route,
+            "quantity": loaded.quantity,
+            "pharmacy_id": loaded.pharmacy_id,
+            "pharmacy_name": loaded.pharmacy_name,
+            "refills": loaded.refills,
+            "refills_remaining": loaded.refills_remaining,
+        },
+    )
+    db.commit()
     return serialize_prescription(loaded)
+
+
+@router.delete("/{prescription_id}", status_code=status.HTTP_204_NO_CONTENT)
+async def delete_prescription(
+    prescription_id: int,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    """Delete a prescription (prescriber or admin)."""
+
+    prescription = db.query(Prescription).filter(Prescription.id == prescription_id).first()
+
+    if not prescription:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Prescription not found",
+        )
+
+    if current_user.role.value == "provider":
+        require_verified_workforce_member(current_user, "delete prescriptions")
+        if prescription.provider_id != current_user.id:
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="Not authorized to delete this prescription",
+            )
+    elif current_user.role.value != "admin":
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Not authorized to delete prescriptions",
+        )
+
+    db.delete(prescription)
+    db.commit()
+    return None
+    if current_user.role.value == "pharmacist" and prescription.pharmacy_id != current_user.id:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Not authorized",
+        )

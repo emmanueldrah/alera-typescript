@@ -59,7 +59,7 @@ describe('DashboardLayout', () => {
 
   it('shows the pending verification banner for unverified professionals', () => {
     render(
-      <MemoryRouter initialEntries={['/dashboard']}>
+      <MemoryRouter initialEntries={['/dashboard']} future={{ v7_startTransition: true, v7_relativeSplatPath: true }}>
         <DashboardLayout>
           <div>Dashboard content</div>
         </DashboardLayout>
@@ -82,7 +82,7 @@ describe('DashboardLayout', () => {
     };
 
     render(
-      <MemoryRouter initialEntries={['/dashboard']}>
+      <MemoryRouter initialEntries={['/dashboard']} future={{ v7_startTransition: true, v7_relativeSplatPath: true }}>
         <DashboardLayout>
           <div>Dashboard content</div>
         </DashboardLayout>
@@ -105,7 +105,7 @@ describe('DashboardLayout', () => {
     };
 
     render(
-      <MemoryRouter initialEntries={['/dashboard']}>
+      <MemoryRouter initialEntries={['/dashboard']} future={{ v7_startTransition: true, v7_relativeSplatPath: true }}>
         <DashboardLayout>
           <div>Dashboard content</div>
         </DashboardLayout>

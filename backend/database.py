@@ -8,24 +8,42 @@ from datetime import datetime
 from typing import Generator
 import sys
 import os
+import re
 
 database_url = settings.DATABASE_URL
 
-# Handle production database settings
-if settings.ENVIRONMENT == "production":
-    # For SQLite in production, use /tmp
-    if database_url.startswith("sqlite"):
-        try:
-            # Ensure we use an absolute path in /tmp
-            db_name = database_url.split("///")[-1] if "///" in database_url else "alera.db"
-            database_url = f"sqlite:////tmp/{db_name}"
-            print(f"ℹ Using production SQLite database at: {database_url}")
-            
-            # Ensure /tmp exists (it should on Vercel)
-            if not os.path.exists("/tmp"):
-                print("WARNING: /tmp directory not found, SQLite might fail")
-        except Exception as e:
-            print(f"WARNING: Failed to reconfigure SQLite path: {e}")
+CANONICAL_USER_ROLE_VALUES = {
+    "patient",
+    "provider",
+    "pharmacist",
+    "admin",
+    "super_admin",
+    "hospital",
+    "laboratory",
+    "imaging",
+    "ambulance",
+    "physiotherapist",
+}
+
+LEGACY_USER_ROLE_ALIASES = {
+    "doctor": "provider",
+    "pharmacy": "pharmacist",
+    "superadmin": "super_admin",
+}
+
+AUDIT_STATUS_SEVERITY_MAP = {
+    "success": "info",
+    "info": "info",
+    "created": "info",
+    "updated": "info",
+    "read": "info",
+    "warning": "warning",
+    "warn": "warning",
+    "error": "critical",
+    "failed": "critical",
+    "failure": "critical",
+    "critical": "critical",
+}
 
 # Database engine configuration
 engine_kwargs = {
@@ -35,17 +53,29 @@ engine_kwargs = {
 
 # Use appropriate pool settings based on database type
 if database_url.startswith("sqlite"):
-    # SQLite: No connection pooling for serverless
+    # SQLite: StaticPool is required for in-memory or shared SQLite connections in threads
     engine_kwargs["poolclass"] = StaticPool
     engine_kwargs["connect_args"] = {"check_same_thread": False}
 elif database_url.startswith("postgresql"):
-    # PostgreSQL: Use NullPool for serverless (no connection pooling)
-    # Vercel uses ephemeral connections
-    engine_kwargs["poolclass"] = NullPool
-else:
-    # Default: No pooling for other database types
-    if settings.ENVIRONMENT == "production":
+    # PostgreSQL: For 100k users, we need robust pooling unless we use an external proxy (PgBouncer).
+    # We default to QueuePool with reasonable defaults for high-concurrency.
+    if os.environ.get("DB_POOL_DISABLED") == "true" or os.environ.get("VERCEL") == "1":
+        from sqlalchemy.pool import NullPool
         engine_kwargs["poolclass"] = NullPool
+    else:
+        # Default to QueuePool (implicit when poolclass is not set)
+        engine_kwargs["pool_size"] = int(os.environ.get("DB_POOL_SIZE", "20"))
+        engine_kwargs["max_overflow"] = int(os.environ.get("DB_MAX_OVERFLOW", "10"))
+        engine_kwargs["pool_timeout"] = 30
+        engine_kwargs["pool_recycle"] = 1800 # 30 mins
+        
+    engine_kwargs["connect_args"] = {
+        "connect_timeout": max(1, int(os.environ.get("DATABASE_CONNECT_TIMEOUT_SECONDS", "10"))),
+    }
+else:
+    # Default: Use NullPool for safety if unknown, but allow pooling in production
+    if settings.ENVIRONMENT == "production":
+        engine_kwargs["pool_size"] = 10
 
 try:
     # Create engine
@@ -172,6 +202,70 @@ def _patch_users_notification_preferences_columns():
             print(f"WARNING: Could not patch users.{column_name} column: {e}")
 
 
+def _patch_users_live_location_columns():
+    """Add live-location tracking columns when upgrading an existing users table."""
+    try:
+        columns = {column["name"] for column in inspect(engine).get_columns("users")}
+    except Exception:
+        return
+
+    patches = {
+        "live_location_sharing_enabled": "BOOLEAN NOT NULL DEFAULT FALSE",
+        "live_latitude": "FLOAT",
+        "live_longitude": "FLOAT",
+        "live_location_updated_at": "TIMESTAMP",
+    }
+
+    for column_name, ddl in patches.items():
+        if column_name in columns:
+            continue
+        try:
+            with engine.begin() as conn:
+                conn.execute(text(f"ALTER TABLE users ADD COLUMN {column_name} {ddl}"))
+        except Exception as e:
+            print(f"WARNING: Could not patch users.{column_name} column: {e}")
+
+
+def _patch_users_organization_column():
+    """Add organization_id to users when enabling organization-level permissions."""
+    try:
+        columns = {column["name"] for column in inspect(engine).get_columns("users")}
+    except Exception:
+        return
+
+    if "organization_id" in columns:
+        return
+
+    try:
+        with engine.begin() as conn:
+            conn.execute(text("ALTER TABLE users ADD COLUMN organization_id INTEGER"))
+    except Exception as e:
+        print(f"WARNING: Could not patch users.organization_id column: {e}")
+
+
+def _patch_ambulance_request_tracking_columns():
+    """Add assignment and richer tracking columns to ambulance requests."""
+    try:
+        columns = {column["name"] for column in inspect(engine).get_columns("ambulance_requests")}
+    except Exception:
+        return
+
+    patches = {
+        "assigned_ambulance_id": "INTEGER",
+        "accepted_at": "TIMESTAMP",
+        "arrived_at": "TIMESTAMP",
+    }
+
+    for column_name, ddl in patches.items():
+        if column_name in columns:
+            continue
+        try:
+            with engine.begin() as conn:
+                conn.execute(text(f"ALTER TABLE ambulance_requests ADD COLUMN {column_name} {ddl}"))
+        except Exception as e:
+            print(f"WARNING: Could not patch ambulance_requests.{column_name} column: {e}")
+
+
 def _patch_admin_accounts_email_verified():
     """Backfill seeded/admin accounts so they never get stuck behind email verification."""
     try:
@@ -212,6 +306,213 @@ def _patch_admin_accounts_email_verified():
         print(f"WARNING: Could not patch admin verification state: {e}")
 
 
+def _patch_destination_routing_columns():
+    """Add destination/provider routing columns introduced after initial launch."""
+    patches = {
+        "referrals": {
+            "destination_provider_id": "INTEGER",
+        },
+        "lab_tests": {
+            "destination_provider_id": "INTEGER",
+        },
+        "imaging_scans": {
+            "destination_provider_id": "INTEGER",
+        },
+        "prescriptions": {
+            "pharmacy_id": "INTEGER",
+        },
+    }
+
+    for table_name, columns in patches.items():
+        try:
+            existing = {column["name"] for column in inspect(engine).get_columns(table_name)}
+        except Exception:
+            continue
+
+        for column_name, ddl in columns.items():
+            if column_name in existing:
+                continue
+            try:
+                with engine.begin() as conn:
+                    conn.execute(text(f"ALTER TABLE {table_name} ADD COLUMN {column_name} {ddl}"))
+            except Exception as e:
+                print(f"WARNING: Could not patch {table_name}.{column_name} column: {e}")
+
+
+def _patch_imaging_result_asset_columns():
+    """Add structured imaging report/image metadata columns for uploaded studies."""
+    try:
+        existing = {column["name"] for column in inspect(engine).get_columns("imaging_scans")}
+    except Exception:
+        return
+
+    patches = {
+        "report_file_id": "VARCHAR(255)",
+        "report_filename": "VARCHAR(500)",
+        "report_mime_type": "VARCHAR(255)",
+        "report_file_size": "INTEGER",
+        "image_files": "JSON",
+        "postdicom_study_id": "VARCHAR(255)",
+        "postdicom_study_url": "VARCHAR(500)",
+    }
+
+    for column_name, ddl in patches.items():
+        if column_name in existing:
+            continue
+        try:
+            with engine.begin() as conn:
+                conn.execute(text(f"ALTER TABLE imaging_scans ADD COLUMN {column_name} {ddl}"))
+        except Exception as e:
+            print(f"WARNING: Could not patch imaging_scans.{column_name} column: {e}")
+
+
+def _patch_user_postdicom_columns():
+    """Add optional PostDICOM configuration columns for imaging centers."""
+    try:
+        existing = {column["name"] for column in inspect(engine).get_columns("users")}
+    except Exception:
+        return
+
+    patches = {
+        "postdicom_api_url": "VARCHAR(500)",
+        "postdicom_api_key": "VARCHAR(255)",
+    }
+
+    for column_name, ddl in patches.items():
+        if column_name in existing:
+            continue
+        try:
+            with engine.begin() as conn:
+                conn.execute(text(f"ALTER TABLE users ADD COLUMN {column_name} {ddl}"))
+        except Exception as e:
+            print(f"WARNING: Could not patch users.{column_name} column: {e}")
+
+
+def _patch_audit_log_columns():
+    """Add newer audit log fields when upgrading an existing database."""
+    try:
+        existing = {column["name"] for column in inspect(engine).get_columns("audit_logs")}
+    except Exception:
+        return
+
+    patches = {
+        "role": "VARCHAR(50)",
+        "resource": "VARCHAR(255)",
+        "status": "VARCHAR(50) NOT NULL DEFAULT 'success'",
+        "severity": "VARCHAR(50) NOT NULL DEFAULT 'info'",
+        "device_info": "TEXT",
+        "metadata_json": "TEXT",
+        "request_id": "VARCHAR(64)",
+        "request_method": "VARCHAR(16)",
+        "request_path": "VARCHAR(255)",
+        "duration_ms": "INTEGER",
+    }
+
+    for column_name, ddl in patches.items():
+        if column_name in existing:
+            continue
+        try:
+            with engine.begin() as conn:
+                conn.execute(text(f"ALTER TABLE audit_logs ADD COLUMN {column_name} {ddl}"))
+        except Exception as e:
+            print(f"WARNING: Could not patch audit_logs.{column_name} column: {e}")
+
+
+def _normalize_user_role_value(raw_role: str | None) -> str | None:
+    if raw_role is None:
+        return None
+
+    normalized = re.sub(r"[^a-z0-9]+", "_", raw_role.strip().lower()).strip("_")
+    if not normalized:
+        return None
+    if normalized in CANONICAL_USER_ROLE_VALUES:
+        return normalized
+    return LEGACY_USER_ROLE_ALIASES.get(normalized)
+
+
+def _normalize_audit_status(raw_status: str | None) -> str:
+    if raw_status is None:
+        return "success"
+
+    normalized = raw_status.strip().lower().replace("-", "_")
+    if not normalized:
+        return "success"
+    return normalized
+
+
+def _normalize_audit_severity(raw_severity: str | None, status: str) -> str:
+    if raw_severity is not None:
+        normalized = raw_severity.strip().lower()
+        if normalized in {"info", "warning", "critical"}:
+            return normalized
+
+    return AUDIT_STATUS_SEVERITY_MAP.get(status, "info")
+
+
+def _backfill_audit_log_defaults():
+    """Normalize legacy audit rows so list/detail endpoints can serialize them safely."""
+    try:
+        existing = {column["name"] for column in inspect(engine).get_columns("audit_logs")}
+    except Exception:
+        return
+
+    required = {"id", "role", "resource_type", "status", "severity", "created_at"}
+    if not required.issubset(existing):
+        return
+
+    updated_rows = 0
+    try:
+        with engine.begin() as conn:
+            rows = conn.execute(
+                text(
+                    """
+                    SELECT id, role, resource_type, status, severity, created_at
+                    FROM audit_logs
+                    """
+                )
+            ).fetchall()
+
+            for row in rows:
+                row_id, raw_role, raw_resource_type, raw_status, raw_severity, raw_created_at = row
+                updates: dict[str, object] = {}
+
+                normalized_role = _normalize_user_role_value(raw_role)
+                if normalized_role and normalized_role != raw_role:
+                    updates["role"] = normalized_role
+
+                normalized_resource_type = (raw_resource_type or "").strip()
+                if not normalized_resource_type:
+                    updates["resource_type"] = "system"
+
+                normalized_status = _normalize_audit_status(raw_status)
+                if normalized_status != raw_status:
+                    updates["status"] = normalized_status
+
+                normalized_severity = _normalize_audit_severity(raw_severity, normalized_status)
+                if normalized_severity != raw_severity:
+                    updates["severity"] = normalized_severity
+
+                if raw_created_at is None:
+                    updates["created_at"] = utcnow()
+
+                if not updates:
+                    continue
+
+                assignments = ", ".join(f"{column_name} = :{column_name}" for column_name in updates)
+                updates["row_id"] = row_id
+                conn.execute(
+                    text(f"UPDATE audit_logs SET {assignments} WHERE id = :row_id"),
+                    updates,
+                )
+                updated_rows += 1
+    except Exception as e:
+        print(f"WARNING: Could not backfill audit log defaults: {e}")
+        return
+
+    if updated_rows > 0:
+        print(f"✓ Normalized {updated_rows} audit log row(s) for legacy compatibility")
+
+
 def _collect_sqlalchemy_enum_specs() -> dict[str, list[str]]:
     """Collect the desired persisted labels for every SQLAlchemy enum in metadata."""
 
@@ -234,8 +535,15 @@ def _collect_sqlalchemy_enum_specs() -> dict[str, list[str]]:
     return specs
 
 
+def _missing_postgres_enum_labels(current_labels: list[str], desired_labels: list[str]) -> list[str]:
+    """Return desired enum labels that are still missing after rename normalization."""
+
+    current_set = set(current_labels)
+    return [label for label in desired_labels if label not in current_set]
+
+
 def _patch_postgres_enum_values():
-    """Normalize legacy PostgreSQL enum labels to the current lowercase values."""
+    """Normalize legacy PostgreSQL enum labels and append any newly introduced labels."""
 
     if not str(database_url).startswith("postgresql"):
         return
@@ -250,6 +558,7 @@ def _patch_postgres_enum_values():
     desired_enums = _collect_sqlalchemy_enum_specs()
 
     rename_count = 0
+    add_count = 0
     try:
         with engine.begin() as conn:
             for type_name, desired_labels in desired_enums.items():
@@ -262,24 +571,30 @@ def _patch_postgres_enum_values():
                         f'ALTER TYPE "{type_name}" RENAME VALUE {old_label!r} TO {new_label!r}'
                     )
                     rename_count += 1
+
+                rename_map = dict(enum_value_renames(current_labels, desired_labels))
+                normalized_labels = [rename_map.get(label, label) for label in current_labels]
+                for missing_label in _missing_postgres_enum_labels(normalized_labels, desired_labels):
+                    conn.exec_driver_sql(
+                        f'ALTER TYPE "{type_name}" ADD VALUE IF NOT EXISTS {missing_label!r}'
+                    )
+                    add_count += 1
     except Exception as e:
         print(f"WARNING: Could not normalize PostgreSQL enum values: {e}")
         return
 
     if rename_count:
         print(f"✓ Normalized {rename_count} PostgreSQL enum label(s)")
+    if add_count:
+        print(f"✓ Added {add_count} PostgreSQL enum label(s)")
 
 
 def _patch_userrole_enum_values():
     """Add missing user role enum values and rename uppercase to lowercase for PostgreSQL userrole type."""
     if not str(database_url).startswith("postgresql"):
         # SQLite uses VARCHAR, so no enum alteration needed
-        return
-
-def _patch_userrole_enum_values():
-    """Add missing user role enum values and rename uppercase to lowercase for PostgreSQL userrole type."""
-    if not str(database_url).startswith("postgresql"):
-        # SQLite uses VARCHAR, so no enum alteration needed
+        # But we still need to normalize any existing legacy values.
+        _normalize_legacy_roles_sqlite()
         return
 
     try:
@@ -306,54 +621,59 @@ def _patch_userrole_enum_values():
                 else:
                     labels = [labels] if labels else []
                 
-                # First, update any existing data to use lowercase
-                renames = {
-                    "PATIENT": "patient",
-                    "PROVIDER": "provider", 
-                    "PHARMACIST": "pharmacist",
-                    "ADMIN": "admin",
-                    "SUPER_ADMIN": "super_admin",
-                    "HOSPITAL": "hospital",
-                    "LABORATORY": "laboratory",
-                    "IMAGING": "imaging",
-                    "AMBULANCE": "ambulance"
-                }
-                
-                # Update data to lowercase
-                for old_value, new_value in renames.items():
-                    try:
-                        result = conn.execute(text(f"UPDATE users SET role = '{new_value}' WHERE role = '{old_value}'"))
-                        updated = result.rowcount
-                        if updated > 0:
-                            print(f"DEBUG: Updated {updated} users from {old_value} to {new_value}")
-                    except Exception as e:
-                        print(f"WARNING: Could not update role {old_value} to {new_value}: {e}")
-                
-                # Rename enum labels
-                rename_count = 0
-                for old_label, new_label in renames.items():
-                    if old_label in labels:
+                normalized_labels = list(labels)
+                normalized_label_set = set(normalized_labels)
+                renamed_labels = 0
+                updated_rows = 0
+
+                for old_label in list(labels):
+                    new_label = _normalize_user_role_value(old_label)
+                    if not new_label or old_label == new_label:
+                        continue
+
+                    if new_label not in normalized_label_set:
                         try:
-                            conn.execute(text(f"ALTER TYPE {schema_name}.userrole RENAME VALUE '{old_label}' TO '{new_label}'"))
-                            rename_count += 1
+                            conn.execute(
+                                text(f"ALTER TYPE {schema_name}.userrole RENAME VALUE '{old_label}' TO '{new_label}'")
+                            )
+                            normalized_label_set.discard(old_label)
+                            normalized_label_set.add(new_label)
+                            normalized_labels = [new_label if label == old_label else label for label in normalized_labels]
+                            renamed_labels += 1
                             print(f"DEBUG: Renamed enum value {old_label} to {new_label}")
+                            continue
                         except Exception as e:
                             print(f"WARNING: Could not rename {old_label} to {new_label}: {e}")
-                
-                if rename_count > 0:
-                    print(f"✓ Renamed {rename_count} PostgreSQL userrole enum label(s) to lowercase")
-                
-                # Add missing values
-                all_desired = set(renames.values())
-                missing_values = [value for value in ("admin", "super_admin") if value not in labels and value not in all_desired]
+
+                    try:
+                        result = conn.execute(
+                            text("UPDATE users SET role = :new_role WHERE role = :old_role"),
+                            {"new_role": new_label, "old_role": old_label},
+                        )
+                        if result.rowcount:
+                            updated_rows += result.rowcount
+                            print(f"DEBUG: Updated {result.rowcount} users from {old_label} to {new_label}")
+                    except Exception as e:
+                        print(f"WARNING: Could not update role {old_label} to {new_label}: {e}")
+
+                if renamed_labels > 0:
+                    print(f"✓ Normalized {renamed_labels} PostgreSQL userrole enum label(s)")
+                if updated_rows > 0:
+                    print(f"✓ Rewrote {updated_rows} user row(s) to canonical role values")
+
+                missing_values = [
+                    value for value in CANONICAL_USER_ROLE_VALUES
+                    if value not in normalized_label_set
+                ]
+                for value in missing_values:
+                    try:
+                        conn.execute(text(f"ALTER TYPE {schema_name}.userrole ADD VALUE IF NOT EXISTS '{value}'"))
+                        print(f"DEBUG: Added {value} to userrole enum")
+                    except Exception as e:
+                        print(f"WARNING: Could not add {value} to userrole enum: {e}")
+
                 if missing_values:
-                    for value in missing_values:
-                        try:
-                            conn.execute(text(f"ALTER TYPE {schema_name}.userrole ADD VALUE IF NOT EXISTS '{value}'"))
-                            print(f"DEBUG: Added {value} to userrole enum")
-                        except Exception as e:
-                            print(f"WARNING: Could not add {value} to userrole enum: {e}")
-                    print(f"✓ Added {', '.join(missing_values)} to PostgreSQL userrole enum")
+                    print(f"✓ Added {', '.join(sorted(missing_values))} to PostgreSQL userrole enum")
             else:
                 print("WARNING: userrole enum not found in database via raw SQL")
                 
@@ -363,16 +683,86 @@ def _patch_userrole_enum_values():
         print(f"DEBUG: Exception traceback: {traceback.format_exc()}")
 
 
+def _normalize_legacy_roles_sqlite():
+    """Normalize legacy SQLite role values to the backend's canonical enum values."""
+    if not str(database_url).startswith("sqlite"):
+        return
+
+    try:
+        with engine.begin() as conn:
+            # Check if users table exists
+            try:
+                result = conn.execute(text("SELECT 1 FROM users LIMIT 1"))
+                result.fetchone()
+            except Exception:
+                # Table doesn't exist yet
+                return
+            
+            update_count = 0
+            rows = conn.execute(text("SELECT id, role FROM users WHERE role IS NOT NULL")).fetchall()
+            for row in rows:
+                user_id = row[0]
+                raw_role = row[1]
+                new_role = _normalize_user_role_value(raw_role)
+                if not new_role or raw_role == new_role:
+                    continue
+
+                result = conn.execute(
+                    text("UPDATE users SET role = :new_role WHERE id = :user_id"),
+                    {"new_role": new_role, "user_id": user_id},
+                )
+                if result.rowcount > 0:
+                    print(f"DEBUG: Updated user {user_id} role from {raw_role} to {new_role}")
+                    update_count += result.rowcount
+            
+            if update_count > 0:
+                print(f"✓ Normalized {update_count} SQLite user role value(s)")
+    except Exception as e:
+        print(f"WARNING: Could not normalize legacy roles in SQLite: {e}")
+
+
+def run_migrations():
+    """Run Alembic migrations programmatically."""
+    from alembic.config import Config
+    from alembic import command
+    import os
+
+    # Path to alembic.ini relative to this file
+    base_dir = os.path.dirname(os.path.abspath(__file__))
+    ini_path = os.path.join(base_dir, "alembic.ini")
+    
+    cfg = Config(ini_path)
+    # Ensure the script location is correct if we're running from a different CWD
+    cfg.set_main_option("script_location", os.path.join(base_dir, "alembic"))
+    
+    try:
+        command.upgrade(cfg, "head")
+        print("✓ Database migrations applied successfully")
+    except Exception as e:
+        print(f"WARNING: Could not apply database migrations: {e}")
+
 def init_db():
     """Initialize database - create all tables and seed default admin"""
     try:
         import app.models  # noqa: F401
 
+        # 1. Run Alembic migrations first
+        run_migrations()
+
+        # 2. Legacy create_all (idempotent, won't hurt if migrations already created tables)
         Base.metadata.create_all(bind=engine)
         _patch_referrals_referral_type_column()
         _patch_users_session_version_column()
         _patch_users_account_recovery_columns()
         _patch_users_notification_preferences_columns()
+        _patch_users_live_location_columns()
+        _patch_users_organization_column()
+        _patch_ambulance_request_tracking_columns()
+        _patch_destination_routing_columns()
+        _patch_imaging_result_asset_columns()
+        _patch_user_postdicom_columns()
+        _patch_audit_log_columns()
+        _backfill_audit_log_defaults()
         _patch_userrole_enum_values()
         _patch_postgres_enum_values()
         _patch_admin_accounts_email_verified()
@@ -388,16 +778,50 @@ def init_db():
         print(f"WARNING: Failed to seed admin user: {e}")
 
 
+def _production_seed_credentials_are_configured() -> bool:
+    required_keys = (
+        "ADMIN_EMAIL",
+        "ADMIN_PASSWORD",
+        "SUPER_ADMIN_EMAIL",
+        "SUPER_ADMIN_PASSWORD",
+    )
+    # If they are different from defaults, consider them configured
+    return all(
+        os.environ.get(key) and os.environ.get(key) != getattr(settings, key)
+        for key in required_keys
+    )
+
+
+def _should_seed_default_admin_accounts() -> bool:
+    if settings.ENVIRONMENT != "production":
+        return True
+
+    # SQLite is always ephemeral in serverless environments (e.g. Vercel /tmp/).
+    # The database is wiped on every cold start, so we must re-seed on every
+    # startup regardless of whether explicit env vars are present.
+    if settings.DATABASE_URL.startswith("sqlite"):
+        return True
+
+    if _production_seed_credentials_are_configured():
+        return True
+
+    print("WARNING: Skipping default admin seeding in production because explicit admin credentials are not configured")
+    return False
+
+
 def _seed_admin():
     """Create the default admin and super_admin users if they don't exist yet."""
     from app.models.user import User, UserRole
     from app.utils.auth import hash_password
 
+    if not _should_seed_default_admin_accounts():
+        return
+
     db = SessionLocal()
     try:
         # ── regular admin ──────────────────────────────────────────────────
-        admin_email = os.environ.get("ADMIN_EMAIL", "admin@alera.health")
-        admin_password = os.environ.get("ADMIN_PASSWORD", "admin_alera_2026!")
+        admin_email = settings.ADMIN_EMAIL
+        admin_password = settings.ADMIN_PASSWORD
 
         if not db.query(User).filter(User.email == admin_email).first():
             admin = User(
@@ -421,8 +845,8 @@ def _seed_admin():
             print(f"✓ Default admin seeded: {admin_email}")
 
         # ── super admin ────────────────────────────────────────────────────
-        super_email = os.environ.get("SUPER_ADMIN_EMAIL", "superadmin@alera.health")
-        super_password = os.environ.get("SUPER_ADMIN_PASSWORD", "superadmin_alera_2026!")
+        super_email = settings.SUPER_ADMIN_EMAIL
+        super_password = settings.SUPER_ADMIN_PASSWORD
 
         if not db.query(User).filter(User.email == super_email).first():
             super_admin = User(

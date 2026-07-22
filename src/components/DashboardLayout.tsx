@@ -11,7 +11,7 @@ import {
 } from '@/lib/verificationStatus';
 import {
   Heart, LayoutDashboard, Calendar, FileText, FlaskConical, ScanLine,
-  Pill, Ambulance, Users, Building2, ShieldCheck, Activity, Bell,
+  Pill, Ambulance, Users, Building2, ShieldCheck, Activity, Bell, AlertCircle,
   LogOut, Menu, X, Clock, MessageSquare, Settings, HeartPulse, Mail
 } from 'lucide-react';
 import { memo } from 'react';
@@ -39,35 +39,54 @@ const roleNavItems: Record<string, { label: string; icon: React.ReactNode; path:
     { label: 'Imaging Referrals', icon: <ScanLine className="w-5 h-5" />, path: '/dashboard/imaging-referrals' },
     { label: 'Pharmacy Referrals', icon: <Pill className="w-5 h-5" />, path: '/dashboard/pharmacy-referrals' },
     { label: 'Specialist Referrals', icon: <FileText className="w-5 h-5" />, path: '/dashboard/referrals' },
+    { label: 'Emergency Tracking', icon: <Ambulance className="w-5 h-5" />, path: '/dashboard/requests' },
     { label: 'Patient Timeline', icon: <Clock className="w-5 h-5" />, path: '/dashboard/timeline' },
+    { label: 'Messages', icon: <MessageSquare className="w-5 h-5" />, path: '/dashboard/messages' },
+  ],
+  physiotherapist: [
+    { label: 'Dashboard', icon: <LayoutDashboard className="w-5 h-5" />, path: '/dashboard' },
+    { label: 'Appointments', icon: <Calendar className="w-5 h-5" />, path: '/dashboard/appointments' },
+    { label: 'Patients', icon: <Users className="w-5 h-5" />, path: '/dashboard/patients' },
+    { label: 'Care Plans', icon: <FileText className="w-5 h-5" />, path: '/dashboard/clinical-notes' },
+    { label: 'Referrals', icon: <Activity className="w-5 h-5" />, path: '/dashboard/referrals' },
+    { label: 'Timeline', icon: <Clock className="w-5 h-5" />, path: '/dashboard/timeline' },
+    { label: 'Pricing', icon: <Pill className="w-5 h-5" />, path: '/dashboard/pricing-settings' },
     { label: 'Messages', icon: <MessageSquare className="w-5 h-5" />, path: '/dashboard/messages' },
   ],
   hospital: [
     { label: 'Dashboard', icon: <LayoutDashboard className="w-5 h-5" />, path: '/dashboard' },
     { label: 'Patients', icon: <Users className="w-5 h-5" />, path: '/dashboard/patients' },
+    { label: 'Emergency Tracking', icon: <Ambulance className="w-5 h-5" />, path: '/dashboard/requests' },
     { label: 'Referrals', icon: <FileText className="w-5 h-5" />, path: '/dashboard/referrals' },
     { label: 'Doctors', icon: <Heart className="w-5 h-5" />, path: '/dashboard/doctors' },
+    { label: 'Messages', icon: <MessageSquare className="w-5 h-5" />, path: '/dashboard/messages' },
   ],
   laboratory: [
     { label: 'Dashboard', icon: <LayoutDashboard className="w-5 h-5" />, path: '/dashboard' },
     { label: 'Test Requests', icon: <FlaskConical className="w-5 h-5" />, path: '/dashboard/test-requests' },
     { label: 'Results', icon: <FileText className="w-5 h-5" />, path: '/dashboard/results' },
+    { label: 'Result Uploads', icon: <FileText className="w-5 h-5" />, path: '/dashboard/lab-results-management' },
+    { label: 'Messages', icon: <MessageSquare className="w-5 h-5" />, path: '/dashboard/messages' },
   ],
   imaging: [
     { label: 'Dashboard', icon: <LayoutDashboard className="w-5 h-5" />, path: '/dashboard' },
     { label: 'Scan Requests', icon: <ScanLine className="w-5 h-5" />, path: '/dashboard/scan-requests' },
+    { label: 'Imaging Referrals', icon: <ScanLine className="w-5 h-5" />, path: '/dashboard/imaging-referrals' },
     { label: 'Results', icon: <FileText className="w-5 h-5" />, path: '/dashboard/results' },
+    { label: 'Messages', icon: <MessageSquare className="w-5 h-5" />, path: '/dashboard/messages' },
   ],
   pharmacy: [
     { label: 'Dashboard', icon: <LayoutDashboard className="w-5 h-5" />, path: '/dashboard' },
     { label: 'Prescriptions', icon: <Pill className="w-5 h-5" />, path: '/dashboard/prescriptions' },
     { label: 'Referral requests', icon: <FileText className="w-5 h-5" />, path: '/dashboard/pharmacy-referrals' },
     { label: 'Inventory', icon: <Activity className="w-5 h-5" />, path: '/dashboard/inventory' },
+    { label: 'Messages', icon: <MessageSquare className="w-5 h-5" />, path: '/dashboard/messages' },
   ],
   ambulance: [
     { label: 'Dashboard', icon: <LayoutDashboard className="w-5 h-5" />, path: '/dashboard' },
     { label: 'Requests', icon: <Ambulance className="w-5 h-5" />, path: '/dashboard/requests' },
     { label: 'Vehicles', icon: <Activity className="w-5 h-5" />, path: '/dashboard/vehicles' },
+    { label: 'Messages', icon: <MessageSquare className="w-5 h-5" />, path: '/dashboard/messages' },
   ],
   admin: [
     { label: 'Dashboard', icon: <LayoutDashboard className="w-5 h-5" />, path: '/dashboard' },
@@ -76,18 +95,28 @@ const roleNavItems: Record<string, { label: string; icon: React.ReactNode; path:
     { label: 'Analytics', icon: <Activity className="w-5 h-5" />, path: '/dashboard/analytics' },
     { label: 'Notifications', icon: <Bell className="w-5 h-5" />, path: '/dashboard/notifications' },
   ],
+  super_admin: [
+    { label: 'Dashboard', icon: <LayoutDashboard className="w-5 h-5" />, path: '/dashboard' },
+    { label: 'Users', icon: <Users className="w-5 h-5" />, path: '/dashboard/users' },
+    { label: 'Verifications', icon: <ShieldCheck className="w-5 h-5" />, path: '/dashboard/verifications' },
+    { label: 'Analytics', icon: <Activity className="w-5 h-5" />, path: '/dashboard/analytics' },
+    { label: 'Notifications', icon: <Bell className="w-5 h-5" />, path: '/dashboard/notifications' },
+    { label: 'Admin Billing', icon: <FileText className="w-5 h-5" />, path: '/dashboard/admin-billing' },
+    { label: 'Audit Logs', icon: <AlertCircle className="w-5 h-5" />, path: '/dashboard/audit' },
+    { label: 'Create Admin', icon: <ShieldCheck className="w-5 h-5" />, path: '/dashboard/admin/create' },
+  ],
 };
 
 const roleLabels: Record<string, string> = {
   patient: 'Patient', doctor: 'Doctor', hospital: 'Hospital', laboratory: 'Laboratory',
-  imaging: 'Imaging Center', pharmacy: 'Pharmacy', ambulance: 'Ambulance', admin: 'Admin',
+  imaging: 'Imaging Center', pharmacy: 'Pharmacy', ambulance: 'Ambulance', physiotherapist: 'Physiotherapist', admin: 'Admin', super_admin: 'Super Admin',
 };
 
 const roleIcons: Record<string, React.ReactNode> = {
   patient: <Users className="w-5 h-5" />, doctor: <Heart className="w-5 h-5" />,
   hospital: <Building2 className="w-5 h-5" />, laboratory: <FlaskConical className="w-5 h-5" />,
   imaging: <ScanLine className="w-5 h-5" />, pharmacy: <Pill className="w-5 h-5" />,
-  ambulance: <Ambulance className="w-5 h-5" />, admin: <ShieldCheck className="w-5 h-5" />,
+  ambulance: <Ambulance className="w-5 h-5" />, physiotherapist: <Activity className="w-5 h-5" />, admin: <ShieldCheck className="w-5 h-5" />, super_admin: <ShieldCheck className="w-5 h-5" />,
 };
 
 interface DashboardLayoutProps {

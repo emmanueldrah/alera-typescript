@@ -1,25 +1,21 @@
 import axios, { AxiosInstance, AxiosError } from 'axios';
 import type { InternalAxiosRequestConfig } from 'axios';
+import { frontendEnv } from '@/config/env';
+const API_BASE_URL = frontendEnv.apiBaseUrl;
 
-const resolveApiBaseUrl = () => {
-  if (import.meta.env.PROD) {
-    return '/api';
-  }
-
-  const configuredUrl = import.meta.env.VITE_API_URL?.trim();
-  if (configuredUrl) {
-    return configuredUrl.replace(/\/+$/, '');
-  }
-
-  return '/api';
+const getCsrfTokenFromCookie = (): string | null => {
+  if (typeof document === 'undefined') return null;
+  const cookie = document.cookie
+    .split('; ')
+    .find((entry) => entry.startsWith('csrf_token='));
+  if (!cookie) return null;
+  return decodeURIComponent(cookie.split('=').slice(1).join('='));
 };
-
-const API_BASE_URL = resolveApiBaseUrl();
 
 // Create axios instance
 export const apiClient: AxiosInstance = axios.create({
   baseURL: API_BASE_URL,
-  timeout: 10000,
+  timeout: frontendEnv.apiTimeoutMs,
   withCredentials: true,
   headers: {
     'Content-Type': 'application/json',
@@ -53,6 +49,13 @@ apiClient.interceptors.request.use(
   (config) => {
     // Ensure cookies are included in every request for auth flows
     config.withCredentials = true;
+    const method = config.method?.toUpperCase();
+    if (method && ['POST', 'PUT', 'PATCH', 'DELETE'].includes(method)) {
+      const csrfToken = getCsrfTokenFromCookie();
+      if (csrfToken) {
+        config.headers.set('X-CSRF-Token', csrfToken);
+      }
+    }
     return config;
   },
   (error) => Promise.reject(error)

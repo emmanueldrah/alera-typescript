@@ -18,7 +18,9 @@ const roleIcons: Record<string, React.ReactNode> = {
   imaging: <ScanLine className="w-5 h-5" />,
   pharmacy: <Pill className="w-5 h-5" />,
   ambulance: <Ambulance className="w-5 h-5" />,
+  physiotherapist: <Heart className="w-5 h-5" />,
   admin: <ShieldCheck className="w-5 h-5" />,
+  super_admin: <ShieldCheck className="w-5 h-5" />,
 };
 
 const roleLabels: Record<string, string> = {
@@ -29,11 +31,22 @@ const roleLabels: Record<string, string> = {
   imaging: 'Imaging Center',
   pharmacy: 'Pharmacy',
   ambulance: 'Ambulance',
+  physiotherapist: 'Physiotherapist',
   admin: 'Administrator',
+  super_admin: 'Super Admin',
 };
 
+const profileTabs = [
+  { id: 'basic', label: 'Basic', icon: <Users className="w-4 h-4" /> },
+  { id: 'contact', label: 'Contact', icon: <Mail className="w-4 h-4" /> },
+  { id: 'security', label: 'Security', icon: <Lock className="w-4 h-4" /> },
+  { id: 'notifications', label: 'Notifications', icon: <Bell className="w-4 h-4" /> },
+  { id: 'privacy', label: 'Privacy', icon: <ShieldCheck className="w-4 h-4" /> },
+  { id: 'account', label: 'Account', icon: <Heart className="w-4 h-4" /> },
+] as const;
+
 const ProfilePage = () => {
-  const { user, updateProfile, updateBasicInfo, changePassword, updateNotificationPreferences, updatePrivacySettings, deleteAccount, resendEmailVerification, clearCache } = useAuth();
+  const { user, updateProfile, updateBasicInfo, changePassword, updateNotificationPreferences, updatePrivacySettings, deleteAccount, linkAccount, resendEmailVerification, clearCache } = useAuth();
   const [activeTab, setActiveTab] = useState<'basic' | 'contact' | 'security' | 'notifications' | 'privacy' | 'account'>('basic');
   const [isLoading, setIsLoading] = useState(false);
   const [success, setSuccess] = useState('');
@@ -52,6 +65,7 @@ const ProfilePage = () => {
   const [state, setState] = useState(profile?.state || '');
   const [zipCode, setZipCode] = useState(profile?.zipCode || '');
   const [bio, setBio] = useState(profile?.bio || '');
+  const [postdicomApiUrl, setPostdicomApiUrl] = useState(user?.postdicomApiUrl || '');
 
   // Security State
   const [oldPassword, setOldPassword] = useState('');
@@ -82,7 +96,8 @@ const ProfilePage = () => {
     setNotifEmail(profile.notificationEmail ?? true);
     setNotifSms(profile.notificationSms ?? false);
     setPublicProfile(profile.privacyPublicProfile ?? false);
-  }, [profile]);
+    setPostdicomApiUrl(user?.postdicomApiUrl || '');
+  }, [profile, user]);
 
   // Delete Account State
   const [deletePassword, setDeletePassword] = useState('');
@@ -90,6 +105,9 @@ const ProfilePage = () => {
   const [confirmDelete, setConfirmDelete] = useState(false);
   const [confirmClearCache, setConfirmClearCache] = useState(false);
   const [sendingVerification, setSendingVerification] = useState(false);
+  const [currentPasswordForLink, setCurrentPasswordForLink] = useState('');
+  const [linkedEmail, setLinkedEmail] = useState('');
+  const [linkedPassword, setLinkedPassword] = useState('');
   const professionalVerificationStatus = user
     ? getProfessionalVerificationStatus(user.isVerified, user.isActive ?? true)
     : 'pending';
@@ -142,7 +160,7 @@ const ProfilePage = () => {
     
     setIsLoading(true);
     try {
-      await updateProfile({ phone, address, city, state, zipCode, bio });
+      await updateProfile({ phone, address, city, state, zipCode, bio, postdicomApiUrl });
       showMessage('Contact information updated successfully', 'success');
     } catch (err) {
       showMessage(err instanceof Error ? err.message : 'Failed to update', 'error');
@@ -252,6 +270,27 @@ const ProfilePage = () => {
     }
   };
 
+  const handleLinkAccount = async () => {
+    setError('');
+    if (!currentPasswordForLink || !linkedEmail.trim() || !linkedPassword) {
+      setError('Enter your password and the other account credentials to link accounts');
+      return;
+    }
+
+    setIsLoading(true);
+    try {
+      await linkAccount(currentPasswordForLink, linkedEmail.trim(), linkedPassword);
+      setCurrentPasswordForLink('');
+      setLinkedEmail('');
+      setLinkedPassword('');
+      showMessage('Accounts linked successfully', 'success');
+    } catch (err) {
+      showMessage(err instanceof Error ? err.message : 'Failed to link accounts', 'error');
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
   const handleAvatarUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
@@ -264,62 +303,134 @@ const ProfilePage = () => {
   };
 
   return (
-    <div className="max-w-4xl space-y-6">
-      <div>
-        <h1 className="text-3xl font-display font-bold text-foreground">Profile Settings</h1>
-        <p className="text-muted-foreground mt-1">Manage your account information and preferences</p>
-      </div>
+    <div className="max-w-6xl space-y-6">
+      <motion.div
+        {...card(0)}
+        className="overflow-hidden rounded-[2rem] border border-slate-200 bg-[radial-gradient(circle_at_top_left,_rgba(14,165,233,0.14),_transparent_28%),linear-gradient(145deg,_#ffffff_0%,_#f8fbff_55%,_#f3faf6_100%)] p-8 shadow-sm"
+      >
+        <div className="grid gap-8 xl:grid-cols-[1.15fr_0.85fr]">
+          <div>
+            <div className="inline-flex items-center gap-2 rounded-full border border-sky-200 bg-white/80 px-4 py-1.5 text-sm font-medium text-sky-700">
+              <ShieldCheck className="h-4 w-4" />
+              Account and verification workspace
+            </div>
+            <h1 className="mt-5 text-3xl font-display font-bold tracking-tight text-foreground">Profile Settings</h1>
+            <p className="mt-3 max-w-2xl text-sm leading-6 text-muted-foreground sm:text-base">
+              Manage your identity, verification status, contact details, security controls, and account preferences from one place.
+            </p>
 
-      {/* Profile Header */}
-      <motion.div {...card(0)} className="bg-gradient-to-r from-primary/10 to-primary/5 rounded-2xl border border-border p-8">
-        <div className="flex items-start gap-6">
-          <div className="w-24 h-24 rounded-2xl bg-gradient-primary flex items-center justify-center text-primary-foreground flex-shrink-0 overflow-hidden">
-            {avatar ? <img src={avatar} alt="Avatar" className="w-full h-full object-cover" /> : roleIcons[user.role] && <div className="text-4xl">{roleIcons[user.role]}</div>}
+            <div className="mt-8 flex flex-col gap-5 sm:flex-row sm:items-start">
+              <div className="flex h-24 w-24 items-center justify-center overflow-hidden rounded-[1.5rem] bg-gradient-primary text-primary-foreground shadow-lg shadow-primary/15">
+                {avatar ? (
+                  <img src={avatar} alt="Avatar" className="h-full w-full object-cover" />
+                ) : (
+                  <div className="text-4xl">{roleIcons[user.role]}</div>
+                )}
+              </div>
+
+              <div className="flex-1">
+                <div className="flex flex-wrap items-center gap-3">
+                  <h2 className="text-2xl font-bold text-foreground">{user.name}</h2>
+                  <div className="inline-flex items-center gap-2 rounded-full bg-primary/10 px-3 py-1.5 text-sm font-medium text-primary">
+                    {roleIcons[user.role]}
+                    {roleLabels[user.role]}
+                  </div>
+                </div>
+                <p className="mt-2 text-sm text-muted-foreground">{user.email}</p>
+                <div className="mt-4 flex flex-wrap gap-3">
+                  <div
+                    className={`inline-flex items-center gap-2 rounded-full px-3 py-1.5 text-sm font-medium ${
+                      professionalVerificationStatus === 'verified'
+                        ? 'bg-success/10 text-success'
+                        : professionalVerificationStatus === 'pending'
+                          ? 'bg-warning/10 text-warning'
+                          : 'bg-destructive/10 text-destructive'
+                    }`}
+                  >
+                    <ShieldCheck className="w-4 h-4" />
+                    {getVerificationStatusLabel(professionalVerificationStatus)}
+                  </div>
+                  <div className={`inline-flex items-center gap-2 rounded-full px-3 py-1.5 text-sm font-medium ${isEmailUnverified ? 'bg-warning/10 text-warning' : 'bg-success/10 text-success'}`}>
+                    <Mail className="w-4 h-4" />
+                    {isEmailUnverified ? 'Email verification pending' : 'Email verified'}
+                  </div>
+                  {user.createdAt ? (
+                    <div className="inline-flex items-center gap-2 rounded-full bg-slate-100 px-3 py-1.5 text-sm text-slate-600">
+                      Member since {new Date(user.createdAt).toLocaleDateString()}
+                    </div>
+                  ) : null}
+                </div>
+              </div>
+            </div>
           </div>
-          <div className="flex-1">
-            <h2 className="text-2xl font-bold text-foreground mb-1">{user.name}</h2>
-            <p className="text-muted-foreground mb-4">{user.email}</p>
-            <div className="flex items-center gap-4">
-              <div className="inline-flex items-center gap-2 px-3 py-1.5 rounded-lg bg-primary/10 text-primary text-sm font-medium">
-                {roleIcons[user.role]}
-                {roleLabels[user.role]}
+
+          <div className="rounded-[1.75rem] border border-slate-200 bg-slate-950 p-6 text-white shadow-xl shadow-slate-950/10">
+            <p className="text-xs font-semibold uppercase tracking-[0.24em] text-slate-400">Status board</p>
+            <div className="mt-5 grid gap-3 sm:grid-cols-2 xl:grid-cols-1">
+              <div className="rounded-2xl border border-white/10 bg-white/5 p-4">
+                <p className="text-xs uppercase tracking-[0.18em] text-slate-400">Verification state</p>
+                <p className="mt-2 text-lg font-semibold text-white">
+                  {getVerificationStatusLabel(professionalVerificationStatus)}
+                </p>
               </div>
-              <div
-                className={`inline-flex items-center gap-2 px-3 py-1.5 rounded-lg text-sm font-medium ${
-                  professionalVerificationStatus === 'verified'
-                    ? 'bg-success/10 text-success'
-                    : professionalVerificationStatus === 'pending'
-                      ? 'bg-warning/10 text-warning'
-                      : 'bg-destructive/10 text-destructive'
-                }`}
-              >
-                <ShieldCheck className="w-4 h-4" />
-                {getVerificationStatusLabel(professionalVerificationStatus)}
+              <div className="rounded-2xl border border-white/10 bg-white/5 p-4">
+                <p className="text-xs uppercase tracking-[0.18em] text-slate-400">Recovery readiness</p>
+                <p className="mt-2 text-sm leading-6 text-slate-300">
+                  {isEmailUnverified
+                    ? 'Verify your email to strengthen account recovery and platform alert delivery.'
+                    : 'Your email is verified and ready for secure recovery flows.'}
+                </p>
               </div>
-              {user.createdAt && <p className="text-xs text-muted-foreground">Member since {new Date(user.createdAt).toLocaleDateString()}</p>}
+              <div className="rounded-2xl border border-white/10 bg-white/5 p-4">
+                <p className="text-xs uppercase tracking-[0.18em] text-slate-400">Current focus</p>
+                <p className="mt-2 text-sm leading-6 text-slate-300">
+                  Use the tabs below to update identity, security, notifications, privacy, or account-level settings.
+                </p>
+              </div>
             </div>
           </div>
         </div>
       </motion.div>
 
-      {/* Tabs */}
-      <div className="flex flex-wrap gap-2 bg-card rounded-xl p-1 border border-border">
-        {(['basic', 'contact', 'security', 'notifications', 'privacy', 'account'] as const).map((tab) => (
-          <button
-            key={tab}
-            onClick={() => setActiveTab(tab)}
-            className={`px-4 py-2 rounded-lg text-sm font-medium transition-all capitalize ${
-              activeTab === tab ? 'bg-primary text-primary-foreground' : 'text-foreground/70 hover:text-foreground'
-            }`}
-          >
-            {tab}
-          </button>
-        ))}
+      <div className="rounded-[1.5rem] border border-border bg-card p-2 shadow-sm">
+        <div className="flex flex-wrap gap-2">
+          {profileTabs.map((tab) => (
+            <button
+              key={tab.id}
+              onClick={() => setActiveTab(tab.id)}
+              className={`inline-flex items-center gap-2 rounded-2xl px-4 py-2.5 text-sm font-medium transition-all ${
+                activeTab === tab.id
+                  ? 'bg-slate-950 text-white shadow'
+                  : 'text-foreground/70 hover:bg-slate-100 hover:text-foreground'
+              }`}
+            >
+              {tab.icon}
+              {tab.label}
+            </button>
+          ))}
+        </div>
       </div>
 
-      {/* Messages */}
-      {error && <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="bg-destructive/10 border border-destructive text-destructive p-4 rounded-lg flex items-start gap-3"><AlertCircle className="w-5 h-5 mt-0.5 flex-shrink-0" /><span className="text-sm">{error}</span></motion.div>}
-      {success && <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="bg-success/10 border border-success text-success p-4 rounded-lg flex items-start gap-3"><Check className="w-5 h-5 mt-0.5 flex-shrink-0" /><span className="text-sm">{success}</span></motion.div>}
+      {error ? (
+        <motion.div
+          initial={{ opacity: 0 }}
+          animate={{ opacity: 1 }}
+          className="flex items-start gap-3 rounded-2xl border border-destructive/20 bg-destructive/10 p-4 text-destructive"
+        >
+          <AlertCircle className="mt-0.5 w-5 h-5 flex-shrink-0" />
+          <span className="text-sm">{error}</span>
+        </motion.div>
+      ) : null}
+      {success ? (
+        <motion.div
+          initial={{ opacity: 0 }}
+          animate={{ opacity: 1 }}
+          className="flex items-start gap-3 rounded-2xl border border-success/20 bg-success/10 p-4 text-success"
+        >
+          <Check className="mt-0.5 w-5 h-5 flex-shrink-0" />
+          <span className="text-sm">{success}</span>
+        </motion.div>
+      ) : null}
 
       {/* Basic Information Tab */}
       {activeTab === 'basic' && (
@@ -385,6 +496,22 @@ const ProfilePage = () => {
               <textarea value={bio} onChange={e => setBio(e.target.value)} placeholder="Tell us about yourself..." rows={3} className="w-full px-4 py-3 rounded-lg border border-input bg-card text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-primary/30" />
             </div>
 
+            {user.role === 'imaging' && (
+              <div>
+                <label className="block text-sm font-medium text-foreground mb-2">PostDICOM Endpoint</label>
+                <input
+                  type="url"
+                  value={postdicomApiUrl}
+                  onChange={e => setPostdicomApiUrl(e.target.value)}
+                  placeholder="https://your-postdicom-instance.com/api/upload"
+                  className="w-full h-10 px-4 rounded-lg border border-input bg-card text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-primary/30"
+                />
+                <p className="text-xs text-muted-foreground mt-2">
+                  Enter the PostDICOM upload URL for imaging center transfers. Imaging uploads are sent directly to PostDICOM only, and no local files are stored for imaging center results.
+                </p>
+              </div>
+            )}
+
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
               <div>
                 <label className="block text-sm font-medium text-foreground mb-2">Address</label>
@@ -439,7 +566,7 @@ const ProfilePage = () => {
                   {showNewPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
                 </button>
               </div>
-              <p className="text-xs text-muted-foreground mt-1">At least 6 characters</p>
+              <p className="text-xs text-muted-foreground mt-1">At least 8 characters with uppercase, lowercase, and a number</p>
             </div>
 
             <div>
@@ -580,6 +707,89 @@ const ProfilePage = () => {
                   <p className="text-foreground mt-1">{new Date(user.createdAt).toLocaleDateString()}</p>
                 </div>
               )}
+              <div>
+                <p className="text-xs font-semibold text-muted-foreground uppercase">Linked Account</p>
+                <p className="text-foreground mt-1">{user.hasLinkedAccount ? 'Connected' : 'Not linked yet'}</p>
+              </div>
+            </div>
+
+            <div className="border border-sky-100 bg-sky-50 rounded-xl p-4 text-sm text-slate-700">
+              If you use Alera for work and also want care for yourself, keep a separate patient account. This keeps your work role and your personal care clearly separate.
+            </div>
+
+            <div className="rounded-lg border border-border bg-secondary/30 p-4 space-y-4">
+              <div>
+                <p className="font-medium text-foreground">Linked accounts</p>
+                <p className="text-sm text-muted-foreground mt-1">
+                  Link a separate account that belongs to you, like a patient account for your own care.
+                </p>
+              </div>
+
+              {user.linkedAccounts && user.linkedAccounts.length > 0 ? (
+                <div className="space-y-3">
+                  {user.linkedAccounts.map((account) => (
+                    <div key={account.id} className="rounded-xl border border-border bg-card p-4">
+                      <div className="flex flex-wrap items-center gap-2">
+                        <div className="inline-flex items-center gap-2 rounded-full bg-primary/10 px-3 py-1 text-sm font-medium text-primary">
+                          {roleIcons[account.role] || <Users className="w-4 h-4" />}
+                          {roleLabels[account.role] || account.role}
+                        </div>
+                        <span className="text-sm text-muted-foreground">{account.maskedEmail || 'Linked account'}</span>
+                      </div>
+                      {account.createdAt ? (
+                        <p className="mt-2 text-xs text-muted-foreground">
+                          Linked on {new Date(account.createdAt).toLocaleDateString()}
+                        </p>
+                      ) : null}
+                    </div>
+                  ))}
+                </div>
+              ) : (
+                <div className="rounded-xl border border-dashed border-border bg-card/70 p-4 text-sm text-muted-foreground">
+                  No linked account yet.
+                </div>
+              )}
+
+              {!user.hasLinkedAccount ? (
+                <div className="grid gap-4 sm:grid-cols-2">
+                  <div className="sm:col-span-2">
+                    <label className="block text-sm font-medium text-foreground mb-2">Your current account password</label>
+                    <input
+                      type="password"
+                      value={currentPasswordForLink}
+                      onChange={e => setCurrentPasswordForLink(e.target.value)}
+                      className="w-full h-10 px-4 rounded-lg border border-input bg-card text-foreground focus:outline-none focus:ring-2 focus:ring-primary/30"
+                      placeholder="Enter your current password"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium text-foreground mb-2">Other account email</label>
+                    <input
+                      type="email"
+                      value={linkedEmail}
+                      onChange={e => setLinkedEmail(e.target.value)}
+                      className="w-full h-10 px-4 rounded-lg border border-input bg-card text-foreground focus:outline-none focus:ring-2 focus:ring-primary/30"
+                      placeholder="patient@example.com"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium text-foreground mb-2">Other account password</label>
+                    <input
+                      type="password"
+                      value={linkedPassword}
+                      onChange={e => setLinkedPassword(e.target.value)}
+                      className="w-full h-10 px-4 rounded-lg border border-input bg-card text-foreground focus:outline-none focus:ring-2 focus:ring-primary/30"
+                      placeholder="Enter the other account password"
+                    />
+                  </div>
+                  <div className="sm:col-span-2">
+                    <Button onClick={handleLinkAccount} disabled={isLoading} className="gap-2">
+                      {isLoading && <Loader className="w-4 h-4 animate-spin" />}
+                      Link My Separate Account
+                    </Button>
+                  </div>
+                </div>
+              ) : null}
             </div>
 
             {/* Clear Cache Section */}

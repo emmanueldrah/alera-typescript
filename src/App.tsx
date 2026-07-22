@@ -1,3 +1,4 @@
+import { lazy, Suspense } from "react";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { BrowserRouter, Route, Routes, Navigate, useLocation } from "react-router-dom";
 import { SpeedInsights } from '@vercel/speed-insights/react';
@@ -8,25 +9,48 @@ import { AuthProvider } from "@/contexts/AuthContext";
 import { AppDataProvider } from "@/contexts/AppDataContext";
 import { NotificationProvider } from "@/contexts/NotificationContext";
 import { ChatProvider } from "@/contexts/ChatContext";
+import { SystemProvider } from "@/contexts/SystemContext";
 import { useAuth } from "@/contexts/useAuth";
+import { useSystem } from "@/contexts/useSystem";
 import ProtectedRoute from "@/components/ProtectedRoute";
-import MainLayout from "./components/MainLayout";
 import ErrorBoundary from "./components/ErrorBoundary";
-import LandingHome from "./pages/Landing/Home";
-import LandingHowItWorks from "./pages/Landing/HowItWorks";
-import LandingFeatures from "./pages/Landing/Features";
-import LandingTrust from "./pages/Landing/Trust";
-import LandingWhoWeServe from "./pages/Landing/WhoWeServe";
-import Login from "./pages/Login";
-import Signup from "./pages/Signup";
-import ForgotPassword from "./pages/ForgotPassword";
-import ResetPassword from "./pages/ResetPassword";
-import VerifyEmail from "./pages/VerifyEmail";
-import DashboardHome from "./pages/DashboardHome";
-import FeatureWrapper from "./pages/FeatureWrapper";
-import NotFound from "./pages/NotFound";
+import RouteLoader from "./components/RouteLoader";
+import { featureRouteKeys } from "@/app/featureRegistry";
+import type { MaintenanceBannerType } from "@/contexts/system-context";
 
-const queryClient = new QueryClient();
+const MainLayout = lazy(() => import("./components/MainLayout"));
+const LandingHome = lazy(() => import("./pages/Landing/Home"));
+const LandingHowItWorks = lazy(() => import("./pages/Landing/HowItWorks"));
+const LandingFeatures = lazy(() => import("./pages/Landing/Features"));
+const LandingTrust = lazy(() => import("./pages/Landing/Trust"));
+const LandingWhoWeServe = lazy(() => import("./pages/Landing/WhoWeServe"));
+const LandingWhyAlera = lazy(() => import("./pages/Landing/WhyAlera"));
+const PrivacyPolicy = lazy(() => import("./pages/Landing/PrivacyPolicy"));
+const TermsOfService = lazy(() => import("./pages/Landing/TermsOfService"));
+const Login = lazy(() => import("./pages/Login"));
+const Signup = lazy(() => import("./pages/Signup"));
+const ForgotPassword = lazy(() => import("./pages/ForgotPassword"));
+const ResetPassword = lazy(() => import("./pages/ResetPassword"));
+const VerifyEmail = lazy(() => import("./pages/VerifyEmail"));
+const DashboardHome = lazy(() => import("./pages/DashboardHome"));
+const FeatureWrapper = lazy(() => import("./pages/FeatureWrapper"));
+const Maintenance = lazy(() => import("./pages/Maintenance"));
+const SystemManagement = lazy(() => import("./pages/admin/SystemManagement"));
+const NotFound = lazy(() => import("./pages/NotFound"));
+import MaintenanceBanner from "@/components/MaintenanceBanner";
+
+const queryClient = new QueryClient({
+  defaultOptions: {
+    queries: {
+      retry: 1,
+      staleTime: 30_000,
+      refetchOnWindowFocus: false,
+    },
+    mutations: {
+      retry: 0,
+    },
+  },
+});
 
 const AuthRedirect = ({ children }: { children: React.ReactNode }) => {
   const { isAuthenticated, isLoading } = useAuth();
@@ -36,22 +60,49 @@ const AuthRedirect = ({ children }: { children: React.ReactNode }) => {
   const isOnAuthPage = ['/login', '/signup', '/forgot-password', '/reset-password', '/verify-email'].includes(location.pathname);
 
   // Only redirect from landing pages if authenticated
-  const isOnLandingPage = ['/', '/how-it-works', '/features', '/trust', '/who-we-serve'].includes(location.pathname);
+  const isOnLandingPage = ['/', '/how-it-works', '/features', '/trust', '/who-we-serve', '/why-alera', '/privacy-policy', '/terms'].includes(location.pathname);
 
   if (!isLoading && isAuthenticated && isOnLandingPage) return <Navigate to="/dashboard" replace />;
   return <>{children}</>;
 };
 
-const featureRoutes = [
-  'appointments', 'prescriptions', 'lab-results', 'lab-referrals', 'test-requests', 'lab-results-management',
-  'imaging', 'imaging-referrals', 'scan-requests', 'ambulance', 'requests',
-  'timeline', 'inventory', 'vehicles', 'users', 'verifications', 'analytics',
-  'patients', 'doctors', 'referrals', 'pharmacy-referrals', 'results', 'messages', 'profile',
-  'health-metrics', 'notifications', 'appointment-reminders', 'smart-appointment-reminders',
-  'allergies', 'prescription-refills', 'medical-history', 'consent',
-  'clinical-notes', 'problem-list', 'medication-adherence',
-  'pricing-settings', 'billing', 'admin-billing', 'audit', 'admin/create',
-];
+const MaintenanceGuard = ({ children }: { children: React.ReactNode }) => {
+  const { isMaintenanceMode, settings, bannerVisible, closeBanner } = useSystem();
+  const { user } = useAuth();
+  const location = useLocation();
+  const bannerType: MaintenanceBannerType =
+    settings?.notification_banner_type === 'warning' || settings?.notification_banner_type === 'success'
+      ? settings.notification_banner_type
+      : 'info';
+
+  const isAdmin = user?.role === 'admin' || user?.role === 'super_admin';
+  const isMaintenancePage = location.pathname === '/maintenance';
+  const isLoginPage = location.pathname === '/login';
+
+  // Allow admins to bypass maintenance mode
+  // Also allow access to login page so admins can log in
+  if (isMaintenanceMode && !isAdmin && !isMaintenancePage && !isLoginPage) {
+    return <Navigate to="/maintenance" replace />;
+  }
+
+  // If system is NOT in maintenance mode but user is on maintenance page, redirect to dashboard/home
+  if (!isMaintenanceMode && isMaintenancePage) {
+    return <Navigate to="/" replace />;
+  }
+
+  return (
+    <>
+      {bannerVisible && settings?.notification_banner_message && (
+        <MaintenanceBanner 
+          message={settings.notification_banner_message} 
+          type={bannerType}
+          onClose={closeBanner}
+        />
+      )}
+      {children}
+    </>
+  );
+};
 
 const App = () => {
   try {

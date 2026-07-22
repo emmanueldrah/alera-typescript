@@ -6,7 +6,7 @@ from importlib.metadata import PackageNotFoundError, version as package_version
 import hashlib
 import secrets
 from config import settings
-from fastapi import HTTPException, status
+from fastapi import HTTPException, status, Request
 
 try:
     import argon2
@@ -19,6 +19,17 @@ except (ImportError, PackageNotFoundError):
 
 # Password hashing - use argon2 for modern password verification
 pwd_context = CryptContext(schemes=["argon2"], deprecated="auto")
+
+
+def validate_password_strength(password: str) -> str:
+    """Enforce a baseline password policy for all credential-setting flows."""
+    if len(password) < 8:
+        raise ValueError("Password must be at least 8 characters long")
+    if not any(c.isalpha() for c in password):
+        raise ValueError("Password must contain at least one letter")
+    if not any(c.isdigit() for c in password):
+        raise ValueError("Password must contain at least one digit")
+    return password
 
 
 def hash_password(password: str) -> str:
@@ -85,6 +96,19 @@ def decode_token(token: str) -> dict:
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="Invalid token"
         )
+
+
+def get_token_from_request(request: Request | None) -> str | None:
+    if request is None:
+        return None
+
+    authorization = request.headers.get("Authorization")
+    if authorization:
+        scheme, _, token_value = authorization.partition(" ")
+        if scheme.lower() == "bearer" and token_value:
+            return token_value.strip()
+
+    return request.cookies.get("access_token")
 
 
 def _extract_subject_as_int(payload: dict) -> int:

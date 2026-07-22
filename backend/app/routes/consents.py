@@ -32,7 +32,7 @@ async def create_consent(
 ):
     """Create a consent request for a patient"""
     
-    if current_user.role.value not in ["provider", "admin"]:
+    if current_user.role.value not in ["provider", "admin", "super_admin"]:
         raise HTTPException(status_code=403, detail="Only providers and admins can request consents")
 
     if not patient_id:
@@ -99,7 +99,7 @@ async def list_consents(
     elif current_user.role.value == "provider":
         require_verified_workforce_member(current_user, "view consents")
         query = query.filter(PatientConsent.requested_by == current_user.id)
-    elif current_user.role.value != "admin":
+    elif not current_user.is_admin_or_super():
         raise HTTPException(status_code=403, detail="Access denied")
 
     # Filter by patient if specified
@@ -141,7 +141,7 @@ async def get_consent(
         require_verified_workforce_member(current_user, "view consents")
         if consent.requested_by != current_user.id:
             raise HTTPException(status_code=403, detail="Access denied")
-    if current_user.role.value not in ["patient", "provider", "admin"]:
+    if current_user.role.value not in ["patient", "provider", "admin", "super_admin"]:
         raise HTTPException(status_code=403, detail="Access denied")
 
     return PatientConsentResponse(**consent.to_dict())

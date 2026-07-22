@@ -1,8 +1,9 @@
 import React, { useState, useCallback, useEffect } from 'react';
 import { clearAleraStorage } from '@/lib/storageKeys';
 import { AuthContext } from './auth-context';
-import { authApi, usersApi, type ApiUser } from '@/lib/apiService';
-import { setTokens, getAccessToken, clearTokens, setGlobalLogoutCallback } from '@/lib/apiClient';
+import { accountLinksApi, authApi, usersApi, type ApiLinkedAccountSummary, type ApiUser } from '@/lib/apiService';
+import { clearTokens, setGlobalLogoutCallback } from '@/lib/apiClient';
+import { normalizeUserRole } from '@/lib/roleUtils';
 
 export type UserRole =
   | 'patient'
@@ -12,10 +13,12 @@ export type UserRole =
   | 'imaging'
   | 'pharmacy'
   | 'ambulance'
+  | 'physiotherapist'
   | 'admin'
   | 'super_admin';
 
-export type SignupRole = Exclude<UserRole, 'admin'>;
+export type SignupRole = Exclude<UserRole, 'admin' | 'super_admin'>;
+export type AuthRegisterRole = 'patient' | 'provider' | 'pharmacist' | 'hospital' | 'laboratory' | 'imaging' | 'ambulance' | 'physiotherapist';
 
 export interface UserProfile {
   firstName: string;
@@ -28,9 +31,18 @@ export interface UserProfile {
   dateOfBirth?: string;
   bio?: string;
   avatar?: string;
+  postdicomApiUrl?: string;
   notificationEmail: boolean;
   notificationSms: boolean;
   privacyPublicProfile: boolean;
+}
+
+export interface LinkedAccountSummary {
+  id: string;
+  role: UserRole;
+  maskedEmail?: string;
+  createdAt?: string | null;
+  linkType?: string;
 }
 
 export interface User {
@@ -44,43 +56,35 @@ export interface User {
   emailVerifiedAt?: string | null;
   avatar?: string;
   profile?: UserProfile;
+  postdicomApiUrl?: string;
   createdAt?: string;
   lastLogin?: string;
+  hasLinkedAccount?: boolean;
+  linkedAccounts?: LinkedAccountSummary[];
 }
 
 const isApiUser = (data: unknown): data is ApiUser => {
   return typeof data === 'object' && data !== null && 'id' in data && 'email' in data;
 };
 
+const ACCESSIBLE_USERS_PAGE_SIZE = 100;
+
 type BackendRole = ApiUser['role'];
+
+const mapBackendRoleToUserRole = (role: BackendRole | string): UserRole => {
+  return normalizeUserRole(role) ?? 'patient';
+};
+
+const mapLinkedAccount = (data: ApiLinkedAccountSummary): LinkedAccountSummary => ({
+  id: String(data.id),
+  role: mapBackendRoleToUserRole(data.role),
+  maskedEmail: data.masked_email ?? undefined,
+  createdAt: data.created_at ?? null,
+  linkType: data.link_type ?? 'same_person',
+});
 
 // Map backend user roles to frontend format
 const mapBackendUser = (data: ApiUser): User => {
-  const mapBackendRoleToUserRole = (role: BackendRole | string): UserRole => {
-    switch (role) {
-      case 'patient':
-        return 'patient';
-      case 'provider':
-        return 'doctor';
-      case 'pharmacist':
-        return 'pharmacy';
-      case 'hospital':
-        return 'hospital';
-      case 'laboratory':
-        return 'laboratory';
-      case 'imaging':
-        return 'imaging';
-      case 'ambulance':
-        return 'ambulance';
-      case 'admin':
-        return 'admin';
-      case 'super_admin':
-        return 'super_admin';
-      default:
-        return 'patient';
-    }
-  };
-
   const fullName = data.full_name?.trim() || [data.first_name, data.last_name].filter(Boolean).join(' ').trim();
   const [firstName = '', ...lastNameParts] = fullName.split(' ');
   return {
@@ -93,8 +97,11 @@ const mapBackendUser = (data: ApiUser): User => {
     emailVerified: data.email_verified ?? false,
     emailVerifiedAt: data.email_verified_at ?? null,
     avatar: data.avatar || data.profile_image_url,
+    postdicomApiUrl: data.postdicom_api_url,
     createdAt: data.created_at,
     lastLogin: data.last_login,
+    hasLinkedAccount: data.has_linked_account ?? false,
+    linkedAccounts: (data.linked_accounts || []).map(mapLinkedAccount),
     profile: {
       firstName,
       lastName: lastNameParts.join(' '),
@@ -128,7 +135,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
   const loadAccessibleUsers = useCallback(async () => {
     try {
-      const response = await usersApi.getAccessibleUsers();
+      const response = await usersApi.getAccessibleUsers(0, ACCESSIBLE_USERS_PAGE_SIZE);
       const mapped = Array.isArray(response) ? response.filter(isApiUser).map(mapBackendUser) : [];
       setUsers(mapped);
       return mapped;
@@ -176,7 +183,20 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     }
     setUser(mapBackendUser(response.user));
     void loadAccessibleUsers();
-  }, []);
+  }, [loadAccessibleUsers]);
+
+  const loginWithGoogle = useCallback(async (credential: string) => {
+    const response = await authApi.loginWithGoogle(credential);
+    if (response.needs_registration) {
+      return { needsRegistration: true, googleData: response.google_data };
+    }
+    if (!isApiUser(response.user)) {
+      throw new Error('Login response did not include a valid user');
+    }
+    setUser(mapBackendUser(response.user));
+    void loadAccessibleUsers();
+    return {};
+  }, [loadAccessibleUsers]);
 
   const signup = useCallback(async (
     name: string,
@@ -196,7 +216,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     const lastName = lastNameParts.join(' ') || 'User';
 
     // Map frontend roles to backend roles
-    const roleMap: Record<SignupRole, BackendRole> = {
+    const roleMap: Record<SignupRole, AuthRegisterRole> = {
       patient: 'patient',
       doctor: 'provider',
       hospital: 'hospital',
@@ -204,6 +224,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       imaging: 'imaging',
       pharmacy: 'pharmacist',
       ambulance: 'ambulance',
+      physiotherapist: 'physiotherapist',
     };
     const backendRole = roleMap[role] || 'patient';
 
@@ -231,6 +252,52 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     if (isApiUser(response.user)) {
       setUser(mapBackendUser(response.user));
       void loadAccessibleUsers();
+    }
+  }, [loadAccessibleUsers]);
+
+  const registerWithGoogle = useCallback(async (
+    credential: string,
+    role: SignupRole,
+    licenseNumber?: string,
+    licenseState?: string,
+    specialty?: string,
+    phone?: string,
+    address?: string,
+    city?: string,
+    state?: string,
+    zipCode?: string,
+  ) => {
+    // Map frontend roles to backend roles
+    const roleMap: Record<SignupRole, AuthRegisterRole> = {
+      patient: 'patient',
+      doctor: 'provider',
+      hospital: 'hospital',
+      laboratory: 'laboratory',
+      imaging: 'imaging',
+      pharmacy: 'pharmacist',
+      ambulance: 'ambulance',
+      physiotherapist: 'physiotherapist',
+    };
+    const backendRole = roleMap[role] || 'patient';
+
+    const response = await authApi.registerWithGoogle({
+      credential,
+      role: backendRole,
+      phone: phone || undefined,
+      address: address || undefined,
+      city: city || undefined,
+      state: state || undefined,
+      zip_code: zipCode || undefined,
+      license_number: role === 'patient' ? undefined : licenseNumber,
+      license_state: role === 'patient' ? undefined : licenseState,
+      specialty: role === 'patient' ? undefined : specialty,
+    });
+
+    if (isApiUser(response.user)) {
+      setUser(mapBackendUser(response.user));
+      void loadAccessibleUsers();
+    } else {
+      throw new Error('Registration response did not include a valid user');
     }
   }, [loadAccessibleUsers]);
 
@@ -262,6 +329,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       date_of_birth: profile.dateOfBirth,
       bio: profile.bio,
       profile_image_url: profile.avatar,
+      postdicom_api_url: profile.postdicomApiUrl,
       notification_email: profile.notificationEmail,
       notification_sms: profile.notificationSms,
       privacy_public_profile: profile.privacyPublicProfile,
@@ -343,12 +411,27 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
       return null;
     }
-  }, [loadAccessibleUsers]);
+  }, [loadAccessibleUsers, lastRefreshAttempt]);
 
   const deleteAccount = useCallback(async (password: string) => {
     if (!user) throw new Error('No user logged in');
 
     await authApi.deleteAccount(password);
+  }, [user]);
+
+  const linkAccount = useCallback(async (currentPassword: string, linkedEmail: string, linkedPassword: string) => {
+    if (!user) throw new Error('No user logged in');
+
+    await accountLinksApi.create({
+      current_password: currentPassword,
+      linked_email: linkedEmail,
+      linked_password: linkedPassword,
+    });
+
+    const refreshedUser = await authApi.getCurrentUser();
+    if (isApiUser(refreshedUser)) {
+      setUser(mapBackendUser(refreshedUser));
+    }
   }, [user]);
 
   const resendEmailVerification = useCallback(async () => {
@@ -417,6 +500,8 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         isAuthenticated: true,
         isLoading,
         login,
+        loginWithGoogle,
+        registerWithGoogle,
         signup,
         logout,
         addUser,
@@ -427,6 +512,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         updateNotificationPreferences,
         updatePrivacySettings,
         deleteAccount,
+        linkAccount,
         resendEmailVerification,
         clearCache
       }}>
@@ -441,6 +527,8 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       isAuthenticated: !!user, 
       isLoading,
       login, 
+      loginWithGoogle,
+      registerWithGoogle,
       signup, 
       logout, 
       addUser, 
@@ -451,6 +539,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       updateNotificationPreferences, 
       updatePrivacySettings, 
       deleteAccount, 
+      linkAccount,
       resendEmailVerification,
       clearCache 
     }}>

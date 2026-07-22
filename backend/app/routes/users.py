@@ -1,4 +1,5 @@
 from fastapi import APIRouter, Depends, HTTPException, status
+from sqlalchemy import and_, or_
 from sqlalchemy.orm import Session
 from database import get_db
 from app.models.user import User, UserRole
@@ -55,7 +56,7 @@ async def list_doctors(
     """
     role_text = normalized_enum_text(User.role)
     doctors = db.query(User).filter(
-        role_text == UserRole.PROVIDER.value,
+        role_text.in_([UserRole.PROVIDER.value, UserRole.PHYSIOTHERAPIST.value]),
         User.is_active.is_(True),
         User.is_verified.is_(True),
     ).all()
@@ -66,13 +67,24 @@ async def list_doctors(
 async def list_accessible_users(
     current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db),
+    skip: int = 0,
+    limit: int = 100,
 ):
     """Return the users relevant to the authenticated session."""
 
+    skip = max(skip, 0)
+    limit = min(max(limit, 1), 200)
     role_text = normalized_enum_text(User.role)
 
-    if current_user.role.value == "admin":
-        return db.query(User).filter(User.is_active.is_(True)).all()
+    if current_user.role in (UserRole.ADMIN, UserRole.SUPER_ADMIN):
+        return (
+            db.query(User)
+            .filter(User.is_active.is_(True))
+            .order_by(User.created_at.desc())
+            .offset(skip)
+            .limit(limit)
+            .all()
+        )
 
     if current_user.role.value == "patient":
         return (
@@ -88,29 +100,56 @@ async def list_accessible_users(
                         UserRole.LABORATORY.value,
                         UserRole.IMAGING.value,
                         UserRole.AMBULANCE.value,
+                        UserRole.PHYSIOTHERAPIST.value,
                     ]
                 ),
             )
+            .order_by(User.created_at.desc())
+            .offset(skip)
+            .limit(limit)
             .all()
         )
 
     if current_user.role.value == "provider":
         patient_ids = provider_panel_patient_ids(db, current_user.id)
         query = db.query(User).filter(User.is_active.is_(True))
-        if patient_ids:
-            query = query.filter(User.id.in_(patient_ids))
-        else:
-            query = query.filter(User.id == current_user.id)
-        return query.all()
+        patient_filter = User.id.in_(patient_ids) if patient_ids else User.id == current_user.id
+        referral_destinations_filter = and_(
+            User.is_verified.is_(True),
+            role_text.in_(
+                [
+                    UserRole.HOSPITAL.value,
+                    UserRole.LABORATORY.value,
+                    UserRole.IMAGING.value,
+                    UserRole.PHARMACIST.value,
+                ]
+            ),
+        )
+        query = query.filter(
+            or_(
+                patient_filter,
+                User.id == current_user.id,
+                referral_destinations_filter,
+            )
+        )
+        return query.order_by(User.created_at.desc()).offset(skip).limit(limit).all()
 
     if is_workforce_role(current_user.role):
         return (
             db.query(User)
             .filter(
                 User.is_active.is_(True),
-                User.is_verified.is_(True),
-                role_text == UserRole.PATIENT.value,
+                or_(
+                    role_text == UserRole.PATIENT.value,
+                    and_(
+                        User.is_verified.is_(True),
+                        role_text == UserRole.PROVIDER.value,
+                    ),
+                ),
             )
+            .order_by(User.created_at.desc())
+            .offset(skip)
+            .limit(limit)
             .all()
         )
 
@@ -132,7 +171,7 @@ async def get_user(
             detail="User not found"
         )
 
-    if current_user.id != user_id and current_user.role.value != "admin":
+    if current_user.id != user_id and current_user.role not in (UserRole.ADMIN, UserRole.SUPER_ADMIN):
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
             detail="Not authorized to view this user",
@@ -149,12 +188,13 @@ async def list_users(
     db: Session = Depends(get_db)
 ):
     """List all users (admin only)"""
-    
-    if current_user.role.value != "admin":
+
+    if current_user.role not in (UserRole.ADMIN, UserRole.SUPER_ADMIN):
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
             detail="Only admins can list all users"
         )
-    
-    users = db.query(User).offset(skip).limit(limit).all()
+
+    limit = min(max(limit, 1), 200)
+    users = db.query(User).offset(max(skip, 0)).limit(limit).all()
     return users

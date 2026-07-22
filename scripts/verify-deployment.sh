@@ -109,13 +109,34 @@ else
     pass "No obvious hardcoded secrets found"
 fi
 
-# 8. Check for .env files
+# 8. Check for local env files
 echo ""
 echo "8️⃣  Checking .env files..."
-if [ -f ".env" ] || [ -f ".env.local" ]; then
-    warn ".env file found (ensure it's in .gitignore)"
+LOCAL_ENV_FILES=()
+for env_file in .env .env.local backend/.env; do
+    if [ -f "$env_file" ]; then
+        LOCAL_ENV_FILES+=("$env_file")
+    fi
+done
+
+if [ ${#LOCAL_ENV_FILES[@]} -gt 0 ]; then
+    warn "Local env files present: ${LOCAL_ENV_FILES[*]}"
+    echo "    They are fine for local development, but Vercel should rely on dashboard env vars only."
 else
-    pass "No .env files in repository (good)"
+    pass "No local env files found"
+fi
+
+TRACKED_ENV_FILES=()
+for env_file in .env .env.local backend/.env; do
+    if git ls-files --error-unmatch "$env_file" > /dev/null 2>&1; then
+        TRACKED_ENV_FILES+=("$env_file")
+    fi
+done
+
+if [ ${#TRACKED_ENV_FILES[@]} -gt 0 ]; then
+    fail "Tracked env files detected: ${TRACKED_ENV_FILES[*]}"
+else
+    pass "No env files are tracked by git"
 fi
 
 # 9. Check TypeScript
@@ -127,7 +148,63 @@ else
     fail "TypeScript errors found. Run: npm run type-check"
 fi
 
-# 10. Summary
+# 10. Check frontend tests
+echo ""
+echo "🔟  Running frontend tests..."
+if npm test > /tmp/alera-frontend-tests.log 2>&1; then
+    pass "Frontend tests passing"
+else
+    fail "Frontend tests failed. Run: npm test"
+fi
+
+# 11. Check backend tests
+echo ""
+echo "1️⃣1️⃣  Running backend tests..."
+if python3 -m pytest -q backend/tests > /tmp/alera-backend-tests.log 2>&1; then
+    pass "Backend tests passing"
+else
+    fail "Backend tests failed. Run: pytest -q backend/tests"
+fi
+
+# 12. Check production build
+echo ""
+echo "1️⃣2️⃣  Building production bundle..."
+if npm run build > /tmp/alera-build.log 2>&1; then
+    pass "Production build successful"
+else
+    fail "Production build failed. Run: npm run build"
+fi
+
+# 13. Warn about required production env vars
+echo ""
+echo "1️⃣3️⃣  Checking production environment guidance..."
+REQUIRED_ENV_VARS=(
+    "DATABASE_URL"
+    "SECRET_KEY"
+    "ENCRYPTION_KEY"
+    "FRONTEND_URL"
+    "CORS_ORIGINS"
+)
+
+for env_var in "${REQUIRED_ENV_VARS[@]}"; do
+    if [ -z "${!env_var}" ]; then
+        warn "$env_var is not set in the current shell. Make sure it is configured in production."
+    else
+        pass "$env_var is set in the current shell"
+    fi
+done
+
+if [ "${ENVIRONMENT}" = "development" ]; then
+    warn "ENVIRONMENT is set to development in the current shell. Do not use that value on Vercel."
+fi
+
+if [ -n "${VERCEL_ENV}" ]; then
+    pass "VERCEL_ENV is visible in the current shell: ${VERCEL_ENV}"
+else
+    warn "VERCEL_ENV is not set locally. On Vercel it should be preview or production."
+fi
+
+# 14. Summary
 echo ""
 echo "======================================"
 echo -e "${GREEN}✅ All checks passed!${NC}"
@@ -144,5 +221,6 @@ echo "  [ ] Generate SECRET_KEY: python scripts/generate_keys.py"
 echo "  [ ] Generate ENCRYPTION_KEY (same script)"
 echo "  [ ] Add keys to Vercel Environment Variables"
 echo "  [ ] Configure DATABASE_URL for production"
+echo "  [ ] Confirm Vercel is not injecting ENVIRONMENT=development"
 echo "  [ ] Test deployment: https://alera-typescript.vercel.app"
 echo ""

@@ -23,6 +23,7 @@ from app.utils.access import (
     require_verified_workforce_member,
 )
 from app.services.file_service import FileStorageService, DocumentService
+from app.services.medical_record_sync import attach_document_to_record, create_db_notification, upsert_medical_record
 
 router = APIRouter(prefix="/api/documents", tags=["documents"])
 
@@ -86,6 +87,41 @@ async def upload_document(
             status="created",
         )
 
+        medical_record = upsert_medical_record(
+            db,
+            patient_id=current_user.id,
+            provider=None,
+            record_type="external_document",
+            category="document",
+            title=document.filename,
+            summary=document.description,
+            status="available",
+            event_time=document.upload_time,
+            source_record_id=f"patient-document:{document.id}",
+            payload={
+                "legacy_document_id": document.id,
+                "document_type": document.file_type.value if hasattr(document.file_type, "value") else str(document.file_type),
+                "is_private": document.is_private,
+            },
+            is_external=False,
+        )
+        await attach_document_to_record(
+            db,
+            medical_record=medical_record,
+            uploaded_by=current_user,
+            existing_file_id=document.file_id,
+            filename=document.filename,
+            mime_type=document.mime_type or "application/octet-stream",
+            file_size=document.file_size or 0,
+            storage_subpath=f"documents/{current_user.id}",
+            document_type=document.file_type.value if hasattr(document.file_type, "value") else str(document.file_type),
+            description=document.description,
+            is_external=False,
+            source_system="alera",
+            source_document_id=document.id,
+        )
+        db.commit()
+
         return PatientDocumentResponse(**document.to_dict())
 
     except HTTPException:
@@ -94,7 +130,7 @@ async def upload_document(
         db.rollback()
         raise HTTPException(
             status_code=500,
-            detail=f"Failed to upload document: {str(e)}"
+            detail="Failed to upload document"
         )
 
 
@@ -123,7 +159,7 @@ async def list_documents(
             PatientDocument.is_private == False
         )
     # Admins see all documents
-    elif current_user.role.value == "admin":
+    elif current_user.is_admin_or_super():
         query = db.query(PatientDocument)
     else:
         raise HTTPException(status_code=403, detail="Access denied")
@@ -190,7 +226,7 @@ async def update_document(
         raise HTTPException(status_code=404, detail="Document not found")
 
     # Only document owner can update
-    if document.patient_id != current_user.id and current_user.role.value != "admin":
+    if document.patient_id != current_user.id and not current_user.is_admin_or_super():
         raise HTTPException(status_code=403, detail="Access denied")
 
     # Update fields
@@ -233,7 +269,7 @@ async def delete_document(
         raise HTTPException(status_code=404, detail="Document not found")
 
     # Only document owner can delete
-    if document.patient_id != current_user.id and current_user.role.value != "admin":
+    if document.patient_id != current_user.id and not current_user.is_admin_or_super():
         raise HTTPException(status_code=403, detail="Access denied")
 
     # Delete file from storage
@@ -311,7 +347,11 @@ async def download_document(
     return FileResponse(
         path=file_path,
         filename=document.filename,
-        media_type=document.mime_type
+        media_type=document.mime_type,
+        headers={
+            "Cache-Control": "no-store",
+            "X-Content-Type-Options": "nosniff",
+        },
     )
 
 
@@ -325,7 +365,7 @@ async def get_patient_documents(
 ):
     """Get all documents for a patient (provider/admin only)"""
     
-    if current_user.role.value not in ["provider", "admin"]:
+    if current_user.role.value not in ["provider", "admin", "super_admin"]:
         raise HTTPException(status_code=403, detail="Access denied")
 
     if current_user.role.value == "provider":
@@ -339,7 +379,7 @@ async def get_patient_documents(
     if current_user.role.value == "provider":
         query = query.filter(PatientDocument.is_private == False)
 
-    if current_user.role.value == "admin":
+    if current_user.is_admin_or_super():
         # Admins can see all documents
         query = db.query(PatientDocument).filter(
             PatientDocument.patient_id == patient_id

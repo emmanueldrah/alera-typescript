@@ -1,20 +1,23 @@
-import { useState, useMemo } from 'react';
+import { useState, useMemo, useEffect } from 'react';
 import { motion } from 'framer-motion';
-import { FileText, CheckCircle, Clock, Inbox, Plus, Send, X } from 'lucide-react';
+import { FileText, CheckCircle, Clock, Inbox, Plus, Search, Send, X } from 'lucide-react';
 import { useAuth } from '@/contexts/useAuth';
 import type { UserRole } from '@/contexts/AuthContext';
 import { useAppData } from '@/contexts/useAppData';
 import { useNotifications } from '@/contexts/useNotifications';
 import { Button } from '@/components/ui/button';
+import { toast } from '@/components/ui/use-toast';
 import type { ReferralType } from '@/data/mockData';
 import { getDoctorPatients } from '@/lib/patientDirectory';
 import {
+  REFERRAL_DESTINATION_ERROR,
   canAcceptReferral,
   canCancelReferral,
   canCompleteReferral,
+  getReferralDestinationProviders,
   getReferralDepartmentId,
-  getReferralDepartmentsForKind,
   getVisibleReferrals,
+  isReferralDestinationValid,
   referralKindLabel,
   type ReferralKind,
 } from '@/lib/referralUtils';
@@ -41,13 +44,17 @@ const dashboardPathForReferralType = (t: ReferralType): string => {
 
 const ReferralsPage = ({ referralKind = 'hospital' }: ReferralsPageProps) => {
   const { user, getUsers } = useAuth();
-  const { referrals, appointments, addReferral, updateReferral } = useAppData();
+  const { referrals, appointments, addReferral, updateReferral, refreshAppData } = useAppData();
   const { addNotification } = useNotifications();
   const [statusFilter, setStatusFilter] = useState('all');
+  const [searchQuery, setSearchQuery] = useState('');
   const [showForm, setShowForm] = useState(false);
-  const [formData, setFormData] = useState({ patientId: '', toDepartment: '', reason: '', notes: '' });
+  const [formError, setFormError] = useState<string | null>(null);
+  const [formData, setFormData] = useState({ patientId: '', destinationProviderId: '', toDepartment: '', reason: '', notes: '' });
 
   const effectiveRole = normalizeUserRole(user?.role) ?? user?.role;
+  const users = getUsers();
+  const usersById = useMemo(() => new Map(users.map((account) => [account.id, account])), [users]);
 
   const userReferrals = useMemo(() => {
     const kindFilter = effectiveRole === 'doctor' ? referralKind : undefined;
@@ -55,36 +62,54 @@ const ReferralsPage = ({ referralKind = 'hospital' }: ReferralsPageProps) => {
   }, [referrals, user, effectiveRole, referralKind]);
 
   const patientOptions = useMemo(
-    () => getDoctorPatients(getUsers(), appointments, effectiveRole === 'doctor' ? user?.id : undefined),
-    [appointments, getUsers, user, effectiveRole],
+    () => getDoctorPatients(users, appointments, effectiveRole === 'doctor' ? user?.id : undefined),
+    [appointments, users, user, effectiveRole],
   );
 
-  const departmentOptions = useMemo(
-    () => getReferralDepartmentsForKind(referralKind, referrals),
-    [referralKind, referrals],
+  const destinationOptions = useMemo(
+    () => getReferralDestinationProviders(users, referralKind),
+    [users, referralKind],
   );
 
   const pageHeading = useMemo(() => {
     switch (referralKind) {
       case 'laboratory':
-        return { title: 'Laboratory referrals', subtitleDoctor: 'Send patients to the lab queue', subtitleOther: 'Laboratory referral requests' };
+        return { title: 'Laboratory referrals', subtitleDoctor: 'Send patients to a specific laboratory', subtitleOther: 'Laboratory referrals assigned to this facility' };
       case 'imaging':
-        return { title: 'Imaging referrals', subtitleDoctor: 'Send patients to imaging', subtitleOther: 'Imaging referral requests' };
+        return { title: 'Imaging referrals', subtitleDoctor: 'Send patients to a specific imaging center', subtitleOther: 'Imaging referrals assigned to this facility' };
       case 'pharmacy':
-        return { title: 'Pharmacy referrals', subtitleDoctor: 'Refer patients for pharmacy services', subtitleOther: 'Pharmacy referral requests' };
+        return { title: 'Pharmacy referrals', subtitleDoctor: 'Refer patients to a specific pharmacy', subtitleOther: 'Pharmacy referrals assigned to this facility' };
       default:
         return {
           title: 'Hospital referrals',
-          subtitleDoctor: 'Refer patients to specialist departments',
-          subtitleOther: 'Specialist and pharmacy coordination (your queue)',
+          subtitleDoctor: 'Refer patients to a specific hospital',
+          subtitleOther: 'Hospital referrals assigned to this facility',
         };
     }
   }, [referralKind]);
 
   const filtered = useMemo(() => {
-    if (statusFilter === 'all') return userReferrals;
-    return userReferrals.filter((r) => r.status === statusFilter);
-  }, [userReferrals, statusFilter]);
+    const normalizedQuery = searchQuery.trim().toLowerCase();
+    return userReferrals.filter((r) => {
+      const matchesStatus = statusFilter === 'all' || r.status === statusFilter;
+      const matchesSearch = !normalizedQuery
+        || r.patientName.toLowerCase().includes(normalizedQuery)
+        || r.fromDoctorName.toLowerCase().includes(normalizedQuery)
+        || r.toDepartment.toLowerCase().includes(normalizedQuery)
+        || r.reason.toLowerCase().includes(normalizedQuery);
+      return matchesStatus && matchesSearch;
+    });
+  }, [searchQuery, statusFilter, userReferrals]);
+
+  useEffect(() => {
+    const interval = window.setInterval(() => {
+      void refreshAppData();
+    }, 15000);
+
+    return () => {
+      window.clearInterval(interval);
+    };
+  }, [refreshAppData]);
 
   const stats = useMemo(
     () => ({
@@ -104,15 +129,21 @@ const ReferralsPage = ({ referralKind = 'hospital' }: ReferralsPageProps) => {
       lastUpdated: new Date().toLocaleDateString('en-CA'),
     }));
     if (referral) {
+      const doctorEmail = usersById.get(referral.fromDoctorId)?.email;
       addNotification({
         title: 'Referral accepted',
         message: `${referralKindLabel(referral.referralType)}: ${referral.toDepartment} accepted the referral for ${referral.patientName}.`,
         type: 'system',
         priority: 'medium',
-        audience: 'role',
-        targetRoles: ['doctor'],
+        audience: 'personal',
+        targetEmails: doctorEmail ? [doctorEmail] : undefined,
+        targetRoles: doctorEmail ? undefined : ['doctor'],
         actionUrl: dashboardPathForReferralType(referral.referralType),
         actionLabel: 'View referral',
+      });
+      toast({
+        title: 'Referral accepted',
+        description: `${referral.patientName} is now being handled by ${referral.toDepartment}.`,
       });
     }
   };
@@ -125,15 +156,21 @@ const ReferralsPage = ({ referralKind = 'hospital' }: ReferralsPageProps) => {
       lastUpdated: new Date().toLocaleDateString('en-CA'),
     }));
     if (referral) {
+      const doctorEmail = usersById.get(referral.fromDoctorId)?.email;
       addNotification({
         title: 'Referral completed',
         message: `${referralKindLabel(referral.referralType)}: ${referral.toDepartment} completed the referral for ${referral.patientName}.`,
         type: 'system',
         priority: 'medium',
-        audience: 'role',
-        targetRoles: ['doctor'],
+        audience: 'personal',
+        targetEmails: doctorEmail ? [doctorEmail] : undefined,
+        targetRoles: doctorEmail ? undefined : ['doctor'],
         actionUrl: dashboardPathForReferralType(referral.referralType),
         actionLabel: 'View referral',
+      });
+      toast({
+        title: 'Referral completed',
+        description: `${referral.patientName}'s referral has been marked complete.`,
       });
     }
   };
@@ -146,55 +183,88 @@ const ReferralsPage = ({ referralKind = 'hospital' }: ReferralsPageProps) => {
       lastUpdated: new Date().toLocaleDateString('en-CA'),
     }));
     if (referral) {
+      const destinationEmail = referral.destinationProviderId ? usersById.get(referral.destinationProviderId)?.email : undefined;
       addNotification({
         title: 'Referral cancelled',
         message: `A ${referralKindLabel(referral.referralType).toLowerCase()} referral for ${referral.patientName} was cancelled.`,
         type: 'system',
         priority: 'medium',
-        audience: 'role',
-        targetRoles: coordinatorRolesForType(referral.referralType),
+        audience: 'personal',
+        targetEmails: destinationEmail ? [destinationEmail] : undefined,
+        targetRoles: destinationEmail ? undefined : coordinatorRolesForType(referral.referralType),
         actionUrl: dashboardPathForReferralType(referral.referralType),
         actionLabel: 'View referrals',
+      });
+      toast({
+        title: 'Referral cancelled',
+        description: `${referral.patientName}'s referral has been cancelled.`,
       });
     }
   };
 
-  const handleCreateReferral = () => {
-    if (effectiveRole !== 'doctor' || !formData.patientId || !formData.toDepartment || !formData.reason.trim()) return;
+  const handleCreateReferral = async () => {
+    if (effectiveRole !== 'doctor' || !formData.patientId || !formData.destinationProviderId || !formData.toDepartment || !formData.reason.trim()) {
+      toast({
+        title: 'Complete the referral form',
+        description: 'Patient, destination, and referral reason are all required.',
+        variant: 'destructive',
+      });
+      return;
+    }
+
+    if (!isReferralDestinationValid(referralKind, formData.toDepartment)) {
+      setFormError(REFERRAL_DESTINATION_ERROR);
+      return;
+    }
 
     const patient = patientOptions.find((option) => option.id === formData.patientId);
-    if (!patient) return;
+    const destinationProvider = destinationOptions.find((option) => option.id === formData.destinationProviderId);
+    if (!patient || !destinationProvider) return;
 
     const today = new Date().toLocaleDateString('en-CA');
-    addReferral({
-      id: `ref-${crypto.randomUUID()}`,
-      referralType: referralKind,
-      patientId: patient.id,
-      patientName: patient.name,
-      fromDoctorId: user.id,
-      fromDoctorName: user.name,
-      toDepartmentId: getReferralDepartmentId(formData.toDepartment),
-      toDepartment: formData.toDepartment,
-      reason: formData.reason.trim(),
-      date: today,
-      status: 'pending',
-      lastUpdated: today,
-      notes: formData.notes.trim() || undefined,
-    });
+    try {
+      await addReferral({
+        id: `ref-${crypto.randomUUID()}`,
+        referralType: referralKind,
+        patientId: patient.id,
+        patientName: patient.name,
+        fromDoctorId: user.id,
+        fromDoctorName: user.name,
+        destinationProviderId: destinationProvider.id,
+        destinationProviderName: destinationProvider.name,
+        destinationProviderRole: destinationProvider.role === 'pharmacy' ? 'pharmacy' : referralKind,
+        toDepartmentId: destinationProvider.id || getReferralDepartmentId(destinationProvider.name),
+        toDepartment: destinationProvider.name,
+        reason: formData.reason.trim(),
+        date: today,
+        status: 'pending',
+        lastUpdated: today,
+        notes: formData.notes.trim() || undefined,
+      });
 
-    const path = dashboardPathForReferralType(referralKind);
-    addNotification({
-      title: 'New referral submitted',
-      message: `${patient.name} — ${referralKindLabel(referralKind)} to ${formData.toDepartment}.`,
-      type: 'system',
-      priority: 'medium',
-      audience: 'role',
-      targetRoles: coordinatorRolesForType(referralKind),
-      actionUrl: path,
-      actionLabel: 'Review referrals',
-    });
-    setFormData({ patientId: '', toDepartment: '', reason: '', notes: '' });
-    setShowForm(false);
+      const path = dashboardPathForReferralType(referralKind);
+      addNotification({
+        title: 'New referral submitted',
+        message: `${patient.name} — ${referralKindLabel(referralKind)} to ${destinationProvider.name}.`,
+        type: 'system',
+        priority: 'medium',
+        audience: 'personal',
+        targetEmails: destinationProvider.email ? [destinationProvider.email] : undefined,
+        targetRoles: destinationProvider.email ? undefined : coordinatorRolesForType(referralKind),
+        actionUrl: path,
+        actionLabel: 'Review referrals',
+      });
+      setFormError(null);
+      setFormData({ patientId: '', destinationProviderId: '', toDepartment: '', reason: '', notes: '' });
+      setShowForm(false);
+      toast({
+        title: 'Referral submitted',
+        description: `${patient.name} was referred to ${destinationProvider.name}.`,
+      });
+    } catch (error) {
+      setFormError('Unable to submit referral. Please try again.');
+      console.error('handleCreateReferral failed:', error);
+    }
   };
 
   const getStatusColor = (status: string) => {
@@ -259,18 +329,34 @@ const ReferralsPage = ({ referralKind = 'hospital' }: ReferralsPageProps) => {
             </div>
             <div>
               <label className="block text-sm font-medium text-foreground mb-1">
-                {referralKind === 'hospital' ? 'Department' : 'Destination / service'}
+                {referralKind === 'hospital' ? 'Hospital' : `${referralKindLabel(referralKind)} destination`}
               </label>
               <select
-                value={formData.toDepartment}
-                onChange={(event) => setFormData((current) => ({ ...current, toDepartment: event.target.value }))}
+                value={formData.destinationProviderId}
+                onChange={(event) => {
+                  setFormError(null);
+                  const selected = destinationOptions.find((option) => option.id === event.target.value);
+                  setFormData((current) => ({
+                    ...current,
+                    destinationProviderId: event.target.value,
+                    toDepartment: selected?.name || '',
+                  }));
+                }}
                 className="w-full h-11 px-4 rounded-xl border border-input bg-background text-foreground focus:outline-none focus:ring-2 focus:ring-primary/30"
               >
-                <option value="">Select</option>
-                {departmentOptions.map((department) => (
-                  <option key={department} value={department}>{department}</option>
+                <option value="">Select destination</option>
+                {destinationOptions.map((provider) => (
+                  <option key={provider.id} value={provider.id}>
+                    {provider.name}{provider.profile?.city ? ` - ${provider.profile.city}` : ''}
+                  </option>
                 ))}
               </select>
+              {formError ? <p className="mt-2 text-sm text-destructive">{formError}</p> : null}
+              {destinationOptions.length === 0 ? (
+                <p className="mt-2 text-sm text-muted-foreground">
+                  No verified {referralKind === 'hospital' ? 'hospitals' : `${referralKind} providers`} available yet.
+                </p>
+              ) : null}
             </div>
             <div className="md:col-span-2">
               <label className="block text-sm font-medium text-foreground mb-1">Reason</label>
@@ -293,7 +379,7 @@ const ReferralsPage = ({ referralKind = 'hospital' }: ReferralsPageProps) => {
           </div>
           <div className="flex gap-3">
             <Button variant="outline" onClick={() => setShowForm(false)}>Cancel</Button>
-            <Button onClick={handleCreateReferral} disabled={!formData.patientId || !formData.toDepartment || !formData.reason.trim()}>
+            <Button onClick={handleCreateReferral} disabled={!formData.patientId || !formData.destinationProviderId || !formData.reason.trim()}>
               Submit referral
             </Button>
           </div>
@@ -325,6 +411,16 @@ const ReferralsPage = ({ referralKind = 'hospital' }: ReferralsPageProps) => {
         </motion.div>
       </div>
 
+      <div className="relative max-w-xl">
+        <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+        <input
+          value={searchQuery}
+          onChange={(event) => setSearchQuery(event.target.value)}
+          placeholder="Search referrals by patient, doctor, destination, or reason..."
+          className="h-11 w-full rounded-xl border border-input bg-background pl-10 pr-4 text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-primary/30"
+        />
+      </div>
+
       <div className="flex gap-2 flex-wrap">
         {['all', 'pending', 'accepted', 'completed', 'cancelled'].map((status) => (
           <button
@@ -345,7 +441,7 @@ const ReferralsPage = ({ referralKind = 'hospital' }: ReferralsPageProps) => {
       {filtered.length === 0 ? (
         <div className="flex flex-col items-center justify-center py-12 text-muted-foreground bg-card rounded-2xl border border-border">
           <Inbox className="w-10 h-10 mb-3" />
-          <p className="text-sm">{userReferrals.length === 0 ? 'No referrals' : 'No referrals match your filter'}</p>
+          <p className="text-sm">{userReferrals.length === 0 ? 'No referrals' : 'No referrals match your current search or filter'}</p>
         </div>
       ) : (
         <div className="space-y-2">

@@ -1,11 +1,27 @@
 import { createContext } from 'react';
 import type { User, UserProfile, UserRole, SignupRole } from './AuthContext';
+import type { ApiAuthResponse } from '@/lib/apiService';
+
+export type GoogleSignupData = NonNullable<ApiAuthResponse['google_data']>;
 
 export interface AuthContextType {
   user: User | null;
   isAuthenticated: boolean;
   isLoading: boolean;
   login: (email: string, password: string) => Promise<void>;
+  loginWithGoogle: (credential: string) => Promise<{ needsRegistration?: boolean; googleData?: GoogleSignupData }>;
+  registerWithGoogle: (
+    credential: string,
+    role: SignupRole,
+    licenseNumber?: string,
+    licenseState?: string,
+    specialty?: string,
+    phone?: string,
+    address?: string,
+    city?: string,
+    state?: string,
+    zipCode?: string,
+  ) => Promise<void>;
   signup: (
     name: string,
     email: string,
@@ -14,6 +30,11 @@ export interface AuthContextType {
     licenseNumber?: string,
     licenseState?: string,
     specialty?: string,
+    phone?: string,
+    address?: string,
+    city?: string,
+    state?: string,
+    zipCode?: string,
   ) => Promise<void>;
   logout: () => Promise<void>;
   addUser: (name: string, email: string, password: string, role: SignupRole) => Promise<User>;
@@ -24,6 +45,7 @@ export interface AuthContextType {
   updateNotificationPreferences: (email: boolean, sms: boolean) => Promise<void>;
   updatePrivacySettings: (publicProfile: boolean) => Promise<void>;
   deleteAccount: (password: string) => Promise<void>;
+  linkAccount: (currentPassword: string, linkedEmail: string, linkedPassword: string) => Promise<void>;
   resendEmailVerification: () => Promise<void>;
   clearCache: () => void;
 }

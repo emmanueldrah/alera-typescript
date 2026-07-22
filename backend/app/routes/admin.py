@@ -1,22 +1,28 @@
+import logging
+import json
+from app.utils.redis import redis_get, redis_set, redis_delete
 from fastapi import APIRouter, Depends, HTTPException, status, Body
+from sqlalchemy import func
 from sqlalchemy.orm import Session
 from database import get_db
 from app.models import (
     User, UserRole, Appointment, AppointmentStatus, Prescription,
     LabTest, LabTestStatus, ImagingScan, ImagingScanStatus,
-    AmbulanceRequest, AmbulanceRequestStatus, EmergencyPriority
+    AmbulanceRequest, AmbulanceRequestStatus, EmergencyPriority,
+    SystemSettings, Notification
 )
 from app.utils.dependencies import get_current_admin, get_current_super_admin
-from app.schemas import UserResponse
+from app.schemas import UserResponse, SystemSettingsResponse, SystemSettingsUpdate
 from app.schemas.additional_features import AuditLogResponse
 from app.utils.access import WORKFORCE_ROLES, normalized_enum_text
 from app.utils.time import utcnow
 from app.utils.auth import hash_password
 from datetime import datetime, timedelta, time
-from pydantic import BaseModel, EmailStr, Field
+from pydantic import BaseModel, EmailStr, Field, model_validator
 from typing import Optional
 
 router = APIRouter(prefix="/api/admin", tags=["admin"])
+logger = logging.getLogger(__name__)
 
 
 # ─────────────────────────────────────────────────────────────────────────────
@@ -25,11 +31,35 @@ router = APIRouter(prefix="/api/admin", tags=["admin"])
 
 def _revoke_user_sessions(user: User) -> None:
     user.session_version = int(user.session_version or 0) + 1
+    # Invalidate status cache
+    redis_delete(f"user:{user.id}:status")
 
 
 def _workforce_users_query(db: Session):
     role_text = normalized_enum_text(User.role)
     return db.query(User).filter(role_text.in_([role.value for role in WORKFORCE_ROLES]))
+
+
+def _log_dashboard_query_failure(label: str, exc: Exception) -> None:
+    logger.warning("Admin dashboard query failed for %s", label, exc_info=exc)
+
+
+def _dashboard_user_counts(db: Session) -> dict[str, int]:
+    counts = {role.value: 0 for role in UserRole}
+    role_text = normalized_enum_text(User.role)
+    rows = (
+        db.query(role_text.label("role"), func.count(User.id).label("count"))
+        .group_by(role_text)
+        .all()
+    )
+    for role, count in rows:
+        if role in counts:
+            counts[role] = count
+    return counts
+
+
+def _status_value(value):
+    return value.value if hasattr(value, "value") else value
 
 
 # ─────────────────────────────────────────────────────────────────────────────
@@ -46,6 +76,59 @@ class CreateAdminRequest(BaseModel):
     role: str = "admin"  # "admin" or "super_admin"
 
 
+class CreateUserRequest(BaseModel):
+    email: EmailStr
+    username: str = Field(..., min_length=3)
+    password: str = Field(..., min_length=8)
+    first_name: str
+    last_name: str
+    phone: Optional[str] = None
+    role: UserRole = UserRole.PATIENT
+    license_number: Optional[str] = None
+    license_state: Optional[str] = None
+    specialty: Optional[str] = None
+    postdicom_api_url: Optional[str] = None
+    postdicom_api_key: Optional[str] = None
+
+    @model_validator(mode="after")
+    def validate_role_specific_fields(self):
+        if self.role not in (UserRole.PATIENT, UserRole.ADMIN, UserRole.SUPER_ADMIN):
+            if not self.license_number or not self.license_state:
+                raise ValueError("license_number and license_state are required for professional accounts")
+        return self
+
+
+class ChangeUserRoleRequest(BaseModel):
+    new_role: str
+
+
+ROLE_ALIASES: dict[str, UserRole] = {
+    "patient": UserRole.PATIENT,
+    "doctor": UserRole.PROVIDER,
+    "provider": UserRole.PROVIDER,
+    "pharmacy": UserRole.PHARMACIST,
+    "pharmacist": UserRole.PHARMACIST,
+    "hospital": UserRole.HOSPITAL,
+    "laboratory": UserRole.LABORATORY,
+    "imaging": UserRole.IMAGING,
+    "ambulance": UserRole.AMBULANCE,
+    "physiotherapist": UserRole.PHYSIOTHERAPIST,
+    "admin": UserRole.ADMIN,
+    "super_admin": UserRole.SUPER_ADMIN,
+}
+
+
+def _parse_user_role(raw_role: str) -> UserRole:
+    normalized = raw_role.strip().lower().replace("-", "_")
+    role = ROLE_ALIASES.get(normalized)
+    if role is None:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=f"Invalid role: {raw_role}",
+        )
+    return role
+
+
 # ─────────────────────────────────────────────────────────────────────────────
 # Dashboard / Stats (accessible to all admins)
 # ─────────────────────────────────────────────────────────────────────────────
@@ -55,7 +138,20 @@ async def get_dashboard_stats(
     current_user: User = Depends(get_current_admin),
     db: Session = Depends(get_db)
 ):
-    """Get admin dashboard statistics with resilient integration"""
+    """Get admin dashboard statistics with Redis caching"""
+    
+    cache_key = "admin:dashboard:stats"
+    cached_data = redis_get(cache_key)
+    
+    if cached_data:
+        try:
+            stats = json.loads(cached_data)
+            # Add non-cacheable info
+            stats["current_admin_role"] = current_user.role.value
+            stats["cached"] = True
+            return stats
+        except Exception as e:
+            logger.warning("Failed to parse cached dashboard stats: %s", e)
 
     user_counts = {role.value: 0 for role in UserRole}
     total_users = 0
@@ -67,13 +163,10 @@ async def get_dashboard_stats(
     active_emergencies = 0
 
     try:
-        role_text = normalized_enum_text(User.role)
-        for role in UserRole:
-            count = db.query(User).filter(role_text == role.value).count()
-            user_counts[role.value] = count
+        user_counts = _dashboard_user_counts(db)
         total_users = sum(user_counts.values())
-    except Exception as e:
-        print(f"Warning: Failed to fetch user counts: {e}")
+    except Exception as exc:
+        _log_dashboard_query_failure("users", exc)
 
     try:
         today = utcnow().date()
@@ -84,15 +177,15 @@ async def get_dashboard_stats(
             Appointment.scheduled_time >= start_of_today,
             Appointment.scheduled_time <= end_of_today
         ).count()
-    except Exception as e:
-        print(f"Warning: Failed to fetch appointment counts: {e}")
+    except Exception as exc:
+        _log_dashboard_query_failure("appointments", exc)
 
     try:
         active_prescriptions = db.query(Prescription).filter(
             Prescription.status == "active"
         ).count()
-    except Exception as e:
-        print(f"Warning: Failed to fetch prescription counts: {e}")
+    except Exception as exc:
+        _log_dashboard_query_failure("prescriptions", exc)
 
     try:
         pending_labs = db.query(LabTest).filter(
@@ -101,8 +194,8 @@ async def get_dashboard_stats(
         pending_imaging = db.query(ImagingScan).filter(
             ImagingScan.status != ImagingScanStatus.COMPLETED.value
         ).count()
-    except Exception as e:
-        print(f"Warning: Failed to fetch lab/imaging counts: {e}")
+    except Exception as exc:
+        _log_dashboard_query_failure("lab_imaging", exc)
 
     try:
         active_emergencies = db.query(AmbulanceRequest).filter(
@@ -110,11 +203,11 @@ async def get_dashboard_stats(
             AmbulanceRequest.status != AmbulanceRequestStatus.CANCELLED.value,
             AmbulanceRequest.priority == EmergencyPriority.CRITICAL.value
         ).count()
-    except Exception as e:
-        print(f"Warning: Failed to fetch emergency counts: {e}")
+    except Exception as exc:
+        _log_dashboard_query_failure("emergencies", exc)
 
-    return {
-        "timestamp": utcnow(),
+    stats_response = {
+        "timestamp": utcnow().isoformat() if hasattr(utcnow(), "isoformat") else str(utcnow()),
         "users": {"total": total_users, "by_role": user_counts},
         "appointments": {"total": total_appointments, "today": today_appointments},
         "prescriptions": {"active": active_prescriptions},
@@ -122,8 +215,17 @@ async def get_dashboard_stats(
         "imaging": {"pending": pending_imaging},
         "emergencies": {"active": active_emergencies},
         "system": {"db_status": "partially_online" if total_users == 0 else "operational"},
-        "current_admin_role": current_user.role.value,
     }
+
+    # Cache for 60 seconds
+    try:
+        redis_set(cache_key, json.dumps(stats_response), ex=60)
+    except Exception as e:
+        logger.warning("Failed to cache dashboard stats: %s", e)
+
+    # Add final per-request info
+    stats_response["current_admin_role"] = current_user.role.value
+    return stats_response
 
 
 # ─────────────────────────────────────────────────────────────────────────────
@@ -218,6 +320,8 @@ async def reactivate_user(
         )
 
     user.is_active = True
+    # Invalidate status cache
+    redis_delete(f"user:{user.id}:status")
     db.commit()
 
     from app.routes.audit import log_action
@@ -233,19 +337,21 @@ async def reactivate_user(
 @router.put("/users/{user_id}/change-role")
 async def change_user_role(
     user_id: int,
-    new_role: str,
+    payload: Optional[ChangeUserRoleRequest] = Body(default=None),
+    new_role: Optional[str] = None,
     current_user: User = Depends(get_current_admin),
     db: Session = Depends(get_db)
 ):
     """Change user's role — super_admin required to assign admin/super_admin roles"""
 
-    try:
-        role = UserRole[new_role.upper()]
-    except KeyError:
+    requested_role = payload.new_role if isinstance(payload, ChangeUserRoleRequest) else new_role
+    if not requested_role:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail=f"Invalid role: {new_role}"
+            detail="new_role is required",
         )
+
+    role = _parse_user_role(requested_role)
 
     user = db.query(User).filter(User.id == user_id).first()
 
@@ -277,9 +383,72 @@ async def change_user_role(
     )
 
     return {
-        "message": f"User role changed from {old_role.value} to {new_role}",
-        "user_id": user_id, "old_role": old_role.value, "new_role": new_role
+        "message": f"User role changed from {old_role.value} to {role.value}",
+        "user_id": user_id, "old_role": old_role.value, "new_role": role.value
     }
+
+
+@router.post("/users/create", response_model=UserResponse)
+async def create_user_account(
+    payload: CreateUserRequest,
+    current_user: User = Depends(get_current_admin),
+    db: Session = Depends(get_db)
+):
+    """Create a new user account through the admin console."""
+
+    if payload.role in (UserRole.ADMIN, UserRole.SUPER_ADMIN) and current_user.role != UserRole.SUPER_ADMIN:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Only super admins can create admin or super admin accounts"
+        )
+
+    existing = db.query(User).filter(
+        (User.email == payload.email) | (User.username == payload.username)
+    ).first()
+    if existing:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Email or username already in use"
+        )
+
+    new_user = User(
+        email=payload.email,
+        username=payload.username,
+        hashed_password=hash_password(payload.password),
+        first_name=payload.first_name,
+        last_name=payload.last_name,
+        phone=payload.phone,
+        role=payload.role,
+        license_number=payload.license_number,
+        specialty=payload.specialty,
+        license_state=payload.license_state,
+        postdicom_api_url=payload.postdicom_api_url,
+        postdicom_api_key=payload.postdicom_api_key,
+        is_active=True,
+        is_verified=payload.role in (UserRole.PATIENT, UserRole.ADMIN, UserRole.SUPER_ADMIN),
+        email_verified=True,
+        email_verified_at=utcnow(),
+        session_version=0,
+        notification_email=True,
+        notification_sms=False,
+        privacy_public_profile=False,
+    )
+    db.add(new_user)
+    db.commit()
+    db.refresh(new_user)
+
+    from app.routes.audit import log_action
+    await log_action(
+        db=db,
+        user_id=current_user.id,
+        action="admin.create_user",
+        resource_type="user",
+        resource_id=new_user.id,
+        description=f"Created account with role {new_user.role.value}: {new_user.email}",
+        status="created",
+    )
+
+    return new_user
 
 
 # ─────────────────────────────────────────────────────────────────────────────
@@ -444,18 +613,26 @@ async def get_appointment_analytics(
     """Get appointment analytics for last N days"""
 
     start_date = utcnow() - timedelta(days=days)
-    appointments = db.query(Appointment).filter(Appointment.created_at >= start_date).all()
+    aggregates = (
+        db.query(Appointment.status, func.count(Appointment.id))
+        .filter(Appointment.created_at >= start_date)
+        .group_by(Appointment.status)
+        .all()
+    )
 
+    total = 0
     status_counts = {}
-    for appt in appointments:
-        s = appt.status
-        status_counts[s] = status_counts.get(s, 0) + 1
+    for status_value, count in aggregates:
+        normalized_status = status_value.value if hasattr(status_value, "value") else str(status_value)
+        numeric_count = int(count or 0)
+        status_counts[normalized_status] = numeric_count
+        total += numeric_count
 
     return {
         "period_days": days,
-        "total": len(appointments),
+        "total": total,
         "by_status": status_counts,
-        "average_per_day": len(appointments) / days if days > 0 else 0
+        "average_per_day": total / days if days > 0 else 0
     }
 
 
@@ -468,16 +645,24 @@ async def get_user_analytics(
     """Get user signup analytics"""
 
     start_date = utcnow() - timedelta(days=days)
-    new_users = db.query(User).filter(User.created_at >= start_date).all()
+    aggregates = (
+        db.query(User.role, func.count(User.id))
+        .filter(User.created_at >= start_date)
+        .group_by(User.role)
+        .all()
+    )
 
+    total = 0
     users_by_role = {}
-    for user in new_users:
-        r = user.role.value
-        users_by_role[r] = users_by_role.get(r, 0) + 1
+    for role_value, count in aggregates:
+        normalized_role = role_value.value if hasattr(role_value, "value") else str(role_value)
+        numeric_count = int(count or 0)
+        users_by_role[normalized_role] = numeric_count
+        total += numeric_count
 
     return {
         "period_days": days,
-        "new_users": len(new_users),
+        "new_users": total,
         "by_role": users_by_role
     }
 
@@ -624,6 +809,7 @@ async def get_ecosystem_activity(
 ):
     """Centralized feed of recent ecosystem events"""
 
+    limit = min(max(limit, 1), 100)
     activity = []
 
     try:
@@ -641,22 +827,156 @@ async def get_ecosystem_activity(
             activity.append({
                 "type": "prescription",
                 "time": s.created_at,
+                "description": f"New prescription for {s.medication_name}",
+                "status": s.status
+            })
+
+    except Exception as exc:
+        logger.error("Failed to build activity feed: %s", exc)
+
+    activity.sort(key=lambda x: x["time"], reverse=True)
+    return activity[:limit]
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# System Settings & Maintenance
+# ─────────────────────────────────────────────────────────────────────────────
+
+def _get_or_create_system_settings(db: Session) -> SystemSettings:
+    settings = db.query(SystemSettings).first()
+    if not settings:
+        settings = SystemSettings()
+        db.add(settings)
+        db.commit()
+        db.refresh(settings)
+    return settings
+
+
+@router.get("/system/settings", response_model=SystemSettingsResponse)
+async def get_system_settings(
+    current_user: User = Depends(get_current_admin),
+    db: Session = Depends(get_db)
+):
+    """Get global system settings including maintenance mode status"""
+    return _get_or_create_system_settings(db)
+
+
+@router.put("/system/settings", response_model=SystemSettingsResponse)
+async def update_system_settings(
+    payload: SystemSettingsUpdate,
+    current_user: User = Depends(get_current_super_admin),
+    db: Session = Depends(get_db)
+):
+    """Update global system settings (SUPER_ADMIN only)"""
+    settings = _get_or_create_system_settings(db)
+    
+    update_data = payload.model_dump(exclude_unset=True)
+    for key, value in update_data.items():
+        setattr(settings, key, value)
+    
+    settings.updated_by_id = current_user.id
+    db.commit()
+    db.refresh(settings)
+    
+    # Invalidate caches to reflect changes immediately
+    from app.utils.redis import redis_delete
+    redis_delete("system:maintenance_mode")
+    redis_delete("system:maintenance_message")
+    redis_delete("system:status_blob")
+    
+    from app.routes.audit import log_action
+    await log_action(
+        db=db, user_id=current_user.id, action="admin.update_system_settings",
+        resource_type="system_settings", resource_id=settings.id,
+        description=f"Updated system settings. Maintenance={settings.is_maintenance_mode}",
+        status="warning" if settings.is_maintenance_mode else "info",
+    )
+    
+    return settings
+
+
+class GlobalNotificationRequest(BaseModel):
+    title: str
+    message: str
+    notification_type: str = "alert"
+    action_url: Optional[str] = None
+
+
+@router.post("/system/notify-all")
+async def notify_all_users(
+    payload: GlobalNotificationRequest,
+    current_user: User = Depends(get_current_super_admin),
+    db: Session = Depends(get_db)
+):
+    """Send a notification to all active users in the system (SUPER_ADMIN only)"""
+    
+    # Get all active users
+    active_users = db.query(User).filter(User.is_active == True).all()
+    
+    notifications = []
+    for user in active_users:
+        notifications.append(Notification(
+            user_id=user.id,
+            title=payload.title,
+            message=payload.message,
+            notification_type=payload.notification_type,
+            action_url=payload.action_url
+        ))
+    
+    db.add_all(notifications)
+    db.commit()
+    
+    from app.routes.audit import log_action
+    await log_action(
+        db=db, user_id=current_user.id, action="admin.notify_all",
+        resource_type="system", resource_id=0,
+        description=f"Sent global notification to {len(active_users)} users: {payload.title}",
+        status="info",
+    )
+    
+    return {"message": f"Notification sent to {len(active_users)} users"}
+
+
+@router.get("/ecosystem-activity", response_model=list)
+async def get_ecosystem_activity(
+    limit: int = 20,
+    current_user: User = Depends(get_current_admin),
+    db: Session = Depends(get_db)
+):
+    """Get a unified feed of the most recent critical activities across the ecosystem"""
+    activity = []
+    
+    try:
+        appointments = db.query(Appointment).order_by(Appointment.created_at.desc()).limit(limit).all()
+        for a in appointments:
+            activity.append({
+                "type": "appointment",
+                "time": a.created_at,
+                "description": f"Appointment scheduled: {a.title}",
+                "status": a.status
+            })
+
+        scripts = db.query(Prescription).order_by(Prescription.created_at.desc()).limit(limit).all()
+        for s in scripts:
+            activity.append({
+                "type": "prescription",
+                "time": s.created_at,
                 "description": f"New prescription issued: {s.medication_name}",
                 "status": s.status
             })
 
-        labs = db.query(LabTest).order_by(LabTest.ordered_at.desc()).limit(10).all()
+        labs = db.query(LabTest).order_by(LabTest.ordered_at.desc()).limit(limit).all()
         for l in labs:
             activity.append({
                 "type": "lab_test",
                 "time": l.ordered_at,
                 "description": f"Lab test requested: {l.test_name}",
-                "status": l.status.value if hasattr(l.status, 'value') else l.status
+                "status": l.status
             })
-    except Exception as e:
-        print(f"Activity feed warning: {e}")
+    except Exception as exc:
+        logger.warning("Failed to build ecosystem activity feed", exc_info=exc)
 
-    activity.sort(key=lambda x: x["time"], reverse=True)
+    activity.sort(key=lambda x: x.get("time") or "", reverse=True)
     return activity[:limit]
 
 
@@ -682,6 +1002,6 @@ async def get_active_emergency_dispatch(
         ).order_by(AmbulanceRequest.requested_at.desc()).all()
 
         return [req.to_dict() for req in active_requests]
-    except Exception as e:
-        print(f"Emergency monitor error: {e}")
+    except Exception as exc:
+        logger.warning("Failed to load active emergency dispatch view", exc_info=exc)
         return []

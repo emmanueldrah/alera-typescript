@@ -31,6 +31,7 @@ export interface Prescription {
   patientId: string;
   doctorName: string;
   doctorId: string;
+  pharmacyName?: string;
   date: string;
   medications: { name: string; dosage: string; frequency: string; duration: string }[];
   status: 'active' | 'dispensed' | 'expired';
@@ -271,6 +272,7 @@ export interface LabTest {
   patientId: string;
   doctorName: string;
   doctorId: string;
+  destinationProviderName?: string;
   testName: string;
   date: string;
   status: 'requested' | 'in-progress' | 'completed' | 'cancelled';
@@ -288,12 +290,37 @@ export interface ImagingScan {
   patientId: string;
   doctorName: string;
   doctorId: string;
+  destinationProviderName?: string;
   scanType: 'X-Ray' | 'MRI' | 'CT Scan' | 'Ultrasound' | 'PET Scan' | 'DEXA Scan';
   date: string;
   status: 'requested' | 'in-progress' | 'completed' | 'cancelled';
   results?: string;
   centerId?: string;
   bodyPart?: string;
+  clinicalIndication?: string;
+  impression?: string;
+  reportUrl?: string;
+  imageUrl?: string;
+  postdicomStudyId?: string;
+  postdicomStudyUrl?: string;
+  reportFile?: {
+    fileId: string;
+    filename: string;
+    mimeType: string;
+    fileSize: number;
+    uploadTime?: string;
+    downloadUrl?: string;
+  };
+  imageFiles?: Array<{
+    fileId: string;
+    filename: string;
+    mimeType: string;
+    fileSize: number;
+    uploadTime?: string;
+    downloadUrl?: string;
+  }>;
+  scheduledAt?: string;
+  completedAt?: string;
 }
 
 export interface AmbulanceRequest {
@@ -301,11 +328,19 @@ export interface AmbulanceRequest {
   patientName: string;
   patientId: string;
   location: string;
+  address?: string;
+  latitude?: number;
+  longitude?: number;
   date: string;
   time: string;
-  status: 'requested' | 'dispatched' | 'en-route' | 'completed';
+  status: 'requested' | 'accepted' | 'dispatched' | 'en-route' | 'arrived' | 'completed' | 'cancelled';
   priority: 'low' | 'medium' | 'high' | 'critical';
   vehicleId?: string;
+  assignedAmbulanceId?: string;
+  acceptedAt?: string;
+  dispatchedAt?: string;
+  arrivedAt?: string;
+  completedAt?: string;
 }
 
 export interface TimelineEvent {
@@ -464,6 +499,9 @@ export interface Referral {
   patientName: string;
   fromDoctorId: string;
   fromDoctorName: string;
+  destinationProviderId?: string;
+  destinationProviderName?: string;
+  destinationProviderRole?: 'hospital' | 'laboratory' | 'imaging' | 'pharmacy' | 'physiotherapist';
   toDepartmentId: string;
   toDepartment: string;
   reason: string;

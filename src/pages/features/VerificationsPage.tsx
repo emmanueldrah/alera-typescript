@@ -1,4 +1,4 @@
-import { useState, useMemo, useEffect } from 'react';
+import { useCallback, useState, useMemo, useEffect } from 'react';
 import { motion } from 'framer-motion';
 import { 
   ShieldCheck, CheckCircle, XCircle, Heart, FlaskConical, 
@@ -34,15 +34,28 @@ const roleLabels: Record<string, string> = {
   ambulance: 'Ambulance Service',
 };
 
+type VerificationItem = {
+  id: number;
+  name: string;
+  email: string;
+  role: string;
+  status: VerificationQueueStatus;
+  appliedDate: string;
+  documents: string;
+  notes?: string;
+  verifiedBy?: string;
+  verificationDate?: string;
+};
+
 const VerificationsPage = () => {
   const { user } = useAuth();
   const { toast } = useToast();
-  const [verifications, setVerifications] = useState<AdminUserRow[]>([]);
+  const [verifications, setVerifications] = useState<VerificationItem[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [statusFilter, setStatusFilter] = useState('all');
   const statusTabs = ['all', 'pending', 'verified', 'rejected'] as const;
 
-  const fetchVerifications = async () => {
+  const fetchVerifications = useCallback(async () => {
     setIsLoading(true);
     try {
       const data = await api.admin.listVerifications();
@@ -67,11 +80,11 @@ const VerificationsPage = () => {
     } finally {
       setIsLoading(false);
     }
-  };
+  }, [toast]);
 
   useEffect(() => {
     fetchVerifications();
-  }, []);
+  }, [fetchVerifications]);
 
   const filtered = useMemo(() => {
     if (statusFilter === 'all') return verifications;

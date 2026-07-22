@@ -2,189 +2,28 @@ import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import type { AmbulanceRequest, Appointment, ImagingScan, LabTest, Prescription, VitalSigns, HealthMetric, InventoryItem, AmbulanceVehicle, Referral, ProviderVerification, PatientAllergy, PatientMedicalHistory, PatientConsent, DrugInteraction, ClinicalNote, PatientProblem, MedicationAdherence, ProviderPricing, ServiceCharge, Invoice, BillingRecord, AppointmentReminder } from '@/data/mockData';
 import { drugInteractionDatabase } from '@/data/drugInteractionReference';
 import { AppDataContext, type AppDataContextType } from './app-data-context';
-import { appointmentsApi, prescriptionsApi, allergiesApi, api, referralsApi, recordsApi, ambulanceApi } from '@/lib/apiService';
+import { appointmentsApi, prescriptionsApi, allergiesApi, api, referralsApi, recordsApi, ambulanceApi, type ImagingFileAsset } from '@/lib/apiService';
 import { useAuth } from './useAuth';
 import { buildScheduledIso } from '@/lib/appointmentUtils';
-import { getReferralDepartmentId } from '@/lib/referralUtils';
-
-type BackendAppointment = {
-  id: string | number;
-  patient_id: string | number;
-  provider_id: string | number;
-  title: string;
-  description?: string;
-  scheduled_time: string;
-  appointment_type?: string;
-  status?: string;
-  notes?: string;
-  patient_name?: string | null;
-  provider_name?: string | null;
-};
-
-type BackendPrescription = {
-  id: string | number;
-  medication_name: string;
-  dosage: string;
-  dosage_unit?: string;
-  frequency: string;
-  route?: string;
-  instructions?: string | null;
-  quantity?: number | null;
-  provider_id: string | number;
-  patient_id: string | number;
-  status?: string;
-  refills?: number;
-  refills_remaining?: number;
-  prescribed_date?: string;
-  created_at?: string;
-  patient_name?: string | null;
-  provider_name?: string | null;
-};
-
-type BackendAllergy = {
-  id: string | number;
-  patient_id: string | number;
-  allergen: string;
-  allergen_type: string;
-  severity: string;
-  reaction_description: string;
-  treatment?: string;
-  onset_date?: string;
-  created_at?: string;
-  patient_name?: string | null;
-};
-
-const getListPayload = <T,>(value: unknown): T[] => {
-  if (Array.isArray(value)) {
-    return value as T[];
-  }
-
-  if (typeof value === 'object' && value !== null && Array.isArray((value as { items?: unknown }).items)) {
-    return (value as { items: T[] }).items;
-  }
-
-  return [];
-};
-
-interface StoredAppData {
-  appointments: Appointment[];
-  prescriptions: Prescription[];
-  labTests: LabTest[];
-  imagingScans: ImagingScan[];
-  ambulanceRequests: AmbulanceRequest[];
-  vitalSigns: VitalSigns[];
-  healthMetrics: HealthMetric[];
-  inventoryItems: InventoryItem[];
-  ambulances: AmbulanceVehicle[];
-  referrals: Referral[];
-  providerVerifications: ProviderVerification[];
-  patientAllergies: PatientAllergy[];
-  medicalHistories: PatientMedicalHistory[];
-  patientConsents: PatientConsent[];
-  clinicalNotes: ClinicalNote[];
-  patientProblems: PatientProblem[];
-  medicationAdherence: MedicationAdherence[];
-  providerPricing: ProviderPricing[];
-  serviceCharges: ServiceCharge[];
-  invoices: Invoice[];
-  billingRecords: BillingRecord[];
-  appointmentReminders: AppointmentReminder[];
-}
-
-const emptyData: StoredAppData = {
-  appointments: [],
-  prescriptions: [],
-  labTests: [],
-  imagingScans: [],
-  ambulanceRequests: [],
-  vitalSigns: [],
-  healthMetrics: [],
-  inventoryItems: [],
-  ambulances: [],
-  referrals: [],
-  providerVerifications: [],
-  patientAllergies: [],
-  medicalHistories: [],
-  patientConsents: [],
-  clinicalNotes: [],
-  patientProblems: [],
-  medicationAdherence: [],
-  providerPricing: [],
-  serviceCharges: [],
-  invoices: [],
-  billingRecords: [],
-  appointmentReminders: [],
-};
-
-type BackendLabTest = {
-  id: number;
-  test_name: string;
-  test_code?: string;
-  description?: string;
-  status: string;
-  result_value?: string;
-  result_unit?: string;
-  reference_range?: string;
-  result_notes?: string;
-  result_file_url?: string;
-  ordered_at: string;
-  collected_at?: string;
-  completed_at?: string;
-  patient_id: number;
-  ordered_by: number;
-  patient_name?: string | null;
-  ordered_by_name?: string | null;
-};
-
-type BackendImagingScan = {
-  id: number;
-  scan_type: string;
-  body_part?: string;
-  clinical_indication?: string;
-  status: string;
-  findings?: string;
-  impression?: string;
-  report_url?: string;
-  image_url?: string;
-  ordered_at: string;
-  scheduled_at?: string;
-  completed_at?: string;
-  patient_id: number;
-  ordered_by: number;
-  patient_name?: string | null;
-  ordered_by_name?: string | null;
-};
-
-type BackendReferral = {
-  id: number;
-  patient_id: number;
-  from_doctor_id: number;
-  referral_type?: string | null;
-  to_department: string;
-  to_department_id?: string | null;
-  reason: string;
-  notes?: string | null;
-  status: string;
-  created_at: string;
-  updated_at: string;
-  patient_name?: string | null;
-  from_doctor_name?: string | null;
-};
-
-type BackendAmbulanceRequest = {
-  id: number;
-  patient_id?: number | null;
-  location_name: string;
-  address?: string | null;
-  latitude?: number | null;
-  longitude?: number | null;
-  description?: string | null;
-  status: string;
-  priority: string;
-  requested_at: string;
-  dispatched_at?: string | null;
-  completed_at?: string | null;
-};
+import {
+  type BackendAllergy,
+  type BackendAmbulanceRequest,
+  type BackendAppointment,
+  type BackendImagingScan,
+  type BackendLabTest,
+  type BackendPrescription,
+  type BackendReferral,
+  type StoredAppData,
+  emptyData,
+  getListPayload,
+  mapBackendAllergy,
+  mapBackendAmbulanceRequest,
+  mapBackendAppointment,
+  mapBackendImagingScan,
+  mapBackendLabTest,
+  mapBackendPrescription,
+  mapBackendReferral,
+} from './app-data-mappers';
 
 type StructuredRecordRow<T> = {
   id: string;
@@ -207,189 +46,6 @@ type PrescriptionRefillRequest = {
   dispensedDate?: string;
 };
 
-const mapBackendStatus = (raw?: string): Appointment['status'] => {
-  const s = (raw || 'scheduled').toLowerCase().replace(/_/g, '-');
-  if (s === 'in-progress') return 'in-progress';
-  if (s === 'confirmed') return 'confirmed-by-doctor';
-  if (s === 'rescheduled') return 'rescheduled';
-  if (s === 'completed') return 'completed';
-  if (s === 'cancelled') return 'cancelled';
-  if (s === 'scheduled') return 'scheduled';
-  return 'scheduled';
-};
-
-// Helper to convert backend appointment to frontend format
-const mapBackendAppointment = (apt: BackendAppointment): Appointment => {
-  const at = (apt.appointment_type || 'telehealth').toLowerCase();
-  const tele = at === 'telehealth' || at === 'phone';
-  const st = new Date(apt.scheduled_time);
-  return {
-    id: String(apt.id),
-    patientId: String(apt.patient_id),
-    patientName: apt.patient_name?.trim() || `Patient #${apt.patient_id}`,
-    doctorId: String(apt.provider_id),
-    doctorName: apt.provider_name?.trim() || `Provider #${apt.provider_id}`,
-    date: st.toISOString().slice(0, 10),
-    time: st.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
-    type: apt.title || (tele ? 'Telehealth' : 'In-Person'),
-    appointmentMode: tele ? 'telemedicine' : 'in-person',
-    status: mapBackendStatus(apt.status),
-    notes: apt.notes || apt.description || apt.title,
-    doctorConfirmed: mapBackendStatus(apt.status) === 'confirmed-by-doctor',
-  };
-};
-
-const mapBackendPrescriptionStatus = (raw?: string): Prescription['status'] => {
-  const s = (raw || 'active').toLowerCase();
-  if (s === 'dispensed') return 'dispensed';
-  if (s === 'expired' || s === 'discontinued') return 'expired';
-  return 'active';
-};
-
-// Helper to convert backend prescription to frontend format
-const mapBackendPrescription = (presc: BackendPrescription): Prescription => {
-  const total = presc.refills ?? 0;
-  const remaining = presc.refills_remaining ?? total;
-  const refillsUsed = Math.max(0, total - remaining);
-  const duration =
-    presc.quantity != null && presc.quantity > 0
-      ? `${presc.quantity} units`
-      : presc.instructions?.trim()
-        ? presc.instructions
-        : 'As directed';
-  const dosageLabel = [presc.dosage, presc.dosage_unit].filter(Boolean).join(' ').trim() || presc.dosage;
-
-  return {
-    id: String(presc.id),
-    patientName: presc.patient_name?.trim() || `Patient #${presc.patient_id}`,
-    patientId: String(presc.patient_id),
-    doctorName: presc.provider_name?.trim() || `Provider #${presc.provider_id}`,
-    doctorId: String(presc.provider_id),
-    date: presc.prescribed_date ? presc.prescribed_date.slice(0, 10) : new Date().toISOString().slice(0, 10),
-    medications: [{
-      name: presc.medication_name,
-      dosage: dosageLabel,
-      frequency: presc.frequency,
-      duration,
-    }],
-    status: mapBackendPrescriptionStatus(presc.status),
-    refillsAllowed: total,
-    refillsUsed,
-  };
-};
-
-// Helper to convert backend allergy to frontend format
-const mapBackendAllergy = (allergy: BackendAllergy): PatientAllergy => ({
-  id: String(allergy.id),
-  patientId: String(allergy.patient_id),
-  patientName: allergy.patient_name?.trim() || undefined,
-  allergen: allergy.allergen,
-  allergyType: (allergy.allergen_type.toLowerCase() || 'other') as PatientAllergy['allergyType'],
-  severity: (() => {
-    const sev = (allergy.severity || 'mild').toLowerCase();
-    if (sev === 'life-threatening') return 'life-threatening' as const;
-    if (sev === 'severe') return 'severe' as const;
-    if (sev === 'moderate') return 'moderate' as const;
-    return 'mild' as const;
-  })(),
-  reaction: allergy.reaction_description,
-  dateIdentified: allergy.onset_date || allergy.created_at,
-  addedDate: allergy.created_at,
-  status: 'active',
-  notes: allergy.treatment || '',
-});
-
-const mapBackendLabStatus = (raw: string): LabTest['status'] => {
-  const s = raw.toLowerCase();
-  if (s === 'completed') return 'completed';
-  if (s === 'cancelled') return 'cancelled';
-  if (s === 'processing' || s === 'sample_collected') return 'in-progress';
-  return 'requested';
-};
-
-const mapBackendImagingStatus = (raw: string): ImagingScan['status'] => {
-  const s = raw.toLowerCase();
-  if (s === 'completed') return 'completed';
-  if (s === 'cancelled') return 'cancelled';
-  if (s === 'in_progress' || s === 'scheduled') return 'in-progress';
-  return 'requested';
-};
-
-const mapBackendLabTest = (test: BackendLabTest): LabTest => ({
-  id: String(test.id),
-  patientId: String(test.patient_id),
-  patientName: test.patient_name?.trim() || `Patient #${test.patient_id}`,
-  doctorId: String(test.ordered_by),
-  doctorName: test.ordered_by_name?.trim() || `Provider #${test.ordered_by}`,
-  testName: test.test_name,
-  date: test.ordered_at.slice(0, 10),
-  status: mapBackendLabStatus(test.status),
-  results:
-    test.result_value && test.result_unit
-      ? `${test.result_value} ${test.result_unit}`
-      : test.result_notes || undefined,
-  referenceRange: test.reference_range,
-  notes: test.result_notes,
-  documentUrl: test.result_file_url || undefined,
-});
-
-const mapBackendImagingScan = (scan: BackendImagingScan): ImagingScan => ({
-  id: String(scan.id),
-  patientId: String(scan.patient_id),
-  patientName: scan.patient_name?.trim() || `Patient #${scan.patient_id}`,
-  doctorId: String(scan.ordered_by),
-  doctorName: scan.ordered_by_name?.trim() || `Provider #${scan.ordered_by}`,
-  scanType: scan.scan_type as ImagingScan['scanType'],
-  bodyPart: scan.body_part || 'Unspecified',
-  date: scan.ordered_at.slice(0, 10),
-  status: mapBackendImagingStatus(scan.status),
-  results: scan.findings,
-});
-
-const mapBackendReferral = (r: BackendReferral): Referral => {
-  const rt = (r.referral_type || 'hospital').toLowerCase();
-  const referralType: Referral['referralType'] =
-    rt === 'laboratory' || rt === 'imaging' || rt === 'pharmacy' ? rt : 'hospital';
-  return {
-    id: String(r.id),
-    referralType,
-    patientId: String(r.patient_id),
-    patientName: r.patient_name?.trim() || `Patient #${r.patient_id}`,
-    fromDoctorId: String(r.from_doctor_id),
-    fromDoctorName: r.from_doctor_name?.trim() || `Provider #${r.from_doctor_id}`,
-    toDepartmentId: r.to_department_id || getReferralDepartmentId(r.to_department),
-    toDepartment: r.to_department,
-    reason: r.reason,
-    date: (r.created_at || '').slice(0, 10),
-    status: r.status as Referral['status'],
-    lastUpdated: (r.updated_at || r.created_at || '').slice(0, 10),
-    notes: r.notes || undefined,
-  };
-};
-
-const mapBackendAmbulanceRequest = (request: BackendAmbulanceRequest, fallbackPatientName?: string): AmbulanceRequest => ({
-  id: String(request.id),
-  patientName: fallbackPatientName || `Patient #${request.patient_id ?? 'unknown'}`,
-  patientId: String(request.patient_id ?? ''),
-  location: request.location_name || request.address || 'Unknown location',
-  date: (request.requested_at || '').slice(0, 10),
-  time: (request.requested_at || '').slice(11, 16),
-  status: (() => {
-    const status = (request.status || 'requested').toLowerCase();
-    if (status === 'dispatched') return 'dispatched';
-    if (status === 'completed') return 'completed';
-    if (status === 'en_route') return 'en-route';
-    return 'requested';
-  })(),
-  priority: (() => {
-    const priority = (request.priority || 'medium').toLowerCase();
-    if (priority === 'critical') return 'critical';
-    if (priority === 'high') return 'high';
-    if (priority === 'low') return 'low';
-    return 'medium';
-  })(),
-  vehicleId: undefined,
-});
 
 const labStatusToApi = (s: LabTest['status']): string => {
   if (s === 'requested') return 'ordered';
@@ -436,9 +92,12 @@ const toOptionalNumber = (value: string | number | null | undefined): number | n
   return Number.isFinite(parsed) ? parsed : null;
 };
 
+const INITIAL_API_PAGE_SIZE = 100;
+const STRUCTURED_RECORD_PAGE_SIZE = 100;
+
 const loadStructuredPayloads = async <T extends { id?: string }>(recordType: string): Promise<T[]> => {
   try {
-    const response = await recordsApi.listRecords<T>(recordType, { skip: 0, limit: 500 });
+    const response = await recordsApi.listRecords<T>(recordType, { skip: 0, limit: STRUCTURED_RECORD_PAGE_SIZE });
     return getListPayload<StructuredRecordRow<T>>(response).map((record) => {
       const payload = record.payload;
       if (payload && typeof payload === 'object') {
@@ -549,13 +208,13 @@ export const AppDataProvider: React.FC<{ children: React.ReactNode }> = ({ child
         appointmentReminders,
         prescriptionRefillRequests,
       ] = await Promise.all([
-        appointmentsApi.listAppointments(0, 200).catch(() => []),
-        prescriptionsApi.listPrescriptions(0, 200).catch(() => []),
-        allergiesApi.listAllergies({ skip: 0, limit: 200 }).catch(() => []),
-        api.labTests.listLabTests(0, 200).catch(() => []),
-        api.imaging.listImagingScans(0, 200).catch(() => []),
-        referralsApi.listReferrals(0, 200).catch(() => []),
-        ambulanceApi.listRequests(0, 200).catch(() => []),
+        appointmentsApi.listAppointments(0, INITIAL_API_PAGE_SIZE).catch(() => []),
+        prescriptionsApi.listPrescriptions(0, INITIAL_API_PAGE_SIZE).catch(() => []),
+        allergiesApi.listAllergies({ skip: 0, limit: INITIAL_API_PAGE_SIZE }).catch(() => []),
+        api.labTests.listLabTests(0, INITIAL_API_PAGE_SIZE).catch(() => []),
+        api.imaging.listImagingScans(0, INITIAL_API_PAGE_SIZE).catch(() => []),
+        referralsApi.listReferrals(0, INITIAL_API_PAGE_SIZE).catch(() => []),
+        ambulanceApi.listRequests(0, INITIAL_API_PAGE_SIZE).catch(() => []),
         loadStructuredPayloads<VitalSigns>('vital_sign'),
         loadStructuredPayloads<HealthMetric>('health_metric'),
         loadStructuredPayloads<InventoryItem>('inventory_item'),
@@ -720,9 +379,26 @@ export const AppDataProvider: React.FC<{ children: React.ReactNode }> = ({ child
       }
     }, 30000);
 
+    const handleVisibilityChange = () => {
+      if (active && document.visibilityState === 'visible') {
+        void loadAPIData(true);
+      }
+    };
+
+    const handleOnline = () => {
+      if (active) {
+        void loadAPIData(true);
+      }
+    };
+
+    document.addEventListener('visibilitychange', handleVisibilityChange);
+    window.addEventListener('online', handleOnline);
+
     return () => {
       active = false;
       window.clearInterval(interval);
+      document.removeEventListener('visibilitychange', handleVisibilityChange);
+      window.removeEventListener('online', handleOnline);
     };
   }, [loadAPIData]);
 
@@ -918,6 +594,7 @@ export const AppDataProvider: React.FC<{ children: React.ReactNode }> = ({ child
         try {
           await prescriptionsApi.createPrescription({
             patient_id: Number(prescription.patientId),
+            pharmacy_id: Number(prescription.pharmacyId),
             medication_name: prescription.medications[0]?.name || 'Medication',
             dosage: prescription.medications[0]?.dosage || 'As directed',
             dosage_unit: prescription.medications[0]?.dosage.split(' ').slice(1).join(' ') || 'unit',
@@ -997,6 +674,7 @@ export const AppDataProvider: React.FC<{ children: React.ReactNode }> = ({ child
         if (!prescription) return;
         const newRefill: PrescriptionRefillRequest = {
           id: `refill-${Date.now()}`,
+          prescriptionId,
           requestDate: new Date().toISOString().split('T')[0],
           status: 'pending',
         };
@@ -1023,6 +701,7 @@ export const AppDataProvider: React.FC<{ children: React.ReactNode }> = ({ child
         try {
           await api.labTests.createLabTest({
             patient_id: Number(test.patientId),
+            destination_provider_id: Number(test.labId),
             test_name: test.testName,
             test_code: test.testName,
           });
@@ -1053,9 +732,10 @@ export const AppDataProvider: React.FC<{ children: React.ReactNode }> = ({ child
         try {
           await api.imaging.orderImagingScan({
             patient_id: Number(scan.patientId),
+            destination_provider_id: Number(scan.centerId),
             scan_type: scan.scanType,
             body_part: scan.bodyPart || undefined,
-            clinical_indication: undefined,
+            clinical_indication: scan.clinicalIndication || undefined,
           });
           await loadAPIData(true);
         } catch (e) {
@@ -1085,6 +765,9 @@ export const AppDataProvider: React.FC<{ children: React.ReactNode }> = ({ child
           await ambulanceApi.createRequest({
             patient_id: toOptionalNumber(request.patientId) ?? undefined,
             location_name: request.location,
+            address: request.address,
+            latitude: request.latitude,
+            longitude: request.longitude,
             description: request.location,
             priority: request.priority,
           });
@@ -1101,10 +784,20 @@ export const AppDataProvider: React.FC<{ children: React.ReactNode }> = ({ child
         const next = update(prev);
         const payload: Record<string, unknown> = {};
         if (next.status !== prev.status) {
-          payload.status = next.status === 'en-route' ? 'en_route' : next.status;
+          payload.status = next.status === 'requested'
+            ? 'pending'
+            : next.status === 'en-route'
+              ? 'en_route'
+              : next.status;
         }
         if (next.priority !== prev.priority) payload.priority = next.priority;
         if (next.location !== prev.location) payload.location_name = next.location;
+        if (next.address !== prev.address) payload.address = next.address;
+        if (next.latitude !== prev.latitude) payload.latitude = next.latitude;
+        if (next.longitude !== prev.longitude) payload.longitude = next.longitude;
+        if (next.assignedAmbulanceId !== prev.assignedAmbulanceId) {
+          payload.assigned_ambulance_id = toOptionalNumber(next.assignedAmbulanceId);
+        }
         try {
           if (Object.keys(payload).length > 0) {
             await ambulanceApi.updateRequest(id, payload);
@@ -1140,6 +833,19 @@ export const AppDataProvider: React.FC<{ children: React.ReactNode }> = ({ child
         }
       })();
     },
+    addInventoryItem: (item) => {
+      void (async () => {
+        try {
+          await upsertStructuredRecord('inventory_item', item, 'inventoryItems', {
+            provider_id: toOptionalNumber(user?.id),
+            status: item.status,
+            created_by: toOptionalNumber(user?.id),
+          });
+        } catch (error) {
+          console.error('addInventoryItem failed:', error);
+        }
+      })();
+    },
     updateInventoryItem: (id, update) => {
       void (async () => {
         const prev = dataRef.current.inventoryItems.find((item) => item.id === id);
@@ -1147,10 +853,35 @@ export const AppDataProvider: React.FC<{ children: React.ReactNode }> = ({ child
         const next = update(prev);
         try {
           await updateStructuredRecord('inventory_item', next, 'inventoryItems', {
+            provider_id: toOptionalNumber(user?.id),
             status: next.status,
+            created_by: toOptionalNumber(user?.id),
           });
         } catch (error) {
           console.error('updateInventoryItem failed:', error);
+        }
+      })();
+    },
+    deleteInventoryItem: (id) => {
+      void (async () => {
+        try {
+          await recordsApi.deleteRecord(id);
+          await loadAPIData(true);
+        } catch (error) {
+          console.error('deleteInventoryItem failed:', error);
+        }
+      })();
+    },
+    addAmbulance: (ambulance) => {
+      void (async () => {
+        try {
+          await upsertStructuredRecord('ambulance_vehicle', ambulance, 'ambulances', {
+            provider_id: toOptionalNumber(user?.id),
+            status: ambulance.status,
+            created_by: toOptionalNumber(user?.id),
+          });
+        } catch (error) {
+          console.error('addAmbulance failed:', error);
         }
       })();
     },
@@ -1161,10 +892,22 @@ export const AppDataProvider: React.FC<{ children: React.ReactNode }> = ({ child
         const next = update(prev);
         try {
           await updateStructuredRecord('ambulance_vehicle', next, 'ambulances', {
+            provider_id: toOptionalNumber(user?.id),
             status: next.status,
+            created_by: toOptionalNumber(user?.id),
           });
         } catch (error) {
           console.error('updateAmbulance failed:', error);
+        }
+      })();
+    },
+    deleteAmbulance: (id) => {
+      void (async () => {
+        try {
+          await recordsApi.deleteRecord(id);
+          await loadAPIData(true);
+        } catch (error) {
+          console.error('deleteAmbulance failed:', error);
         }
       })();
     },
@@ -1205,22 +948,28 @@ export const AppDataProvider: React.FC<{ children: React.ReactNode }> = ({ child
         }
       })();
     },
-    addReferral: (referral) => {
-      void (async () => {
-        try {
-          await referralsApi.createReferral({
-            patient_id: Number(referral.patientId),
-            referral_type: referral.referralType,
-            to_department: referral.toDepartment,
-            to_department_id: referral.toDepartmentId || undefined,
-            reason: referral.reason,
-            notes: referral.notes,
-          });
-          await loadAPIData(true);
-        } catch (e) {
-          console.error('addReferral failed:', e);
-        }
-      })();
+    addReferral: async (referral) => {
+      try {
+        const response = await referralsApi.createReferral({
+          patient_id: Number(referral.patientId),
+          referral_type: referral.referralType,
+          destination_provider_id: Number(referral.destinationProviderId),
+          to_department: referral.toDepartment,
+          to_department_id: referral.toDepartmentId || undefined,
+          reason: referral.reason,
+          notes: referral.notes,
+        });
+
+        setData((current) => ({
+          ...current,
+          referrals: [...current.referrals, mapBackendReferral(response)],
+        }));
+
+        await loadAPIData(true);
+      } catch (e) {
+        console.error('addReferral failed:', e);
+        throw e;
+      }
     },
     updateReferral: (id, update) => {
       void (async () => {
@@ -1617,7 +1366,6 @@ export const AppDataProvider: React.FC<{ children: React.ReactNode }> = ({ child
               appointmentMode: appointment.appointmentMode,
               sentAt: undefined,
               acknowledgedAt: undefined,
-              createdAt: new Date().toISOString(),
             };
 
             const scope = {
@@ -1716,7 +1464,7 @@ export const AppDataProvider: React.FC<{ children: React.ReactNode }> = ({ child
         }
       })();
     },
-  }), [data, user, loadAPIData, refreshAppData, upsertStructuredRecord, updateStructuredRecord, persistBillingRecord]);
+  }), [data, user, loadAPIData, refreshAppData, upsertStructuredRecord, updateStructuredRecord, persistBillingRecord, isLoadingAPI]);
 
   return (
     <AppDataContext.Provider value={contextValue}>

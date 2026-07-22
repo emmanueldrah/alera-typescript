@@ -1,7 +1,8 @@
 import { useMemo, useState } from 'react';
 import { motion } from 'framer-motion';
-import { Pill, Plus, X, Inbox, AlertCircle } from 'lucide-react';
+import { Pill, Plus, Search, X, Inbox, AlertCircle, Trash2 } from 'lucide-react';
 import { useSearchParams } from 'react-router-dom';
+import { toast } from '@/components/ui/use-toast';
 import { useAuth } from '@/contexts/useAuth';
 import { useAppData } from '@/contexts/useAppData';
 import { useNotifications } from '@/contexts/useNotifications';
@@ -9,36 +10,57 @@ import { api } from '@/lib/apiService';
 import { handleApiError } from '@/lib/errorHandler';
 import { normalizeUserRole } from '@/lib/roleUtils';
 import { getDoctorPatients } from '@/lib/patientDirectory';
+import { getReferralDestinationProviders } from '@/lib/referralUtils';
 import { getVisiblePrescriptions } from '@/lib/recordVisibility';
 import type { DrugInteraction } from '@/data/mockData';
 
 const PrescriptionsPage = () => {
-  const { user } = useAuth();
+  const { user, getUsers } = useAuth();
   const { appointments, prescriptions, checkDrugInteractions, refreshAppData } = useAppData();
   const { addNotification } = useNotifications();
   const [searchParams] = useSearchParams();
   const [showForm, setShowForm] = useState(false);
-  const [formData, setFormData] = useState({ patientId: '', medName: '', dosage: '', frequency: '', duration: '' });
+  const [formData, setFormData] = useState({ patientId: '', pharmacyId: '', medName: '', dosage: '', frequency: '', duration: '' });
   const [interactionWarnings, setInteractionWarnings] = useState<DrugInteraction[]>([]);
   const [overrideReason, setOverrideReason] = useState('');
   const [duplicateWarning, setDuplicateWarning] = useState<string | null>(null);
   const [createError, setCreateError] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
   const [dispenseId, setDispenseId] = useState<string | null>(null);
+  const [deleteId, setDeleteId] = useState<string | null>(null);
+  const [searchQuery, setSearchQuery] = useState('');
+  const [statusFilter, setStatusFilter] = useState<'all' | 'active' | 'dispensed' | 'expired'>('all');
   const focusId = searchParams.get('focus');
   const effectiveRole = normalizeUserRole(user?.role) ?? user?.role;
 
-  const patientOptions = useMemo(() => getDoctorPatients([], appointments, user?.id), [appointments, user?.id]);
+  const users = getUsers();
+  const patientOptions = useMemo(() => getDoctorPatients(users, appointments, user?.id), [appointments, user?.id, users]);
+  const pharmacyOptions = useMemo(() => getReferralDestinationProviders(users, 'pharmacy'), [users]);
 
   const visiblePrescriptions = useMemo(
     () => getVisiblePrescriptions(prescriptions, user),
     [prescriptions, user],
   );
+  const filteredPrescriptions = useMemo(() => {
+    const needle = searchQuery.trim().toLowerCase();
+    return visiblePrescriptions.filter((prescription) => {
+      const matchesStatus = statusFilter === 'all' || prescription.status === statusFilter;
+      const matchesSearch = !needle
+        || prescription.patientName.toLowerCase().includes(needle)
+        || prescription.doctorName.toLowerCase().includes(needle)
+        || prescription.medications.some((medication) => medication.name.toLowerCase().includes(needle));
+      return matchesStatus && matchesSearch;
+    });
+  }, [searchQuery, statusFilter, visiblePrescriptions]);
 
   const submitPrescription = async (meta: { notifyDuplicate: boolean; notifyInteractions: number }) => {
-    if (!formData.patientId || !formData.medName || !user?.id) return;
+    if (!formData.patientId || !formData.pharmacyId || !formData.medName || !user?.id) {
+      setCreateError('Patient, pharmacy, and medication are required.');
+      return;
+    }
     const patient = patientOptions.find((option) => option.id === formData.patientId);
-    if (!patient) return;
+    const pharmacy = pharmacyOptions.find((option) => option.id === formData.pharmacyId);
+    if (!patient || !pharmacy) return;
 
     setSubmitting(true);
     setCreateError(null);
@@ -49,6 +71,7 @@ const PrescriptionsPage = () => {
 
       const created = (await api.prescriptions.createPrescription({
         patient_id: Number(formData.patientId),
+        pharmacy_id: Number(formData.pharmacyId),
         medication_name: formData.medName.trim(),
         dosage: formData.dosage.trim() || '1',
         dosage_unit: 'tablet',
@@ -69,7 +92,7 @@ const PrescriptionsPage = () => {
           type: 'prescription',
           priority: 'high',
           audience: 'personal',
-          targetRoles: ['pharmacy'],
+          targetEmails: pharmacy.email ? [pharmacy.email] : undefined,
         });
       }
       if (meta.notifyInteractions > 0) {
@@ -79,7 +102,7 @@ const PrescriptionsPage = () => {
           type: 'prescription',
           priority: 'high',
           audience: 'personal',
-          targetRoles: ['pharmacy'],
+          targetEmails: pharmacy.email ? [pharmacy.email] : undefined,
         });
       }
       addNotification({
@@ -90,8 +113,7 @@ const PrescriptionsPage = () => {
         audience: 'personal',
         actionUrl: `/dashboard/prescriptions?focus=${newId}`,
         actionLabel: 'Open prescription',
-        targetEmails: [user?.email, patient.email].filter((value): value is string => Boolean(value)),
-        targetRoles: ['pharmacy'],
+        targetEmails: [user?.email, patient.email, pharmacy.email].filter((value): value is string => Boolean(value)),
         excludeEmails: user?.email ? [user.email] : [],
         actionUrlByRole: {
           doctor: `/dashboard/prescriptions?focus=${newId}`,
@@ -100,10 +122,14 @@ const PrescriptionsPage = () => {
       });
 
       setShowForm(false);
-      setFormData({ patientId: '', medName: '', dosage: '', frequency: '', duration: '' });
+      setFormData({ patientId: '', pharmacyId: '', medName: '', dosage: '', frequency: '', duration: '' });
       setInteractionWarnings([]);
       setOverrideReason('');
       setDuplicateWarning(null);
+      toast({
+        title: 'Prescription issued',
+        description: `${formData.medName} was prescribed successfully.`,
+      });
     } catch (err) {
       setCreateError(handleApiError(err));
     } finally {
@@ -162,11 +188,31 @@ const PrescriptionsPage = () => {
             patient: `/dashboard/prescriptions?focus=${target.id}`,
           },
         });
+        toast({
+          title: 'Prescription dispensed',
+          description: `${target.medications[0]?.name ?? 'Medication'} was marked as dispensed.`,
+        });
       }
     } catch (err) {
       setCreateError(handleApiError(err));
     } finally {
       setDispenseId(null);
+    }
+  };
+
+  const handleDelete = async (id: string) => {
+    setDeleteId(id);
+    try {
+      await api.prescriptions.deletePrescription(id);
+      await refreshAppData();
+      toast({
+        title: 'Prescription deleted',
+        description: 'The prescription was removed.',
+      });
+    } catch (err) {
+      setCreateError(handleApiError(err));
+    } finally {
+      setDeleteId(null);
     }
   };
 
@@ -198,6 +244,28 @@ const PrescriptionsPage = () => {
         <div className="text-sm text-destructive bg-destructive/10 border border-destructive/20 rounded-xl p-4">{createError}</div>
       )}
 
+      <div className="grid gap-3 md:grid-cols-[minmax(0,1fr)_220px]">
+        <div className="relative">
+          <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+          <input
+            value={searchQuery}
+            onChange={(event) => setSearchQuery(event.target.value)}
+            placeholder="Search prescriptions by patient, doctor, or medication..."
+            className="h-11 w-full rounded-xl border border-input bg-background pl-10 pr-4 text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-primary/30"
+          />
+        </div>
+        <select
+          value={statusFilter}
+          onChange={(event) => setStatusFilter(event.target.value as 'all' | 'active' | 'dispensed' | 'expired')}
+          className="h-11 rounded-xl border border-input bg-background px-4 text-foreground focus:outline-none focus:ring-2 focus:ring-primary/30"
+        >
+          <option value="all">All statuses</option>
+          <option value="active">Active</option>
+          <option value="dispensed">Dispensed</option>
+          <option value="expired">Expired</option>
+        </select>
+      </div>
+
       {showForm && (
         <motion.div initial={{ opacity: 0, y: -10 }} animate={{ opacity: 1, y: 0 }} className="bg-card rounded-2xl border border-border p-6">
           <div className="flex items-center justify-between mb-4">
@@ -227,7 +295,7 @@ const PrescriptionsPage = () => {
                       type="button"
                       onClick={() => {
                         setDuplicateWarning(null);
-                        setFormData({ patientId: '', medName: '', dosage: '', frequency: '', duration: '' });
+                        setFormData({ patientId: '', pharmacyId: '', medName: '', dosage: '', frequency: '', duration: '' });
                       }}
                       className="px-4 py-2 rounded-lg bg-yellow-100 text-yellow-700 text-sm font-medium hover:bg-yellow-200"
                     >
@@ -282,7 +350,7 @@ const PrescriptionsPage = () => {
                       onClick={() => {
                         setInteractionWarnings([]);
                         setOverrideReason('');
-                        setFormData({ patientId: '', medName: '', dosage: '', frequency: '', duration: '' });
+                        setFormData({ patientId: '', pharmacyId: '', medName: '', dosage: '', frequency: '', duration: '' });
                       }}
                       className="px-4 py-2 rounded-lg bg-red-100 text-red-700 text-sm font-medium hover:bg-red-200"
                     >
@@ -322,6 +390,19 @@ const PrescriptionsPage = () => {
                 ))}
               </select>
             </div>
+            <div>
+              <label className="text-sm font-medium text-card-foreground mb-1.5 block">Pharmacy</label>
+              <select
+                value={formData.pharmacyId}
+                onChange={(e) => setFormData({ ...formData, pharmacyId: e.target.value })}
+                className="w-full h-11 px-4 rounded-xl border border-input bg-background text-foreground focus:outline-none focus:ring-2 focus:ring-primary/30"
+              >
+                <option value="">Select pharmacy</option>
+                {pharmacyOptions.map((pharmacy) => (
+                  <option key={pharmacy.id} value={pharmacy.id}>{pharmacy.name}</option>
+                ))}
+              </select>
+            </div>
             {[{ l: 'Medication', k: 'medName', p: 'Medication name' }, { l: 'Dosage', k: 'dosage', p: 'e.g. 500mg' }, { l: 'Frequency', k: 'frequency', p: 'e.g. 3x daily' }, { l: 'Duration', k: 'duration', p: 'e.g. 7 days' }].map((field) => (
               <div key={field.k}>
                 <label className="text-sm font-medium text-card-foreground mb-1.5 block">{field.l}</label>
@@ -345,14 +426,14 @@ const PrescriptionsPage = () => {
         </motion.div>
       )}
 
-      {visiblePrescriptions.length === 0 ? (
+      {filteredPrescriptions.length === 0 ? (
         <div className="flex flex-col items-center justify-center py-12 text-muted-foreground">
           <Inbox className="w-10 h-10 mb-3" />
-          <p className="text-sm">No prescriptions yet</p>
+          <p className="text-sm">{visiblePrescriptions.length === 0 ? 'No prescriptions yet' : 'No prescriptions match your current search or filter'}</p>
         </div>
       ) : (
         <div className="space-y-3">
-          {visiblePrescriptions.map((prescription, index) => (
+          {filteredPrescriptions.map((prescription, index) => (
             <motion.div
               key={prescription.id}
               initial={{ opacity: 0, y: 10 }}
@@ -369,6 +450,7 @@ const PrescriptionsPage = () => {
                     <div className="text-base font-medium text-card-foreground">
                       {effectiveRole === 'patient' || effectiveRole === 'pharmacy' ? prescription.doctorName : prescription.patientName}
                     </div>
+                    {prescription.pharmacyName ? <div className="text-xs text-muted-foreground">Pharmacy: {prescription.pharmacyName}</div> : null}
                     <div className="text-sm text-muted-foreground">
                       {prescription.medications.map((medication) => `${medication.name} ${medication.dosage} — ${medication.frequency} for ${medication.duration}`).join('; ')}
                     </div>
@@ -381,6 +463,16 @@ const PrescriptionsPage = () => {
                   >
                     {prescription.status}
                   </span>
+                  {effectiveRole === 'doctor' && (
+                    <button
+                      type="button"
+                      disabled={deleteId === prescription.id}
+                      onClick={() => void handleDelete(prescription.id)}
+                      className="px-3 py-1 rounded-lg bg-destructive/10 text-destructive text-xs font-medium hover:bg-destructive/20 disabled:opacity-50"
+                    >
+                      <span className="inline-flex items-center gap-1"><Trash2 className="w-3 h-3" /> {deleteId === prescription.id ? '…' : 'Delete'}</span>
+                    </button>
+                  )}
                   {effectiveRole === 'pharmacy' && prescription.status === 'active' && (
                     <button
                       type="button"

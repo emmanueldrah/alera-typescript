@@ -47,6 +47,7 @@ class MessageCreate(MessageBase):
 
 class MessageUpdate(BaseModel):
     content: Optional[str] = None
+    is_read: Optional[str] = None
     is_archived: Optional[str] = None
 
 

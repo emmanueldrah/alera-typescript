@@ -4,10 +4,14 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 import Signup from '@/pages/Signup';
 
 const signupMock = vi.fn();
+const loginWithGoogleMock = vi.fn();
+const registerWithGoogleMock = vi.fn();
 
 vi.mock('@/contexts/useAuth', () => ({
   useAuth: () => ({
     signup: signupMock,
+    loginWithGoogle: loginWithGoogleMock,
+    registerWithGoogle: registerWithGoogleMock,
   }),
 }));
 
@@ -21,11 +25,13 @@ describe('Signup page', () => {
   beforeEach(() => {
     signupMock.mockReset();
     signupMock.mockResolvedValue(undefined);
+    loginWithGoogleMock.mockReset();
+    registerWithGoogleMock.mockReset();
   });
 
   it('shows professional license fields and excludes admin signup', () => {
     render(
-      <MemoryRouter>
+      <MemoryRouter future={{ v7_startTransition: true, v7_relativeSplatPath: true }}>
         <Signup />
       </MemoryRouter>
     );

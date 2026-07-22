@@ -2,9 +2,13 @@
 Notification utilities for respecting user preferences.
 """
 
+import logging
+
 from app.models.user import User
 from app.services.email_service import EmailService
 from app.services.sms_service import SMSService
+
+logger = logging.getLogger(__name__)
 
 
 class NotificationManager:
@@ -36,8 +40,11 @@ class NotificationManager:
                 )
                 results["email_sent"] = True
             except Exception as e:
-                # Log error but don't fail the entire operation
-                print(f"Failed to send appointment reminder email to {user.email}: {e}")
+                logger.warning(
+                    "Failed to send appointment reminder email to %s",
+                    user.email,
+                    exc_info=e,
+                )
 
         # Send SMS if user has SMS notifications enabled and has phone
         if user.notification_sms is True and user.phone is not None:
@@ -49,8 +56,11 @@ class NotificationManager:
                 )
                 results["sms_sent"] = True
             except Exception as e:
-                # Log error but don't fail the entire operation
-                print(f"Failed to send appointment reminder SMS to {user.phone}: {e}")
+                logger.warning(
+                    "Failed to send appointment reminder SMS to %s",
+                    user.phone,
+                    exc_info=e,
+                )
 
         return results
 
@@ -78,7 +88,11 @@ class NotificationManager:
                 )
                 results["email_sent"] = True
             except Exception as e:
-                print(f"Failed to send prescription notification email to {user.email}: {e}")
+                logger.warning(
+                    "Failed to send prescription notification email to %s",
+                    user.email,
+                    exc_info=e,
+                )
 
         # Send SMS if user has SMS notifications enabled and has phone
         if user.notification_sms is True and user.phone is not None:
@@ -90,7 +104,11 @@ class NotificationManager:
                 )
                 results["sms_sent"] = True
             except Exception as e:
-                print(f"Failed to send prescription notification SMS to {user.phone}: {e}")
+                logger.warning(
+                    "Failed to send prescription notification SMS to %s",
+                    user.phone,
+                    exc_info=e,
+                )
 
         return results
 
@@ -118,7 +136,11 @@ class NotificationManager:
                 )
                 results["email_sent"] = True
             except Exception as e:
-                print(f"Failed to send allergy alert email to {user.email}: {e}")
+                logger.warning(
+                    "Failed to send allergy alert email to %s",
+                    user.email,
+                    exc_info=e,
+                )
 
         # Send SMS if user has SMS notifications enabled and has phone
         if user.notification_sms is True and user.phone is not None:
@@ -129,7 +151,11 @@ class NotificationManager:
                 )
                 results["sms_sent"] = True
             except Exception as e:
-                print(f"Failed to send allergy alert SMS to {user.phone}: {e}")
+                logger.warning(
+                    "Failed to send allergy alert SMS to %s",
+                    user.phone,
+                    exc_info=e,
+                )
 
         return results
 
@@ -155,7 +181,11 @@ class NotificationManager:
             )
             return True
         except Exception as e:
-            print(f"Failed to send verification email to {user.email}: {e}")
+            logger.warning(
+                "Failed to send verification email to %s",
+                user.email,
+                exc_info=e,
+            )
             return False
 
     @staticmethod
@@ -180,5 +210,9 @@ class NotificationManager:
             )
             return True
         except Exception as e:
-            print(f"Failed to send password reset email to {user.email}: {e}")
+            logger.warning(
+                "Failed to send password reset email to %s",
+                user.email,
+                exc_info=e,
+            )
             return False

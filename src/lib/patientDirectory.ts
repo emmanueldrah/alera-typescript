@@ -93,7 +93,7 @@ export const getAccessiblePatients = (
     patient.labTestCount += 1;
   };
 
-  if (user?.role === 'doctor') {
+  if (user?.role === 'doctor' || user?.role === 'physiotherapist') {
     appointments.filter((appointment) => appointment.doctorId === user.id).forEach(includeAppointment);
     prescriptions.filter((prescription) => prescription.doctorId === user.id).forEach(includePrescription);
     labTests.filter((labTest) => labTest.doctorId === user.id).forEach(includeLabTest);

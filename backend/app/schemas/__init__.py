@@ -1,7 +1,8 @@
-from pydantic import BaseModel, EmailStr, Field, model_validator, ConfigDict
+from pydantic import BaseModel, EmailStr, Field, model_validator, field_validator, ConfigDict
 from datetime import datetime
 from typing import Optional, List, Literal
 from enum import Enum
+from app.utils.auth import validate_password_strength
 
 
 class UserRole(str, Enum):
@@ -13,6 +14,7 @@ class UserRole(str, Enum):
     LABORATORY = "laboratory"
     IMAGING = "imaging"
     AMBULANCE = "ambulance"
+    PHYSIOTHERAPIST = "physiotherapist"
 
 
 # User Schemas
@@ -35,6 +37,14 @@ class UserCreate(UserBase):
     license_number: Optional[str] = None
     license_state: Optional[str] = None
     specialty: Optional[str] = None
+    postdicom_api_url: Optional[str] = None
+    postdicom_api_key: Optional[str] = None
+
+    @field_validator("password")
+    @classmethod
+    def validate_password(cls, v: str) -> str:
+        """Validate password complexity using the centralized utility."""
+        return validate_password_strength(v)
 
     @model_validator(mode="after")
     def validate_role_specific_fields(self):
@@ -58,9 +68,19 @@ class UserUpdate(BaseModel):
     bio: Optional[str] = None
     profile_image_url: Optional[str] = None
     specialization: Optional[str] = None
+    postdicom_api_url: Optional[str] = None
+    postdicom_api_key: Optional[str] = None
     notification_email: Optional[bool] = None
     notification_sms: Optional[bool] = None
     privacy_public_profile: Optional[bool] = None
+
+
+class LinkedAccountSummary(BaseModel):
+    id: int
+    role: str
+    masked_email: Optional[str] = None
+    created_at: Optional[str] = None
+    link_type: str = "same_person"
 
 
 class UserResponse(BaseModel):
@@ -92,8 +112,23 @@ class UserResponse(BaseModel):
     license_number: Optional[str] = None
     specialty: Optional[str] = None
     license_state: Optional[str] = None
+    organization_id: Optional[int] = None
+    postdicom_api_url: Optional[str] = None
+    has_linked_account: bool = False
+    linked_accounts: list[LinkedAccountSummary] = Field(default_factory=list)
     
     model_config = ConfigDict(from_attributes=True)
+
+
+class AccountLinkCreateRequest(BaseModel):
+    current_password: str
+    linked_email: EmailStr
+    linked_password: str
+
+
+class AccountLinkListResponse(BaseModel):
+    has_linked_account: bool
+    linked_accounts: list[LinkedAccountSummary]
 
 
 # Authentication Schemas
@@ -103,10 +138,8 @@ class LoginRequest(BaseModel):
 
 
 class TokenResponse(BaseModel):
-    access_token: str
-    refresh_token: Optional[str]
-    token_type: str = "bearer"
-    expires_in: int
+    message: str
+    csrf_token: str
 
 
 class AuthResponse(TokenResponse):
@@ -118,6 +151,8 @@ class PasswordChangeRequest(BaseModel):
     new_password: str = Field(..., min_length=8)
     confirm_password: str
 
+    _validate_new_password = field_validator("new_password")(validate_password_strength)
+
 
 class PasswordResetRequest(BaseModel):
     email: EmailStr
@@ -127,6 +162,8 @@ class PasswordResetConfirmRequest(BaseModel):
     token: str
     new_password: str = Field(..., min_length=8)
     confirm_password: str
+
+    _validate_new_password = field_validator("new_password")(validate_password_strength)
 
 
 class EmailVerificationConfirmRequest(BaseModel):
@@ -190,6 +227,7 @@ class PrescriptionCreate(PrescriptionBase):
     """Patient receiving the prescription; prescriber is always the authenticated provider."""
 
     patient_id: int
+    pharmacy_id: int
 
 
 class PrescriptionUpdate(BaseModel):
@@ -207,12 +245,14 @@ class PrescriptionResponse(PrescriptionBase):
     id: int
     patient_id: int
     provider_id: int
+    pharmacy_id: Optional[int] = None
     status: str
     prescribed_date: datetime
     created_at: datetime
     refills_remaining: int = 0
     patient_name: Optional[str] = None
     provider_name: Optional[str] = None
+    pharmacy_name: Optional[str] = None
 
     model_config = ConfigDict(from_attributes=True)
 
@@ -283,6 +323,7 @@ class LabTestBase(BaseModel):
 
 class LabTestCreate(LabTestBase):
     patient_id: int
+    destination_provider_id: int
 
 
 class LabTestUpdate(BaseModel):
@@ -300,6 +341,8 @@ class LabTestResponse(LabTestBase):
     id: int
     patient_id: int
     ordered_by: int
+    destination_provider_id: Optional[int] = None
+    destination_provider_name: Optional[str] = None
     processed_by: Optional[int] = None
     status: str
     result_value: Optional[str] = None
@@ -326,6 +369,7 @@ class ImagingScanBase(BaseModel):
 
 class ImagingScanCreate(ImagingScanBase):
     patient_id: int
+    destination_provider_id: int
 
 
 class ImagingScanUpdate(BaseModel):
@@ -338,16 +382,31 @@ class ImagingScanUpdate(BaseModel):
     completed_at: Optional[datetime] = None
 
 
+class ImagingFileAsset(BaseModel):
+    file_id: str
+    filename: str
+    mime_type: str
+    file_size: int
+    upload_time: Optional[str] = None
+    download_url: Optional[str] = None
+
+
 class ImagingScanResponse(ImagingScanBase):
     id: int
     patient_id: int
     ordered_by: int
+    destination_provider_id: Optional[int] = None
+    destination_provider_name: Optional[str] = None
     processed_by: Optional[int] = None
     status: str
     findings: Optional[str] = None
     impression: Optional[str] = None
     report_url: Optional[str] = None
     image_url: Optional[str] = None
+    report_file: Optional[ImagingFileAsset] = None
+    image_files: List[ImagingFileAsset] = Field(default_factory=list)
+    postdicom_study_id: Optional[str] = None
+    postdicom_study_url: Optional[str] = None
     scheduled_at: Optional[datetime] = None
     ordered_at: datetime
     completed_at: Optional[datetime] = None
@@ -363,13 +422,34 @@ REFERRAL_TYPE_VALUES = ("hospital", "laboratory", "imaging", "pharmacy")
 ReferralTypeLiteral = Literal["hospital", "laboratory", "imaging", "pharmacy"]
 
 
+def _normalize_referral_value(value: str) -> str:
+    return "".join(ch for ch in value.lower() if ch.isalnum())
+
+
+REFERRAL_SERVICE_ALIASES: dict[ReferralTypeLiteral, set[str]] = {
+    "hospital": {"hospital", "specialist", "specialistcare"},
+    "laboratory": {"laboratory", "lab"},
+    "imaging": {"imaging", "radiology"},
+    "pharmacy": {"pharmacy"},
+}
+
+
 class ReferralCreate(BaseModel):
     patient_id: int
     referral_type: ReferralTypeLiteral = "hospital"
+    destination_provider_id: int
     to_department: str
     to_department_id: Optional[str] = None
     reason: str
     notes: Optional[str] = None
+
+    @model_validator(mode="after")
+    def validate_destination_is_different_from_service_rendered(self):
+        normalized_destination = _normalize_referral_value(self.to_department)
+        service_aliases = REFERRAL_SERVICE_ALIASES[self.referral_type]
+        if normalized_destination in service_aliases:
+            raise ValueError("The destination must be different from service rendered")
+        return self
 
 
 class ReferralUpdate(BaseModel):
@@ -382,6 +462,9 @@ class ReferralResponse(BaseModel):
     patient_id: int
     from_doctor_id: int
     referral_type: str
+    destination_provider_id: Optional[int] = None
+    destination_provider_name: Optional[str] = None
+    destination_provider_role: Optional[str] = None
     to_department: str
     to_department_id: Optional[str] = None
     reason: str
@@ -412,16 +495,76 @@ class AmbulanceRequestCreate(AmbulanceRequestBase):
 class AmbulanceRequestUpdate(BaseModel):
     status: Optional[str] = None
     priority: Optional[str] = None
+    assigned_ambulance_id: Optional[int] = None
     dispatched_at: Optional[datetime] = None
+    accepted_at: Optional[datetime] = None
+    arrived_at: Optional[datetime] = None
     completed_at: Optional[datetime] = None
+    location_name: Optional[str] = None
+    address: Optional[str] = None
+    latitude: Optional[float] = None
+    longitude: Optional[float] = None
+    description: Optional[str] = None
 
 
 class AmbulanceRequestResponse(AmbulanceRequestBase):
     id: int
     patient_id: Optional[int] = None
+    assigned_ambulance_id: Optional[int] = None
     status: str
     requested_at: datetime
+    accepted_at: Optional[datetime] = None
     dispatched_at: Optional[datetime] = None
+    arrived_at: Optional[datetime] = None
     completed_at: Optional[datetime] = None
 
+    model_config = ConfigDict(from_attributes=True)
+
+
+class LiveLocationUpdate(BaseModel):
+    latitude: float
+    longitude: float
+    sharing_enabled: bool = True
+
+
+class LiveLocationResponse(BaseModel):
+    user_id: int
+    role: str
+    latitude: Optional[float] = None
+    longitude: Optional[float] = None
+    last_updated: Optional[datetime] = None
+    sharing_enabled: bool = False
+
+
+class EmergencyTrackingResponse(BaseModel):
+    request_id: int
+    status: str
+    priority: str
+    patient_id: Optional[int] = None
+    assigned_ambulance_id: Optional[int] = None
+    patient_location: Optional[LiveLocationResponse] = None
+    ambulance_location: Optional[LiveLocationResponse] = None
+
+
+# System Settings Schemas
+class SystemSettingsBase(BaseModel):
+    is_maintenance_mode: bool
+    maintenance_message: str
+    notification_banner_active: bool
+    notification_banner_message: str
+    notification_banner_type: str
+
+
+class SystemSettingsUpdate(BaseModel):
+    is_maintenance_mode: Optional[bool] = None
+    maintenance_message: Optional[str] = None
+    notification_banner_active: Optional[bool] = None
+    notification_banner_message: Optional[str] = None
+    notification_banner_type: Optional[str] = None
+
+
+class SystemSettingsResponse(SystemSettingsBase):
+    id: int
+    updated_at: datetime
+    
     model_config = ConfigDict(from_attributes=True)

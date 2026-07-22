@@ -1,12 +1,12 @@
+import logging
 from fastapi import APIRouter, Depends, HTTPException, status, Response, Request
 from sqlalchemy.orm import Session
 from datetime import datetime, timedelta
-from pydantic import BaseModel
+from typing import Optional
+from pydantic import BaseModel, model_validator
 from database import get_db
 from app.schemas import (
     LoginRequest,
-    TokenResponse,
-    AuthResponse,
     UserCreate,
     UserResponse,
     PasswordChangeRequest,
@@ -27,12 +27,22 @@ from app.utils.auth import (
 from app.utils.cookies import set_auth_cookies, clear_auth_cookies, set_csrf_token, clear_csrf_token
 from app.utils.csrf import generate_csrf_token
 from app.utils.dependencies import get_current_user
+from app.utils.rate_limit import enforce_rate_limit
 from app.services.email_service import EmailService
 from app.utils.time import utcnow
 from config import settings
+from app.services.audit_service import client_ip_from_request, summarize_device_info, log_action
 import sys
 
+try:
+    from google.oauth2 import id_token as google_id_token
+    from google.auth.transport import requests as google_requests
+    HAS_GOOGLE_AUTH = True
+except ImportError:
+    HAS_GOOGLE_AUTH = False
+
 router = APIRouter(prefix="/api/auth", tags=["auth"])
+logger = logging.getLogger(__name__)
 
 
 class RefreshTokenRequest(BaseModel):
@@ -43,18 +53,42 @@ class DeleteAccountRequest(BaseModel):
     password: str
 
 
+class OAuthRequest(BaseModel):
+    credential: str
+
+
+class OAuthRegisterRequest(BaseModel):
+    credential: str
+    role: UserRole
+    phone: Optional[str] = None
+    address: Optional[str] = None
+    city: Optional[str] = None
+    state: Optional[str] = None
+    zip_code: Optional[str] = None
+    license_number: Optional[str] = None
+    license_state: Optional[str] = None
+    specialty: Optional[str] = None
+
+    @model_validator(mode="after")
+    def validate_role_specific_fields(self):
+        if self.role != UserRole.PATIENT:
+            if not self.license_number or not self.license_state:
+                raise ValueError("license_number and license_state are required for professional accounts")
+        return self
+
+
 def _frontend_link(path: str, token: str) -> str:
     return f"{settings.FRONTEND_URL.rstrip('/')}{path}?token={token}"
 
 
-def _issue_email_verification_token(user: User, db: Session) -> str:
+def _issue_email_verification_token(user: User) -> str:
     token = generate_secure_token()
     user.email_verification_token_hash = hash_token(token)
     user.email_verification_expires_at = utcnow() + timedelta(hours=24)
     return token
 
 
-def _issue_password_reset_token(user: User, db: Session) -> str:
+def _issue_password_reset_token(user: User) -> str:
     token = generate_secure_token()
     user.password_reset_token_hash = hash_token(token)
     user.password_reset_expires_at = utcnow() + timedelta(hours=24)
@@ -76,9 +110,23 @@ def _serialize_user(user: User) -> UserResponse:
     return UserResponse.model_validate(user)
 
 
+def _commit_or_rollback(db: Session) -> None:
+    try:
+        db.commit()
+    except Exception:
+        db.rollback()
+        raise
+
+
 @router.post("/register", status_code=status.HTTP_201_CREATED)
-async def register(user_data: UserCreate, response: Response, db: Session = Depends(get_db)):
+async def register(
+    user_data: UserCreate,
+    db: Session = Depends(get_db),
+    response: Response = None,
+    request: Request = None,
+):
     """Register a new user"""
+    enforce_rate_limit(request=request, scope="auth:register", limit=5, window_seconds=10 * 60)
 
     # Check if user already exists
     existing_user = db.query(User).filter(
@@ -130,34 +178,30 @@ async def register(user_data: UserCreate, response: Response, db: Session = Depe
     db.flush()
 
     if not db_user.email_verified:
-        verification_token = _issue_email_verification_token(db_user, db)
-        try:
-            from app.utils.notification_utils import NotificationManager
-            await NotificationManager.send_verification_email(
-                user=db_user,
-                verification_link=_frontend_link("/verify-email", verification_token),
-            )
-        except HTTPException:
+        verification_token = _issue_email_verification_token(db_user)
+        from app.utils.notification_utils import NotificationManager
+        email_sent = await NotificationManager.send_verification_email(
+            user=db_user,
+            verification_link=_frontend_link("/verify-email", verification_token),
+        )
+        if not email_sent:
             db.rollback()
-            raise
+            raise HTTPException(
+                status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+                detail="Unable to deliver verification email right now. Please try again shortly.",
+            )
 
-    try:
-        db.commit()
-        db.refresh(db_user)
-    except Exception:
-        db.rollback()
-        raise
+    _commit_or_rollback(db)
+    db.refresh(db_user)
 
     access_token, refresh_token = _build_token_pair(db_user)
 
-    # Set secure cookies
-    set_auth_cookies(response, access_token, refresh_token)
-
-    # Set CSRF token
     csrf_token = generate_csrf_token()
-    set_csrf_token(response, csrf_token)
-
-    from app.routes.audit import log_action
+    if response is not None:
+        # Set secure cookies
+        set_auth_cookies(response, access_token, refresh_token)
+        # Set CSRF token
+        set_csrf_token(response, csrf_token)
 
     await log_action(
         db=db,
@@ -177,19 +221,53 @@ async def register(user_data: UserCreate, response: Response, db: Session = Depe
 
 
 @router.post("/login")
-async def login(credentials: LoginRequest, response: Response, db: Session = Depends(get_db)):
+async def login(
+    credentials: LoginRequest,
+    db: Session = Depends(get_db),
+    response: Response = None,
+    request: Request = None,
+):
     """Authenticate user and return access token"""
+    enforce_rate_limit(request=request, scope="auth:login", limit=10, window_seconds=60)
 
     # Find user by email
     user = db.query(User).filter(User.email == credentials.email).first()
 
     if not user or not verify_password(credentials.password, user.hashed_password):
+        await log_action(
+            db=db,
+            user_id=user.id if user else None,
+            role=user.role.value if user and hasattr(user.role, "value") else (str(user.role) if user else None),
+            action="auth.login.failed",
+            resource="auth/session",
+            resource_type="auth",
+            status="failed",
+            ip_address=client_ip_from_request(request),
+            user_agent=request.headers.get("user-agent") if request else None,
+            device_info=summarize_device_info(request.headers.get("user-agent")) if request else None,
+            metadata={"email": credentials.email, "reason": "invalid_credentials"},
+            error_message="Invalid email or password",
+        )
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="Invalid email or password"
         )
 
     if not user.is_active:
+        await log_action(
+            db=db,
+            user_id=user.id,
+            role=user.role.value if hasattr(user.role, "value") else str(user.role),
+            action="auth.login.failed",
+            resource="auth/session",
+            resource_type="auth",
+            status="failed",
+            ip_address=client_ip_from_request(request),
+            user_agent=request.headers.get("user-agent") if request else None,
+            device_info=summarize_device_info(request.headers.get("user-agent")) if request else None,
+            metadata={"email": credentials.email, "reason": "inactive_account"},
+            error_message="User account is disabled",
+        )
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
             detail="User account is disabled"
@@ -201,23 +279,27 @@ async def login(credentials: LoginRequest, response: Response, db: Session = Dep
     # Create tokens
     access_token, refresh_token = _build_token_pair(user)
 
-    # Set secure cookies
-    set_auth_cookies(response, access_token, refresh_token)
-
-    # Set CSRF token
     csrf_token = generate_csrf_token()
-    set_csrf_token(response, csrf_token)
-
-    from app.routes.audit import log_action
+    if response is not None:
+        # Set secure cookies
+        set_auth_cookies(response, access_token, refresh_token)
+        # Set CSRF token
+        set_csrf_token(response, csrf_token)
 
     await log_action(
         db=db,
         user_id=user.id,
+        role=user.role.value if hasattr(user.role, "value") else str(user.role),
         action="auth.login",
-        resource_type="user",
+        resource="auth/session",
+        resource_type="auth",
         resource_id=user.id,
         description="Successful login",
         status="success",
+        ip_address=client_ip_from_request(request),
+        user_agent=request.headers.get("user-agent") if request else None,
+        device_info=summarize_device_info(request.headers.get("user-agent")) if request else None,
+        metadata={"event": "login_success"},
     )
     
     return {
@@ -227,50 +309,240 @@ async def login(credentials: LoginRequest, response: Response, db: Session = Dep
     }
 
 
+@router.post("/oauth/google")
+async def oauth_google(
+    payload: OAuthRequest,
+    db: Session = Depends(get_db),
+    response: Response = None,
+    request: Request = None,
+):
+    """Authenticate or register user via Google OAuth"""
+    enforce_rate_limit(request=request, scope="auth:oauth", limit=10, window_seconds=60)
+    
+    if not HAS_GOOGLE_AUTH:
+        raise HTTPException(status_code=500, detail="google-auth library is not installed")
+        
+    if not settings.GOOGLE_CLIENT_ID:
+        raise HTTPException(status_code=500, detail="Google Auth is not configured on the server")
+        
+    try:
+        # Verify the token
+        idinfo = google_id_token.verify_oauth2_token(
+            payload.credential, google_requests.Request(), settings.GOOGLE_CLIENT_ID
+        )
+        
+        email = idinfo.get("email")
+        if not email:
+            raise HTTPException(status_code=400, detail="No email provided by Google")
+            
+        # Find user
+        user = db.query(User).filter(User.email == email).first()
+        
+        if not user:
+            # User doesn't exist, return needs_registration
+            first_name = idinfo.get("given_name", "")
+            last_name = idinfo.get("family_name", "")
+            
+            return {
+                "message": "User not found. Please complete registration.",
+                "needs_registration": True,
+                "google_data": {
+                    "email": email,
+                    "first_name": first_name,
+                    "last_name": last_name,
+                    "credential": payload.credential,
+                }
+            }
+            
+        elif not user.is_active:
+            raise HTTPException(status_code=403, detail="User account is disabled")
+            
+        user.last_login = utcnow()
+        _commit_or_rollback(db)
+        
+        # Create tokens
+        access_token, refresh_token = _build_token_pair(user)
+        csrf_token = generate_csrf_token()
+        
+        if response is not None:
+            set_auth_cookies(response, access_token, refresh_token)
+            set_csrf_token(response, csrf_token)
+            
+        await log_action(
+            db=db,
+            user_id=user.id,
+            role=user.role.value if hasattr(user.role, "value") else str(user.role),
+            action="auth.oauth_login",
+            resource="auth/session",
+            resource_type="auth",
+            resource_id=user.id,
+            description="Successful Google OAuth login",
+            status="success",
+            ip_address=client_ip_from_request(request),
+            user_agent=request.headers.get("user-agent") if request else None,
+            device_info=summarize_device_info(request.headers.get("user-agent")) if request else None,
+            metadata={"provider": "google"},
+        )
+        
+        return {
+            "message": "Login successful",
+            "user": _serialize_user(user),
+            "csrf_token": csrf_token,
+        }
+        
+    except ValueError:
+        # Invalid token
+        raise HTTPException(status_code=401, detail="Invalid Google token")
+
+
+@router.post("/oauth/google/register")
+async def oauth_google_register(
+    payload: OAuthRegisterRequest,
+    db: Session = Depends(get_db),
+    response: Response = None,
+    request: Request = None,
+):
+    """Register a new user via Google OAuth with additional details"""
+    enforce_rate_limit(request=request, scope="auth:oauth_register", limit=5, window_seconds=60)
+    
+    if not HAS_GOOGLE_AUTH:
+        raise HTTPException(status_code=500, detail="google-auth library is not installed")
+        
+    if not settings.GOOGLE_CLIENT_ID:
+        raise HTTPException(status_code=500, detail="Google Auth is not configured on the server")
+        
+    try:
+        # Verify the token
+        idinfo = google_id_token.verify_oauth2_token(
+            payload.credential, google_requests.Request(), settings.GOOGLE_CLIENT_ID
+        )
+        
+        email = idinfo.get("email")
+        if not email:
+            raise HTTPException(status_code=400, detail="No email provided by Google")
+            
+        # Check if user already exists
+        user = db.query(User).filter(User.email == email).first()
+        
+        if user:
+            raise HTTPException(status_code=400, detail="User already exists with this email")
+            
+        # Register new user
+        first_name = idinfo.get("given_name", "")
+        last_name = idinfo.get("family_name", "")
+        
+        # Generate a random strong password for the user since they are using OAuth
+        hashed_password = hash_password(generate_secure_token() + "Aa1!")
+        
+        is_verified = payload.role == UserRole.PATIENT
+        
+        user = User(
+            email=email,
+            username=email.split("@")[0], # basic default username
+            hashed_password=hashed_password,
+            first_name=first_name,
+            last_name=last_name,
+            phone=payload.phone,
+            address=payload.address,
+            city=payload.city,
+            state=payload.state,
+            zip_code=payload.zip_code,
+            license_number=payload.license_number,
+            license_state=payload.license_state,
+            specialty=payload.specialty,
+            role=payload.role,
+            is_verified=is_verified,
+            email_verified=True,
+            email_verified_at=utcnow(),
+            is_active=True,
+            session_version=0,
+            notification_email=True,
+            notification_sms=False,
+            privacy_public_profile=False,
+        )
+        db.add(user)
+        _commit_or_rollback(db)
+        db.refresh(user)
+        
+        await log_action(
+            db=db,
+            user_id=user.id,
+            action="auth.oauth_register",
+            resource_type="user",
+            resource_id=user.id,
+            description=f"Registered account via Google with role {user.role.value}",
+            status="created",
+        )
+        
+        user.last_login = utcnow()
+        _commit_or_rollback(db)
+        
+        # Create tokens
+        access_token, refresh_token = _build_token_pair(user)
+        csrf_token = generate_csrf_token()
+        
+        if response is not None:
+            set_auth_cookies(response, access_token, refresh_token)
+            set_csrf_token(response, csrf_token)
+            
+        return {
+            "message": "Registration and login successful",
+            "user": _serialize_user(user),
+            "csrf_token": csrf_token,
+        }
+        
+    except ValueError:
+        # Invalid token
+        raise HTTPException(status_code=401, detail="Invalid Google token")
+
+
 @router.post("/request-password-reset")
 async def request_password_reset(
-    request: PasswordResetRequest,
+    payload: PasswordResetRequest,
     db: Session = Depends(get_db),
+    request: Request = None,
 ):
     """Send a password reset email if the account exists."""
+    enforce_rate_limit(request=request, scope="auth:password-reset-request", limit=5, window_seconds=60 * 60)
 
-    user = db.query(User).filter(User.email == request.email).first()
+    user = db.query(User).filter(User.email == payload.email).first()
     if not user or not user.is_active:
         return {"message": "If an account with that email exists, a reset link has been sent."}
 
-    reset_token = _issue_password_reset_token(user, db)
-    try:
-        from app.utils.notification_utils import NotificationManager
-        await NotificationManager.send_password_reset_email(
-            user=user,
-            reset_link=_frontend_link("/reset-password", reset_token),
+    reset_token = _issue_password_reset_token(user)
+    from app.utils.notification_utils import NotificationManager
+    email_sent = await NotificationManager.send_password_reset_email(
+        user=user,
+        reset_link=_frontend_link("/reset-password", reset_token),
+    )
+    if not email_sent:
+        db.rollback()
+        logger.warning(
+            "Password reset email could not be delivered for user_id=%s",
+            user.id,
         )
-    except HTTPException:
-        db.rollback()
-        raise
+        return {"message": "If an account with that email exists, a reset link has been sent."}
 
-    try:
-        db.commit()
-    except Exception:
-        db.rollback()
-        raise
+    _commit_or_rollback(db)
     return {"message": "If an account with that email exists, a reset link has been sent."}
 
 
 @router.post("/reset-password")
 async def reset_password(
-    request: PasswordResetConfirmRequest,
+    payload: PasswordResetConfirmRequest,
     db: Session = Depends(get_db),
+    request: Request = None,
 ):
     """Reset a password using a recovery token."""
+    enforce_rate_limit(request=request, scope="auth:password-reset-confirm", limit=10, window_seconds=60 * 60)
 
-    if request.new_password != request.confirm_password:
+    if payload.new_password != payload.confirm_password:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail="New passwords do not match",
         )
 
-    token_hash = hash_token(request.token)
+    token_hash = hash_token(payload.token)
     user = db.query(User).filter(User.password_reset_token_hash == token_hash).first()
     if (
         not user
@@ -283,17 +555,11 @@ async def reset_password(
             detail="Invalid or expired password reset token",
         )
 
-    user.hashed_password = hash_password(request.new_password)
+    user.hashed_password = hash_password(payload.new_password)
     user.password_reset_token_hash = None
     user.password_reset_expires_at = None
     user.session_version = int(user.session_version or 0) + 1
-    try:
-        db.commit()
-    except Exception:
-        db.rollback()
-        raise
-
-    from app.routes.audit import log_action
+    _commit_or_rollback(db)
 
     await log_action(
         db=db,
@@ -310,12 +576,14 @@ async def reset_password(
 
 @router.post("/verify-email")
 async def verify_email(
-    request: EmailVerificationConfirmRequest,
+    payload: EmailVerificationConfirmRequest,
     db: Session = Depends(get_db),
+    request: Request = None,
 ):
     """Verify a user's email address using a link token."""
+    enforce_rate_limit(request=request, scope="auth:verify-email", limit=10, window_seconds=60 * 60)
 
-    token_hash = hash_token(request.token)
+    token_hash = hash_token(payload.token)
     user = db.query(User).filter(User.email_verification_token_hash == token_hash).first()
     if (
         not user
@@ -332,9 +600,7 @@ async def verify_email(
     user.email_verified_at = utcnow()
     user.email_verification_token_hash = None
     user.email_verification_expires_at = None
-    db.commit()
-
-    from app.routes.audit import log_action
+    _commit_or_rollback(db)
 
     await log_action(
         db=db,
@@ -353,26 +619,28 @@ async def verify_email(
 async def resend_email_verification(
     current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db),
+    request: Request = None,
 ):
     """Resend the current user's verification email."""
+    enforce_rate_limit(request=request, scope="auth:resend-verification", limit=5, window_seconds=60 * 60)
 
     if current_user.role in (UserRole.ADMIN, UserRole.SUPER_ADMIN) or current_user.email_verified:
         return {"message": "Email is already verified"}
 
-    verification_token = _issue_email_verification_token(current_user, db)
-    try:
-        from app.utils.notification_utils import NotificationManager
-        await NotificationManager.send_verification_email(
-            user=current_user,
-            verification_link=_frontend_link("/verify-email", verification_token),
-        )
-    except HTTPException:
+    verification_token = _issue_email_verification_token(current_user)
+    from app.utils.notification_utils import NotificationManager
+    email_sent = await NotificationManager.send_verification_email(
+        user=current_user,
+        verification_link=_frontend_link("/verify-email", verification_token),
+    )
+    if not email_sent:
         db.rollback()
-        raise
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail="Unable to deliver verification email right now. Please try again shortly.",
+        )
 
-    db.commit()
-
-    from app.routes.audit import log_action
+    _commit_or_rollback(db)
 
     await log_action(
         db=db,
@@ -390,6 +658,7 @@ async def resend_email_verification(
 @router.post("/refresh")
 async def refresh(request: Request, response: Response, db: Session = Depends(get_db)):
     """Refresh access token using refresh token from cookie"""
+    enforce_rate_limit(request=request, scope="auth:refresh", limit=30, window_seconds=60)
 
     from app.utils.auth import decode_token
 
@@ -482,10 +751,8 @@ async def change_password(
     # Hash and update password
     current_user.hashed_password = hash_password(request.new_password)
     current_user.session_version = int(current_user.session_version or 0) + 1
-    db.commit()
+    _commit_or_rollback(db)
     db.refresh(current_user)
-
-    from app.routes.audit import log_action
 
     await log_action(
         db=db,
@@ -502,28 +769,36 @@ async def change_password(
 
 @router.post("/logout")
 async def logout(
-    response: Response,
+    request: Request = None,
     current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db),
+    response: Response = None,
 ):
     """Logout user by revoking the current session version and clearing cookies."""
 
     current_user.session_version = int(current_user.session_version or 0) + 1
-    db.commit()
+    _commit_or_rollback(db)
 
-    clear_auth_cookies(response)
-    clear_csrf_token(response)
-
-    from app.routes.audit import log_action
+    if response is not None:
+        clear_auth_cookies(response)
+        clear_csrf_token(response)
 
     await log_action(
         db=db,
         user_id=current_user.id,
+        role=current_user.role.value if hasattr(current_user.role, "value") else str(current_user.role),
         action="auth.logout",
-        resource_type="user",
+        resource="auth/session",
+        resource_type="auth",
         resource_id=current_user.id,
         description="Session revoked on logout",
         status="success",
+        ip_address=client_ip_from_request(request),
+        user_agent=request.headers.get("user-agent") if request else None,
+        device_info=summarize_device_info(request.headers.get("user-agent")) if request else None,
+        metadata={
+            "session_duration_seconds": max(0, int((utcnow() - current_user.last_login).total_seconds())) if current_user.last_login else None,
+        },
     )
 
     return {"message": "Logged out successfully"}
@@ -545,9 +820,7 @@ async def delete_account(
 
     current_user.is_active = False
     current_user.session_version = int(current_user.session_version or 0) + 1
-    db.commit()
-
-    from app.routes.audit import log_action
+    _commit_or_rollback(db)
 
     await log_action(
         db=db,
