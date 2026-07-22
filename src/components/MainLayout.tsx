@@ -1,5 +1,5 @@
 import { Link, Outlet, useLocation } from 'react-router-dom';
-import { HeartPulse, Menu, X } from 'lucide-react';
+import { HeartPulse, Menu, X, ShieldAlert, Wifi } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { useState } from 'react';
 
@@ -30,19 +30,25 @@ const MainLayout = () => {
   const location = useLocation();
 
   return (
-    <div className="min-h-screen overflow-x-hidden bg-[radial-gradient(circle_at_top,_rgba(14,165,233,0.12)_0,_rgba(255,255,255,0)_28%),linear-gradient(180deg,_#f7fbff_0%,_#ffffff_30%,_#f2f8f6_100%)] text-slate-900 flex flex-col">
-      <header className="sticky top-0 z-50 border-b border-slate-200/80 bg-white/80 backdrop-blur-xl">
+    <div className="min-h-screen bg-[#050709] text-slate-100 flex flex-col font-sans">
+
+      {/* Premium Cinematic Header */}
+      <header className="sticky top-0 z-50 border-b border-white/5 bg-slate-950/70 backdrop-blur-xl">
         <div className="mx-auto flex max-w-7xl items-center justify-between px-4 py-4 sm:px-6 lg:px-8">
-          <Link to="/" className="flex items-center gap-3">
-            <div className="flex h-11 w-11 items-center justify-center rounded-2xl bg-[linear-gradient(135deg,_#0ea5e9,_#14b8a6)] text-white shadow-lg shadow-sky-500/20">
-              <HeartPulse className="h-5 w-5" />
+          <Link to="/" className="flex items-center gap-3 group">
+            <div className="flex h-11 w-11 items-center justify-center rounded-2xl border border-teal-500/20 bg-teal-950/30 text-teal-400 shadow-lg shadow-teal-500/10 group-hover:border-teal-500/40 transition-all">
+              <HeartPulse className="h-5 w-5 animate-pulse" />
             </div>
             <div>
-              <p className="text-lg font-semibold tracking-tight text-slate-950">Alera</p>
-              <p className="text-xs text-slate-500">Care OS 2026</p>
+              <p className="text-lg font-bold tracking-tight text-white group-hover:text-teal-300 transition-colors">Alera</p>
+              <div className="flex items-center gap-1.5">
+                <span className="h-1.5 w-1.5 rounded-full bg-teal-400 animate-pulse" />
+                <p className="text-[10px] font-mono text-slate-400 tracking-wider">Care OS 2026</p>
+              </div>
             </div>
           </Link>
 
+          {/* Navigation Links */}
           <nav className="hidden items-center gap-8 lg:flex">
             {navLinks.map((item) => {
               const isActive = location.pathname === item.href;
@@ -50,37 +56,49 @@ const MainLayout = () => {
                 <Link
                   key={item.label}
                   to={item.href}
-                  className={`relative text-sm font-medium transition-colors hover:text-slate-950 ${isActive ? 'text-slate-950' : 'text-slate-600'}`}
+                  className={`relative text-xs font-semibold uppercase tracking-wider transition-colors hover:text-teal-400 ${
+                    isActive ? 'text-teal-400' : 'text-slate-400'
+                  }`}
                 >
                   {item.label}
-                  {isActive && <span className="absolute -bottom-[17px] left-0 right-0 h-0.5 rounded-full bg-sky-500" />}
+                  {isActive && (
+                    <span className="absolute -bottom-[22px] left-0 right-0 h-[2px] bg-gradient-to-r from-teal-500 to-cyan-500" />
+                  )}
                 </Link>
               );
             })}
           </nav>
 
           <div className="flex items-center gap-2 sm:gap-3">
-            <Button asChild variant="ghost" className="hidden rounded-full px-4 text-slate-600 hover:bg-slate-100 hover:text-slate-950 sm:inline-flex">
+            <Button asChild variant="ghost" className="hidden rounded-xl px-4 text-xs uppercase tracking-wider font-semibold text-slate-400 hover:bg-white/5 hover:text-white sm:inline-flex">
               <Link to="/login">Sign in</Link>
             </Button>
-            <Button asChild className="rounded-full bg-slate-950 px-5 text-white shadow-lg shadow-slate-950/10 transition-transform hover:-translate-y-0.5 hover:bg-slate-900">
-              <Link to="/signup">Get Started</Link>
+            <Button asChild className="rounded-xl border border-teal-500/20 bg-teal-950/40 px-5 text-xs uppercase tracking-wider font-bold text-teal-400 shadow-lg shadow-teal-500/5 hover:bg-teal-500 hover:text-slate-950 transition-all">
+              <Link to="/signup">Launch Console</Link>
             </Button>
-            <button onClick={() => setMobileOpen(!mobileOpen)} className="ml-1 rounded-xl p-2 text-slate-600 hover:bg-slate-100 lg:hidden" aria-label="Toggle menu">
+            <button onClick={() => setMobileOpen(!mobileOpen)} className="ml-1 rounded-xl p-2 text-slate-400 hover:bg-white/5 lg:hidden" aria-label="Toggle menu">
               {mobileOpen ? <X className="h-5 w-5" /> : <Menu className="h-5 w-5" />}
             </button>
           </div>
         </div>
 
+        {/* Mobile Navigation Dropdown */}
         {mobileOpen && (
-          <div className="border-t border-slate-100 bg-white/95 px-4 pb-4 pt-3 lg:hidden">
+          <div className="border-t border-white/5 bg-slate-950/95 px-4 pb-6 pt-3 lg:hidden">
             <nav className="flex flex-col gap-2">
               {navLinks.map((item) => (
-                <Link key={item.label} to={item.href} onClick={() => setMobileOpen(false)} className={`rounded-xl px-4 py-3 text-sm font-medium hover:bg-slate-100 ${location.pathname === item.href ? 'bg-sky-50 text-sky-700' : 'text-slate-700'}`}>
+                <Link
+                  key={item.label}
+                  to={item.href}
+                  onClick={() => setMobileOpen(false)}
+                  className={`rounded-xl px-4 py-3 text-xs uppercase tracking-wider font-semibold hover:bg-white/5 ${
+                    location.pathname === item.href ? 'bg-teal-500/10 text-teal-400' : 'text-slate-400'
+                  }`}
+                >
                   {item.label}
                 </Link>
               ))}
-              <Link to="/login" onClick={() => setMobileOpen(false)} className="mt-1 rounded-xl px-4 py-3 text-sm font-medium text-slate-700 hover:bg-slate-100">Sign in</Link>
+              <Link to="/login" onClick={() => setMobileOpen(false)} className="mt-1 rounded-xl px-4 py-3 text-xs uppercase tracking-wider font-semibold text-slate-400 hover:bg-white/5">Sign in</Link>
             </nav>
           </div>
         )}
@@ -90,24 +108,27 @@ const MainLayout = () => {
         <Outlet />
       </main>
 
-      <footer className="border-t border-slate-200/80 bg-white/80 backdrop-blur-xl">
+      {/* Modern Sci-Fi Footer */}
+      <footer className="border-t border-white/5 bg-slate-950/90 py-12">
         <div className="mx-auto max-w-7xl px-4 py-10 sm:px-6 lg:px-8">
           <div className="grid gap-8 sm:grid-cols-2 lg:grid-cols-4">
             <div>
               <div className="flex items-center gap-3">
-                <div className="flex h-9 w-9 items-center justify-center rounded-2xl bg-[linear-gradient(135deg,_#0ea5e9,_#14b8a6)] text-white">
+                <div className="flex h-9 w-9 items-center justify-center rounded-xl border border-teal-500/20 bg-teal-950/30 text-teal-400">
                   <HeartPulse className="h-4 w-4" />
                 </div>
                 <div>
-                  <p className="font-semibold text-slate-950">Alera</p>
-                  <p className="text-xs text-slate-500">Connected healthcare</p>
+                  <p className="font-bold text-white tracking-wide">Alera</p>
+                  <p className="text-[10px] text-slate-500 font-mono">Unified Health OS</p>
                 </div>
               </div>
-              <p className="mt-4 text-sm leading-6 text-slate-500">Connecting patients, doctors, labs, pharmacies, imaging centers, hospitals, and ambulance services on one secure platform.</p>
+              <p className="mt-4 text-xs leading-relaxed text-slate-400">
+                A highly secure, zero-trust healthcare cockpit coordinating patients, providers, pharmacies, and labs with absolute clarity.
+              </p>
             </div>
 
             <div>
-              <p className="mb-3 text-sm font-semibold text-slate-950">Platform</p>
+              <p className="mb-3 text-xs font-semibold uppercase tracking-wider text-teal-400">Platform</p>
               <div className="space-y-2">
                 {[
                   { label: 'Platform Overview', href: '/features' },
@@ -115,38 +136,38 @@ const MainLayout = () => {
                   { label: 'Who We Serve', href: '/who-we-serve' },
                   { label: 'Trust & Security', href: '/trust' },
                 ].map((l) => (
-                  <Link key={l.label} to={l.href} className="block text-sm text-slate-500 transition-colors hover:text-slate-950">{l.label}</Link>
+                  <Link key={l.label} to={l.href} className="block text-xs text-slate-400 transition-colors hover:text-white">{l.label}</Link>
                 ))}
               </div>
             </div>
 
             <div>
-              <p className="mb-3 text-sm font-semibold text-slate-950">For Providers</p>
+              <p className="mb-3 text-xs font-semibold uppercase tracking-wider text-teal-400">Node Classes</p>
               <div className="space-y-2">
                 {providerLinks.map((item) => (
-                  <Link key={item.label} to={item.href} className="block text-sm text-slate-500 transition-colors hover:text-slate-950">{item.label}</Link>
+                  <Link key={item.label} to={item.href} className="block text-xs text-slate-400 transition-colors hover:text-white">{item.label}</Link>
                 ))}
               </div>
             </div>
 
             <div>
-              <p className="mb-3 text-sm font-semibold text-slate-950">Account</p>
+              <p className="mb-3 text-xs font-semibold uppercase tracking-wider text-teal-400">Identity & Legal</p>
               <div className="mb-6 space-y-2">
-                <Link to="/login" className="block text-sm text-slate-500 transition-colors hover:text-slate-950">Sign In</Link>
-                <Link to="/signup" className="block text-sm text-slate-500 transition-colors hover:text-slate-950">Create Account</Link>
+                <Link to="/privacy-policy" className="block text-xs text-slate-400 transition-colors hover:text-white">Privacy Policy</Link>
+                <Link to="/terms" className="block text-xs text-slate-400 transition-colors hover:text-white">Terms of Service</Link>
               </div>
-              <p className="mb-3 text-sm font-semibold text-slate-950">Legal</p>
-              <div className="space-y-2">
-                <Link to="/privacy-policy" className="block text-sm text-slate-500 transition-colors hover:text-slate-950">Privacy Policy</Link>
-                <Link to="/terms" className="block text-sm text-slate-500 transition-colors hover:text-slate-950">Terms of Service</Link>
-                <Link to="/cookies" className="block text-sm text-slate-500 transition-colors hover:text-slate-950">Cookie Policy</Link>
+
+              {/* Online Network Signal */}
+              <div className="inline-flex items-center gap-2 rounded-lg border border-teal-500/15 bg-teal-950/30 px-3 py-1.5 text-[10px] font-mono text-teal-400">
+                <Wifi className="h-3.5 w-3.5 animate-pulse" />
+                <span>SECURE CANNODE OPERATIONAL</span>
               </div>
             </div>
           </div>
 
-          <div className="mt-8 flex flex-col gap-2 border-t border-slate-200 pt-6 sm:flex-row sm:items-center sm:justify-between">
-            <p className="text-sm text-slate-500">© 2026 Alera. A unified healthcare ecosystem for modern care delivery.</p>
-            <p className="text-xs text-slate-400">HIPAA-ready · End-to-end encrypted · Verified provider accounts</p>
+          <div className="mt-12 flex flex-col gap-4 border-t border-white/5 pt-8 sm:flex-row sm:items-center sm:justify-between text-xs text-slate-500">
+            <p>© 2026 Alera Healthcare Systems Inc. Cinematic Clinical Precision.</p>
+            <p className="font-mono text-[10px] uppercase tracking-wider">HIPAA SECURE · NIST COMPLIANT · AES-256 E2EE</p>
           </div>
         </div>
       </footer>
