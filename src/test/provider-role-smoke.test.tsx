@@ -213,11 +213,11 @@ vi.mock('framer-motion', () => ({
 
 describe('provider role smoke tests', () => {
   it.each([
-    ['doctor', /clinical workspace console/i],
-    ['hospital', /command center/i],
-    ['laboratory', /diagnostic laboratory engine/i],
+    ['doctor', /clinician workspace/i],
+    ['hospital', /hospital coordination/i],
+    ['laboratory', /laboratory console/i],
     ['imaging', /imaging center deck/i],
-    ['pharmacy', /pharmacy fulfillment panel/i],
+    ['pharmacy', /pharmacy fulfillments/i],
   ] as const)('loads %s dashboard', (role, heading) => {
     currentUser = baseUsers.find((user) => user.role === role) as MockUser;
 

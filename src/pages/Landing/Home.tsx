@@ -31,13 +31,13 @@ import { Button } from '@/components/ui/button';
 import CareNetworkGraph from '@/components/CareNetworkGraph';
 
 const fadeUp: Variants = {
-  hidden: { opacity: 0, y: 24 },
-  visible: { opacity: 1, y: 0, transition: { duration: 0.65, ease: [0.22, 1, 0.36, 1] } },
+  hidden: { opacity: 0, y: 16 },
+  visible: { opacity: 1, y: 0, transition: { duration: 0.5, ease: [0.16, 1, 0.3, 1] } },
 };
 
 const stagger: Variants = {
   hidden: { opacity: 0 },
-  visible: { opacity: 1, transition: { staggerChildren: 0.1, delayChildren: 0.1 } },
+  visible: { opacity: 1, transition: { staggerChildren: 0.08, delayChildren: 0.05 } },
 };
 
 type RoleCard = {
@@ -45,131 +45,51 @@ type RoleCard = {
   icon: LucideIcon;
   summary: string;
   detail: string;
-  tone: string;
-  accent: string;
-  glow: string;
 };
 
 const roleCards: RoleCard[] = [
   {
-    name: 'Patient',
+    name: 'Patient Portal',
     icon: UserRound,
-    summary: 'Book care, review results, and follow every next step in one calm journey.',
-    detail: 'Appointments • Prescriptions • Follow-up',
-    tone: 'bg-cyan-950/40 border-cyan-500/20 text-cyan-400',
-    accent: 'text-cyan-400',
-    glow: 'from-cyan-500/10 to-transparent',
+    summary: 'A clear, direct route to consult scheduling, secure prescriptions, and laboratory records.',
+    detail: 'Appointments • Prescriptions • Follow-up Plans',
   },
   {
-    name: 'Clinician',
+    name: 'Clinician Workspace',
     icon: Stethoscope,
-    summary: 'Open visits with the right context, from history to diagnostics to discharge planning.',
-    detail: 'Notes • Diagnostics • Referrals',
-    tone: 'bg-violet-950/40 border-violet-500/20 text-violet-400',
-    accent: 'text-violet-400',
-    glow: 'from-violet-500/10 to-transparent',
+    summary: 'Visits loaded with active medical history, diagnostics orders, and direct specialist referrals.',
+    detail: 'EMR Records • Diagnostics • Referrals',
   },
   {
-    name: 'Hospital',
+    name: 'Hospital Management',
     icon: Building2,
-    summary: 'Coordinate admissions, referrals, and care transitions without handoff friction.',
-    detail: 'Handoffs • Operations • Discharge',
-    tone: 'bg-indigo-950/40 border-indigo-500/20 text-indigo-400',
-    accent: 'text-indigo-400',
-    glow: 'from-indigo-500/10 to-transparent',
+    summary: 'Streamline emergency admissions, specialist transfers, and multi-department rosters.',
+    detail: 'Intake • Department Routing • Rosters',
   },
   {
-    name: 'Pharmacy',
+    name: 'Pharmacy Console',
     icon: Pill,
-    summary: 'Verify prescriptions and keep fulfillment moving without repeated clarification.',
-    detail: 'Verification • Fulfillment • Safety',
-    tone: 'bg-emerald-950/40 border-emerald-500/20 text-emerald-400',
-    accent: 'text-emerald-400',
-    glow: 'from-emerald-500/10 to-transparent',
+    summary: 'Electronic prescription matching, safety margin auditing, and secure inventory sync.',
+    detail: 'Fulfillment • Prescription Verification • Safety',
   },
   {
-    name: 'Laboratory',
+    name: 'Laboratory Hub',
     icon: FlaskConical,
-    summary: 'Accept orders, upload results, and keep providers and patients aligned in real time.',
-    detail: 'Orders • Results • Alerts',
-    tone: 'bg-pink-950/40 border-pink-500/20 text-pink-400',
-    accent: 'text-pink-400',
-    glow: 'from-pink-500/10 to-transparent',
+    summary: 'Biological orders, sample accession tracking, and automated results distribution.',
+    detail: 'Assays • Accession • Verified Reports',
   },
   {
-    name: 'Imaging',
+    name: 'Imaging Deck',
     icon: ScanLine,
-    summary: 'Move scan requests and images through the care pathway without bottlenecks.',
-    detail: 'Scheduling • Imaging • Reporting',
-    tone: 'bg-amber-950/40 border-amber-500/20 text-amber-400',
-    accent: 'text-amber-400',
-    glow: 'from-amber-500/10 to-transparent',
+    summary: 'High-resolution study scheduling, DICOM integration, and direct radiologist sign-off.',
+    detail: 'DICOM • Scheduling • Findings',
   },
   {
-    name: 'Ambulance',
+    name: 'Emergency Dispatch',
     icon: Ambulance,
-    summary: 'Route urgent transfers with patient context and receiving-facility coordination.',
-    detail: 'Dispatch • Routing • Live status',
-    tone: 'bg-rose-950/40 border-rose-500/20 text-rose-400',
-    accent: 'text-rose-400',
-    glow: 'from-rose-500/10 to-transparent',
+    summary: 'Triage priority queues, ambulance fleet routing, and direct trauma unit signaling.',
+    detail: 'GPS Telemetry • Triage • Route Planning',
   },
-];
-
-const trustPills = ['End-to-end encryption', 'Role-based permissions', 'Audit-ready timelines', 'HIPAA-ready workflows'];
-
-const deploymentSignal = 'Alera Care OS 2026';
-
-const homepageMetrics = [
-  {
-    title: 'One operating system',
-    value: '7 care roles',
-    copy: 'Patients, clinicians, hospitals, pharmacies, labs, imaging, and ambulance services share one workspace.',
-  },
-  {
-    title: 'Visible trust',
-    value: '24/7 clarity',
-    copy: 'Every action is attributed and status changes are instantly synchronized for complete system transparency.',
-  },
-  {
-    title: 'Faster next steps',
-    value: '4-step flow',
-    copy: 'Book, consult, fulfill, and follow up through a single, visible path without manual intervention.',
-  },
-];
-
-const journeySteps = [
-  {
-    title: '1. Book with confidence',
-    icon: CalendarClock,
-    copy: 'Patients choose the right service, time, and route to care without navigating fragmented channels.',
-    glow: 'shadow-[0_0_15px_rgba(34,211,238,0.15)] border-cyan-500/30'
-  },
-  {
-    title: '2. Consult with context',
-    icon: Stethoscope,
-    copy: 'Doctors see prior notes, medications, diagnostics, and secure communication in one clinical view.',
-    glow: 'shadow-[0_0_15px_rgba(139,92,246,0.15)] border-violet-500/30'
-  },
-  {
-    title: '3. Fulfill without delay',
-    icon: ClipboardCheck,
-    copy: 'Pharmacies, labs, and imaging teams receive verified next steps and update the care loop instantly.',
-    glow: 'shadow-[0_0_15px_rgba(16,185,129,0.15)] border-emerald-500/30'
-  },
-  {
-    title: '4. Follow through calmly',
-    icon: HeartPulse,
-    copy: 'Patients and caregivers receive reminders, results, and instructions that reduce uncertainty after every visit.',
-    glow: 'shadow-[0_0_15px_rgba(239,68,68,0.15)] border-rose-500/30'
-  },
-];
-
-const featureHighlights = [
-  { title: 'Care orchestration', copy: 'Track the full journey from booking to follow-up with one shared operating view.', icon: Activity },
-  { title: 'Secure conversation', copy: 'Clinical messages, updates, and follow-ups stay permissioned and easy to review.', icon: Mic },
-  { title: 'Rapid triage support', copy: 'Emergency response teams can route urgent requests with context instead of hunting for details.', icon: Clock3 },
-  { title: 'Human-centered onboarding', copy: 'New patients and providers can start quickly with Google sign-in and role-aware setup.', icon: Sparkles },
 ];
 
 const setMetaContent = (selector: string, value: string, attribute: 'name' | 'property') => {
@@ -188,251 +108,154 @@ const setMetaContent = (selector: string, value: string, attribute: 'name' | 'pr
 
 const Home = () => {
   useEffect(() => {
-    document.title = 'Alera | Connected healthcare for patients, clinicians, and care networks';
+    document.title = 'Alera | Integrated Healthcare Infrastructure Operating System';
 
     setMetaContent(
       'meta[name="description"]',
-      'Alera is a connected healthcare ecosystem for patients, doctors, hospitals, pharmacies, labs, imaging centers, and ambulance teams.',
+      'Alera is a highly secure, integrated medical operating system connecting patients, clinicians, laboratories, pharmacies, and emergency services.',
       'name',
     );
     setMetaContent(
       'meta[name="keywords"]',
-      'healthcare management software, telemedicine platform, patient appointment booking, hospital workflow software, pharmacy prescription management, lab results platform, imaging center software, ambulance dispatch coordination',
-      'name',
-    );
-    setMetaContent(
-      'meta[property="og:title"]',
-      'Alera | Connected Healthcare Management Software',
-      'property',
-    );
-    setMetaContent(
-      'meta[property="og:description"]',
-      'Coordinate appointments, consultations, prescriptions, diagnostics, referrals, and emergency response through one secure healthcare platform.',
-      'property',
-    );
-    setMetaContent(
-      'meta[name="twitter:title"]',
-      'Alera | Connected Healthcare Management Software',
-      'name',
-    );
-    setMetaContent(
-      'meta[name="twitter:description"]',
-      'Healthcare management software for patients, doctors, hospitals, pharmacies, labs, imaging centers, and ambulance teams.',
+      'healthcare software, clinical operating system, EMR infrastructure, telemedicine, electronic prescriptions, lab results, ambulance dispatch',
       'name',
     );
   }, []);
 
   return (
-    <div className="overflow-x-hidden bg-[#050709] pb-24 text-slate-100 md:pb-0">
+    <div className="bg-slate-50 text-slate-900 pb-24 md:pb-0 font-sans">
 
-      {/* Cinematic Hero Section */}
-      <section className="relative isolate overflow-hidden bg-[radial-gradient(circle_at_top_left,rgba(20,184,166,0.15),transparent_35%),radial-gradient(circle_at_bottom_right,rgba(139,92,246,0.1),transparent_40%)] border-b border-white/5 py-12 md:py-20">
-        <div className="absolute inset-0 bg-[linear-gradient(rgba(255,255,255,0.015)_1px,transparent_1px),linear-gradient(90deg,rgba(255,255,255,0.015)_1px,transparent_1px)] bg-[size:64px_64px] opacity-40" />
+      {/* Handcrafted Structural Hero Section */}
+      <section className="relative overflow-hidden border-b border-slate-200 bg-white py-16 md:py-32">
+        <div className="mx-auto max-w-7xl px-6 lg:px-8">
+          <div className="grid gap-12 lg:grid-cols-[1.1fr_0.9fr] lg:items-center">
 
-        {/* Soft volumetric top glow */}
-        <div className="absolute top-0 left-1/2 -translate-x-1/2 w-[800px] h-[350px] bg-teal-500/10 blur-[120px] rounded-full pointer-events-none" />
+            {/* Hero Copy */}
+            <motion.div initial="hidden" animate="visible" variants={stagger} className="max-w-2xl">
+              <motion.div variants={fadeUp} className="inline-flex items-center gap-2 rounded border border-slate-200 bg-slate-50 px-3 py-1 text-xs font-mono font-semibold uppercase tracking-wider text-slate-600">
+                <ShieldCheck className="h-4 w-4 text-emerald-600" />
+                Infrastructure Edition 2026
+              </motion.div>
 
-        <div className="mx-auto grid max-w-7xl gap-12 px-6 lg:grid-cols-[1.1fr_0.9fr] lg:items-center lg:px-8">
+              <motion.h1 variants={fadeUp} className="mt-6 text-4xl font-extrabold tracking-tight text-slate-900 sm:text-5xl lg:text-6xl leading-[1.1]">
+                Alera: A unified operating layer for integrated health networks.
+              </motion.h1>
 
-          {/* Hero Content */}
-          <motion.div initial="hidden" animate="visible" variants={stagger} className="relative z-10 max-w-3xl">
-            <motion.div variants={fadeUp} className="inline-flex items-center gap-2 rounded-full border border-teal-500/20 bg-teal-950/40 px-4 py-2 text-sm text-teal-400 backdrop-blur-md">
-              <ShieldCheck className="h-4 w-4 text-teal-400 animate-pulse" />
-              {deploymentSignal} · Cinematic Medical Precision
+              <motion.p variants={fadeUp} className="mt-6 text-lg leading-relaxed text-slate-600">
+                Alera connects patients, clinicians, pharmacies, laboratories, and ambulance dispatches onto a single secure infrastructure. No fragmentation. Zero redundant data entries. Built with architectural rigor.
+              </motion.p>
+
+              {/* CTAs */}
+              <motion.div variants={fadeUp} className="mt-8 flex flex-col gap-3 sm:flex-row sm:items-center">
+                <Button asChild size="lg" className="rounded-md bg-slate-900 px-6 py-3 text-sm font-semibold text-white hover:bg-slate-800 transition-colors">
+                  <Link to="/signup">
+                    Initialize Alera Core
+                  </Link>
+                </Button>
+                <Button asChild size="lg" variant="outline" className="rounded-md border border-slate-200 bg-white px-6 py-3 text-sm font-semibold text-slate-700 hover:bg-slate-50">
+                  <a href="#architecture">
+                    Study System Architecture
+                  </a>
+                </Button>
+              </motion.div>
+
+              {/* Compliance Badges */}
+              <motion.div variants={fadeUp} className="mt-10 flex flex-wrap gap-4 border-t border-slate-200 pt-8 text-[11px] font-mono text-slate-500 uppercase tracking-widest">
+                <span>HIPAA Compliant</span>
+                <span className="text-slate-300">•</span>
+                <span>ISO 27001 Secure</span>
+                <span className="text-slate-300">•</span>
+                <span>AES-256 Encrypted</span>
+              </motion.div>
             </motion.div>
 
-            <motion.h1 variants={fadeUp} className="mt-6 text-4xl font-bold leading-[1.05] tracking-tight sm:text-6xl lg:text-7xl">
-              Alera <span className="text-transparent bg-clip-text bg-gradient-to-r from-teal-400 via-cyan-400 to-violet-400">Care OS</span>
-              <span className="mt-3 block text-2xl font-light text-slate-400 sm:text-3xl lg:text-4xl">One unified heartbeat for modern health networks.</span>
-            </motion.h1>
+            {/* Structured Schema/Graph Visual */}
+            <motion.div
+              initial={{ opacity: 0, y: 16 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ duration: 0.6, delay: 0.2 }}
+            >
+              <CareNetworkGraph className="border border-slate-200" />
 
-            <motion.p variants={fadeUp} className="mt-6 max-w-2xl text-base leading-relaxed text-slate-400 sm:text-lg">
-              A premium, high-fidelity command center connecting patients, clinicians, laboratories, pharmacies, imaging, and ambulance teams on an absolute zero-trust framework.
-            </motion.p>
-
-            {/* CTA Group */}
-            <motion.div variants={fadeUp} className="mt-8 flex flex-col gap-3 sm:flex-row sm:items-center">
-              <Button asChild size="lg" className="h-13 rounded-xl bg-teal-500 px-8 text-base font-semibold text-slate-950 hover:bg-teal-400 shadow-[0_0_20px_rgba(20,184,166,0.3)] transition-all">
-                <Link to="/signup">
-                  Launch Command Center
-                  <ChevronRight className="ml-2 h-5 w-5" />
-                </Link>
-              </Button>
-              <Button asChild size="lg" variant="outline" className="h-13 rounded-xl border-white/10 bg-white/5 px-8 text-base text-slate-300 hover:bg-white/10 hover:text-white backdrop-blur">
-                <a href="#experience">
-                  Explore Ecosystem
-                  <ArrowRight className="ml-2 h-5 w-5" />
-                </a>
-              </Button>
-            </motion.div>
-
-            {/* Trust Badges */}
-            <motion.div variants={fadeUp} className="mt-8 flex flex-wrap gap-2">
-              {trustPills.map((pill) => (
-                <span key={pill} className="rounded-lg border border-white/5 bg-white/5 px-3 py-1.5 text-[10px] font-semibold uppercase tracking-[0.16em] text-slate-400">
-                  {pill}
-                </span>
-              ))}
-            </motion.div>
-
-            {/* Operational Metrics */}
-            <motion.div variants={fadeUp} className="mt-10 grid gap-4 sm:grid-cols-3">
-              {homepageMetrics.map((metric) => (
-                <div key={metric.title} className="rounded-2xl border border-white/5 bg-slate-950/60 p-5 backdrop-blur-md relative overflow-hidden group hover:border-teal-500/20 transition-all">
-                  <div className="absolute top-0 left-0 w-full h-[2px] bg-gradient-to-r from-transparent via-teal-500/30 to-transparent opacity-0 group-hover:opacity-100 transition-opacity" />
-                  <p className="text-[10px] font-semibold uppercase tracking-[0.22em] text-teal-400">{metric.title}</p>
-                  <p className="mt-3 text-3xl font-bold text-white">{metric.value}</p>
-                  <p className="mt-2 text-xs leading-relaxed text-slate-400">{metric.copy}</p>
+              <div className="mt-4 rounded-lg border border-slate-200 bg-slate-50 p-4 text-[11px] font-mono text-slate-600">
+                <div className="flex justify-between items-center">
+                  <span className="font-bold">HEALTH NODE STATUS: ACTIVE</span>
+                  <span>LATENCY: 12ms</span>
                 </div>
-              ))}
-            </motion.div>
-          </motion.div>
-
-          {/* Living Care Network Graph Component */}
-          <motion.div
-            initial={{ opacity: 0, scale: 0.95 }}
-            animate={{ opacity: 1, scale: 1 }}
-            transition={{ duration: 0.8, delay: 0.2 }}
-            className="relative z-10"
-          >
-            <div className="absolute inset-0 bg-teal-500/5 blur-[50px] rounded-full pointer-events-none" />
-            <CareNetworkGraph className="shadow-2xl shadow-slate-950" />
-
-            {/* Live Operational Status Card underneath */}
-            <div className="mt-4 rounded-2xl border border-white/5 bg-slate-950/80 p-4 backdrop-blur">
-              <div className="flex items-center justify-between">
-                <div className="flex items-center gap-3">
-                  <span className="relative flex h-2 w-2">
-                    <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span>
-                    <span className="relative inline-flex rounded-full h-2 w-2 bg-emerald-500"></span>
-                  </span>
-                  <span className="text-xs font-mono text-slate-400">ALERA CORE SECURE TELEMETRY</span>
-                </div>
-                <span className="text-xs font-semibold text-teal-400">99.99% SYSTEM OPERATIONAL</span>
               </div>
-            </div>
-          </motion.div>
+            </motion.div>
 
-        </div>
-      </section>
-
-      {/* Grid of Roles Section */}
-      <section id="experience" className="relative bg-[#07090c] py-20 sm:py-24 overflow-hidden">
-        <div className="absolute inset-0 bg-[radial-gradient(circle_at_center,rgba(139,92,246,0.05),transparent_40%)] pointer-events-none" />
-
-        <div className="mx-auto max-w-7xl px-6 lg:px-8">
-          <div className="max-w-3xl">
-            <p className="text-xs font-semibold uppercase tracking-[0.24em] text-teal-400">Universal Care Orchestration</p>
-            <h2 className="mt-3 text-3xl font-bold tracking-tight text-white sm:text-5xl">
-              Tailored workspaces for every link in the medical chain.
-            </h2>
-            <p className="mt-5 text-base leading-relaxed text-slate-400">
-              Generic dashboards cause critical fatigue. Alera implements role-dedicated command panels built exclusively around the clinical action needed next.
-            </p>
-          </div>
-
-          <div className="mt-12 grid gap-6 md:grid-cols-2 xl:grid-cols-4">
-            {roleCards.map((role, i) => {
-              const Icon = role.icon;
-              return (
-                <motion.div
-                  key={role.name}
-                  initial={{ opacity: 0, y: 20 }}
-                  whileInView={{ opacity: 1, y: 0 }}
-                  viewport={{ once: true }}
-                  transition={{ delay: i * 0.05 }}
-                  className="group relative rounded-2xl border border-white/5 bg-slate-950/60 p-6 backdrop-blur transition-all hover:border-teal-500/20 hover:-translate-y-1"
-                >
-                  <div className={`absolute inset-0 bg-gradient-to-b ${role.glow} opacity-0 group-hover:opacity-100 transition-opacity rounded-2xl pointer-events-none`} />
-                  <div className={`inline-flex rounded-xl p-3 border ${role.tone}`}>
-                    <Icon className="h-5 w-5" />
-                  </div>
-                  <h3 className="mt-4 text-lg font-bold text-white group-hover:text-teal-300 transition-colors">{role.name}</h3>
-                  <p className="mt-3 text-xs leading-relaxed text-slate-400">{role.summary}</p>
-                  <div className="mt-5 border-t border-white/5 pt-4">
-                    <p className="text-[10px] font-mono uppercase tracking-wider text-slate-500">{role.detail}</p>
-                  </div>
-                </motion.div>
-              );
-            })}
           </div>
         </div>
       </section>
 
-      {/* Cinematic Contrast Highlight Area */}
-      <section className="relative bg-[#050709] py-20 sm:py-24 border-t border-b border-white/5">
-        <div className="absolute inset-0 bg-[radial-gradient(circle_at_right,rgba(20,184,166,0.05),transparent_40%)] pointer-events-none" />
+      {/* Editorial Split Layout - The Problem & Solution */}
+      <section id="architecture" className="bg-slate-50 py-20 border-b border-slate-200">
         <div className="mx-auto max-w-7xl px-6 lg:px-8">
-          <div className="grid gap-12 lg:grid-cols-[0.8fr_1.2fr] lg:items-center">
+          <div className="grid gap-16 lg:grid-cols-2 lg:items-start">
 
+            {/* Split Left: Narrative */}
             <div>
-              <p className="text-xs font-semibold uppercase tracking-[0.24em] text-teal-400">Quiet Technological Power</p>
-              <h2 className="mt-3 text-3xl font-bold tracking-tight text-white sm:text-4xl">Built for split-second precision. Zero clutter.</h2>
-              <p className="mt-5 text-base leading-relaxed text-slate-400">
-                Healthcare is chaotic. The platform you use shouldn't be. Alera uses sub-millisecond data synchronization, strict dark-mode-first contrasts, and predictive actions so medical specialists spend seconds interacting with software, not minutes.
+              <span className="text-xs font-mono font-bold tracking-widest text-slate-500 uppercase">Operational Narrative</span>
+              <h2 className="mt-3 text-3xl font-extrabold text-slate-900 sm:text-4xl leading-tight">
+                Healthcare integration has been historically broken. We engineered a solution.
+              </h2>
+              <p className="mt-6 text-sm leading-relaxed text-slate-600">
+                Modern medical software operates in silos. Clinicians can't access pharmacy inventory; laboratory results require manual upload; patients coordinate appointments through fragmented portals.
               </p>
-              <div className="mt-8 space-y-4">
+              <p className="mt-4 text-sm leading-relaxed text-slate-600">
+                Alera replaces this chaos with a unified infrastructure. Every patient transaction, prescription, laboratory assay, and fleet coordinate lives on a single, secure ledger. This ensures immediate accessibility, absolute trace security, and frictionless clinic operations.
+              </p>
+            </div>
+
+            {/* Split Right: Systematic Flow */}
+            <div className="space-y-6">
+              <span className="text-xs font-mono font-bold tracking-widest text-slate-500 uppercase">Care Delivery Pipeline</span>
+
+              <div className="relative border-l-2 border-slate-200 pl-6 space-y-8">
                 {[
-                  { label: 'Ecosystem Telemetry', desc: 'Real-time state verification across clinical nodes.' },
-                  { label: 'Tactical Light Controls', desc: 'Cinematic obsidian modes matched with high-fidelity paper light options.' },
-                  { label: 'Frictionless Handoffs', desc: 'Secure encryption keys bridging labs, providers and hospitals.' }
-                ].map((item, idx) => (
-                  <div key={idx} className="flex gap-3">
-                    <div className="flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-teal-500/10 text-teal-400">
-                      <BadgeCheck className="h-3 w-3" />
-                    </div>
-                    <div>
-                      <p className="text-sm font-semibold text-white">{item.label}</p>
-                      <p className="text-xs text-slate-400">{item.desc}</p>
-                    </div>
+                  { step: '01', title: 'Context-Rich Intake', copy: 'Patients book visits with complete symptom histories, medical contexts, and automated reminders.' },
+                  { step: '02', title: 'Structured Clinical Consultation', copy: 'Clinicians formulate diagnostic plans, write medical notes, and queue direct specialist referrals.' },
+                  { step: '03', title: 'Instant Node Handoff', copy: 'Laboratory tests, radiology scans, and prescription fulfillments are dispatched to network providers in real time.' },
+                  { step: '04', title: 'Complete Verification Loop', copy: 'Discharge timelines, results, and medications are cleanly returned to the patient portal, closing the loop.' }
+                ].map((item) => (
+                  <div key={item.step} className="relative">
+                    <span className="absolute -left-[35px] top-0 flex h-6 w-6 items-center justify-center rounded-full bg-slate-900 text-[10px] font-mono font-bold text-white">
+                      {item.step}
+                    </span>
+                    <h3 className="text-sm font-bold text-slate-900">{item.title}</h3>
+                    <p className="mt-1 text-xs text-slate-600 leading-relaxed">{item.copy}</p>
                   </div>
                 ))}
               </div>
             </div>
 
-            <div className="grid gap-4 md:grid-cols-2">
-              {featureHighlights.map((item) => {
-                const Icon = item.icon;
-                return (
-                  <div key={item.title} className="rounded-2xl border border-white/5 bg-[#0a0d11] p-6 hover:border-teal-500/25 transition-all group">
-                    <div className="inline-flex rounded-xl bg-slate-900 p-3 text-teal-400 border border-white/5 group-hover:bg-teal-500/10 transition-colors">
-                      <Icon className="h-5 w-5" />
-                    </div>
-                    <h3 className="mt-4 text-base font-bold text-white group-hover:text-teal-300 transition-colors">{item.title}</h3>
-                    <p className="mt-2 text-xs leading-relaxed text-slate-400">{item.copy}</p>
-                  </div>
-                );
-              })}
-            </div>
-
           </div>
         </div>
       </section>
 
-      {/* Simple Sequential Flow Pathway */}
-      <section className="bg-[#07090c] py-20 sm:py-24">
+      {/* Structured Multi-role Platform Sections */}
+      <section className="bg-white py-20 border-b border-slate-200">
         <div className="mx-auto max-w-7xl px-6 lg:px-8">
-          <div className="mx-auto max-w-3xl text-center">
-            <p className="text-xs font-semibold uppercase tracking-[0.24em] text-teal-400">Engineered Care Sequences</p>
-            <h2 className="mt-3 text-3xl font-bold tracking-tight text-white sm:text-5xl">The four phases of unified care delivery.</h2>
-            <p className="mt-5 text-base leading-relaxed text-slate-400">
-              No dead-ends, no disjointed files. Every clinical action connects straight to the next physical step in the pathway.
+          <div className="max-w-3xl mb-12">
+            <span className="text-xs font-mono font-bold tracking-widest text-slate-500 uppercase">Unified Nodes</span>
+            <h2 className="mt-3 text-3xl font-extrabold text-slate-900">Handcrafted consoles for every healthcare discipline.</h2>
+            <p className="mt-4 text-sm text-slate-600">
+              Generic software forces everyone into the same UI template. Alera implements dedicated dashboards specifically built for the critical functions of each care network role.
             </p>
           </div>
 
-          <div className="mt-12 grid gap-6 lg:grid-cols-4">
-            {journeySteps.map((step, idx) => {
-              const Icon = step.icon;
+          <div className="grid gap-8 md:grid-cols-2 lg:grid-cols-3">
+            {roleCards.map((role) => {
+              const Icon = role.icon;
               return (
-                <div key={step.title} className={`relative rounded-2xl border border-white/5 bg-[#090b0e] p-6 transition-all hover:scale-[1.02] ${step.glow}`}>
-                  <div className="absolute top-4 right-4 text-4xl font-black text-slate-800 pointer-events-none select-none">
-                    0{idx + 1}
+                <div key={role.name} className="rounded-lg border border-slate-200 bg-slate-50/50 p-6 hover:border-slate-400 transition-colors">
+                  <div className="inline-flex rounded bg-slate-100 p-2.5 text-slate-700 border border-slate-200">
+                    <Icon className="h-5 w-5" />
                   </div>
-                  <div className="inline-flex rounded-xl bg-slate-900 p-3 text-teal-400 border border-white/5">
-                    <Icon className="h-6 w-6" />
-                  </div>
-                  <h3 className="mt-5 text-lg font-bold text-white">{step.title}</h3>
-                  <p className="mt-3 text-xs leading-relaxed text-slate-400">{step.copy}</p>
+                  <h3 className="mt-4 text-sm font-bold text-slate-900">{role.name}</h3>
+                  <p className="mt-2 text-xs leading-relaxed text-slate-600">{role.summary}</p>
+                  <p className="mt-4 text-[10px] font-mono text-slate-400 uppercase tracking-widest border-t border-slate-100 pt-3">{role.detail}</p>
                 </div>
               );
             })}
@@ -440,55 +263,63 @@ const Home = () => {
         </div>
       </section>
 
-      {/* Security Assurance section */}
-      <section className="bg-[#050709] py-20 sm:py-24 border-t border-white/5">
+      {/* Security and Integrity Architecture */}
+      <section className="bg-slate-50 py-20 border-b border-slate-200">
         <div className="mx-auto max-w-7xl px-6 lg:px-8">
-          <div className="rounded-3xl border border-white/5 bg-gradient-to-r from-slate-950 via-[#0a0d14] to-slate-950 p-8 text-white sm:p-12 relative overflow-hidden">
-            <div className="absolute -top-10 -right-10 w-40 h-40 bg-teal-500/10 blur-[50px] rounded-full pointer-events-none" />
-            <div className="absolute -bottom-10 -left-10 w-40 h-40 bg-violet-500/10 blur-[50px] rounded-full pointer-events-none" />
-
-            <div className="grid gap-8 lg:grid-cols-[1fr_360px] lg:items-center relative z-10">
+          <div className="rounded-lg border border-slate-200 bg-white p-8 md:p-12">
+            <div className="grid gap-8 lg:grid-cols-2 lg:items-center">
               <div>
-                <p className="text-xs font-semibold uppercase tracking-[0.24em] text-teal-400">Ecosystem Integrity</p>
-                <h3 className="mt-3 text-2xl font-bold tracking-tight sm:text-3xl">Military-grade medical security, visible.</h3>
-                <p className="mt-4 max-w-2xl text-sm leading-relaxed text-slate-400">
-                  Every user, document, prescription, and dispatch possesses a cryptographically validated signature. Audit trails cannot be altered. Handoffs are protected under multi-layer role validations.
+                <span className="text-xs font-mono font-bold tracking-widest text-slate-500 uppercase">Information Security</span>
+                <h3 className="mt-3 text-2xl font-extrabold text-slate-900">An absolute zero-trust data pipeline.</h3>
+                <p className="mt-4 text-sm leading-relaxed text-slate-600">
+                  Every connection is authenticated. Patient biometrics, prescriptions, and lab records are securely encrypted on rest and in transit. Immutable audit logs track every authorization and access.
                 </p>
+                <div className="mt-6 flex flex-wrap gap-3">
+                  {['SOC2 Ready', 'NIST Compliant', 'E2E Cipher Integrity'].map((pill) => (
+                    <span key={pill} className="rounded bg-slate-100 px-2.5 py-1 text-[10px] font-mono font-semibold uppercase text-slate-600 border border-slate-200">
+                      {pill}
+                    </span>
+                  ))}
+                </div>
               </div>
 
-              <div className="rounded-2xl border border-white/10 bg-slate-900/60 p-6 backdrop-blur">
-                <div className="flex items-center gap-3 text-teal-400">
-                  <Fingerprint className="h-5 w-5 text-teal-400 animate-pulse" />
-                  <p className="text-xs font-semibold uppercase tracking-[0.2em]">Zero-Trust Engine</p>
+              <div className="rounded border border-slate-200 bg-slate-50 p-6 font-mono text-xs text-slate-700 space-y-2">
+                <div className="flex justify-between border-b border-slate-200 pb-1.5 font-bold">
+                  <span>METRIC</span>
+                  <span>VALUE</span>
                 </div>
-                <p className="mt-3 text-xs leading-relaxed text-slate-400 font-mono">
-                  ACTIVE CIPHER: AES-GCM-256<br />
-                  COMPLIANCE: HIPAA Ready / ISO 27001<br />
-                  NODE AUTHENTICITY: VERIFIED
-                </p>
+                <div className="flex justify-between">
+                  <span>SSL_CIPHER_SUITE</span>
+                  <span>ECDHE-RSA-AES256-GCM-SHA384</span>
+                </div>
+                <div className="flex justify-between">
+                  <span>AUDIT_LOG_STRATEGY</span>
+                  <span>CRYPTOGRAPHICALLY APPEND-ONLY</span>
+                </div>
+                <div className="flex justify-between">
+                  <span>AUTHENTICATOR_ROLES</span>
+                  <span>DOCTOR, PATIENT, ADMIN, LAB, PHARMACY, EMS</span>
+                </div>
               </div>
             </div>
           </div>
         </div>
       </section>
 
-      {/* Bottom Conversion Section */}
-      <section className="relative bg-[#07090c] px-6 py-20 sm:py-24 lg:px-8">
-        <div className="absolute inset-0 bg-[radial-gradient(circle_at_center,rgba(20,184,166,0.05),transparent_45%)] pointer-events-none" />
-        <div className="mx-auto max-w-5xl rounded-3xl border border-teal-500/20 bg-slate-950/80 p-8 text-center shadow-[0_0_50px_rgba(20,184,166,0.1)] sm:p-16 relative overflow-hidden">
-          <div className="absolute top-0 left-0 w-full h-[2px] bg-gradient-to-r from-transparent via-teal-500 to-transparent" />
-
-          <p className="text-xs font-semibold uppercase tracking-[0.24em] text-teal-400">Upgrade to Care OS 2026</p>
-          <h2 className="mt-3 text-3xl font-bold tracking-tight text-white sm:text-5xl">Reimagine healthcare command.</h2>
-          <p className="mx-auto mt-5 max-w-2xl text-sm leading-relaxed text-slate-400">
-            Sign up for modern, beautiful, and secure clinical orchestration. Set up your node and synchronize with doctors, labs, and patients immediately.
+      {/* Conversion Section */}
+      <section className="bg-white py-20 text-center">
+        <div className="mx-auto max-w-3xl px-6 lg:px-8">
+          <span className="text-xs font-mono font-bold tracking-widest text-slate-500 uppercase">Get Started</span>
+          <h2 className="mt-3 text-3xl font-extrabold text-slate-900">Ready to synchronize your medical network?</h2>
+          <p className="mt-4 text-sm text-slate-600">
+            Establish a verified, compliant account and launch your custom clinical cockpit immediately.
           </p>
-          <div className="mt-8 flex flex-col items-center justify-center gap-3 sm:flex-row">
-            <Button asChild size="lg" className="h-13 rounded-xl bg-teal-500 px-8 text-slate-950 hover:bg-teal-400 font-bold transition-all shadow-[0_0_20px_rgba(20,184,166,0.25)]">
-              <Link to="/signup">Create Secure Node</Link>
+          <div className="mt-8 flex flex-col justify-center gap-3 sm:flex-row">
+            <Button asChild size="lg" className="rounded-md bg-slate-900 px-6 py-3 text-sm font-semibold text-white hover:bg-slate-800 transition-colors">
+              <Link to="/signup">Initialize New Node</Link>
             </Button>
-            <Button asChild size="lg" variant="outline" className="h-13 rounded-xl border-white/10 bg-white/5 px-8 text-white hover:bg-white/10">
-              <Link to="/login">Access with Google</Link>
+            <Button asChild size="lg" variant="outline" className="rounded-md border border-slate-200 bg-white px-6 py-3 text-sm font-semibold text-slate-700 hover:bg-slate-50">
+              <Link to="/login">Access with Identity Provider</Link>
             </Button>
           </div>
         </div>

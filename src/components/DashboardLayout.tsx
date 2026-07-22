@@ -25,7 +25,7 @@ const roleNavItems: Record<string, { label: string; icon: React.ReactNode; path:
     { label: 'Prescriptions Node', icon: <Pill className="w-4 h-4" />, path: '/dashboard/prescriptions' },
     { label: 'Lab Telemetry', icon: <FlaskConical className="w-4 h-4" />, path: '/dashboard/lab-results' },
     { label: 'Scan Modality', icon: <ScanLine className="w-4 h-4" />, path: '/dashboard/imaging' },
-    { label: 'Ambulance dispatch', icon: <Ambulance className="w-4 h-4" />, path: '/dashboard/ambulance' },
+    { label: 'Ambulance Dispatch', icon: <Ambulance className="w-4 h-4" />, path: '/dashboard/ambulance' },
     { label: 'Ecosystem Trace', icon: <Clock className="w-4 h-4" />, path: '/dashboard/timeline' },
     { label: 'Secure Terminal', icon: <MessageSquare className="w-4 h-4" />, path: '/dashboard/messages' },
   ],
@@ -160,45 +160,45 @@ const DashboardLayout = memo(({ children }: DashboardLayoutProps) => {
   };
 
   return (
-    <div className="min-h-screen bg-[#050709] text-slate-100 flex font-sans">
+    <div className="min-h-screen bg-slate-50 text-slate-900 flex font-sans">
 
-      {/* Sci-fi Sidebar Panel */}
-      <aside className={`fixed inset-y-0 left-0 z-50 w-64 border-r border-white/5 bg-[#07090d] transform transition-transform lg:translate-x-0 ${sidebarOpen ? 'translate-x-0' : '-translate-x-full'}`}>
+      {/* Handcrafted Professional Sidebar */}
+      <aside className={`fixed inset-y-0 left-0 z-50 w-64 border-r border-slate-200 bg-white transform transition-transform lg:translate-x-0 ${sidebarOpen ? 'translate-x-0' : '-translate-x-full'}`}>
         <div className="flex flex-col h-full justify-between">
           <div>
 
             {/* Header / Brand */}
-            <div className="flex items-center justify-between h-16 px-5 border-b border-white/5">
+            <div className="flex items-center justify-between h-16 px-5 border-b border-slate-200">
               <Link to="/dashboard" className="flex items-center gap-2.5 group">
-                <div className="w-8 h-8 rounded-xl border border-teal-500/20 bg-teal-950/30 flex items-center justify-center">
-                  <Heart className="w-4 h-4 text-teal-400 animate-pulse" />
+                <div className="w-8 h-8 rounded border border-slate-200 bg-slate-50 flex items-center justify-center">
+                  <Heart className="w-4 h-4 text-slate-800" />
                 </div>
-                <span className="text-sm font-bold tracking-widest text-white group-hover:text-teal-300 transition-colors">ALERA CARE OS</span>
+                <span className="text-xs font-bold tracking-widest text-slate-900 group-hover:text-slate-700 transition-colors uppercase">ALERA OS</span>
               </Link>
-              <button onClick={() => setSidebarOpen(false)} className="lg:hidden text-slate-400">
+              <button onClick={() => setSidebarOpen(false)} className="lg:hidden text-slate-500">
                 <X className="w-5 h-5" />
               </button>
             </div>
 
             {/* Profile Signpost */}
-            <div className="px-4 py-4 border-b border-white/5 bg-slate-950/40">
-              <div className="flex items-center gap-3 p-2.5 rounded-xl border border-white/5 bg-slate-900/40">
-                <div className="w-9 h-9 rounded-xl border border-teal-500/10 bg-teal-950/20 flex items-center justify-center text-teal-400">
+            <div className="px-4 py-4 border-b border-slate-200 bg-slate-50/50">
+              <div className="flex items-center gap-3 p-2.5 rounded border border-slate-200 bg-white">
+                <div className="w-9 h-9 rounded border border-slate-200 bg-slate-50 flex items-center justify-center text-slate-800">
                   {roleIcons[roleKey]}
                 </div>
                 <div className="min-w-0">
-                  <div className="text-xs font-bold text-white truncate">{user.name}</div>
-                  <div className="text-[10px] font-mono text-slate-400 mt-0.5 tracking-wider uppercase">{roleLabels[roleKey]}</div>
+                  <div className="text-xs font-bold text-slate-900 truncate">{user.name}</div>
+                  <div className="text-[10px] font-mono text-slate-500 mt-0.5 tracking-wider uppercase">{roleLabels[roleKey]}</div>
 
                   {/* Verification Status */}
                   <div
                     data-testid="sidebar-professional-verification"
-                    className={`mt-1.5 inline-flex items-center gap-1 rounded-md px-1.5 py-0.5 text-[9px] font-mono uppercase tracking-wider ${
+                    className={`mt-1.5 inline-flex items-center gap-1 rounded px-1.5 py-0.5 text-[9px] font-mono uppercase tracking-wider ${
                       professionalVerificationStatus === 'verified'
-                        ? 'bg-emerald-500/10 border border-emerald-500/20 text-emerald-400'
+                        ? 'bg-emerald-50 border border-emerald-200 text-emerald-800'
                         : professionalVerificationStatus === 'pending'
-                        ? 'bg-amber-500/10 border border-amber-500/20 text-amber-400 animate-pulse'
-                        : 'bg-red-500/10 border border-red-500/20 text-red-400'
+                        ? 'bg-amber-50 border border-amber-200 text-amber-800'
+                        : 'bg-red-50 border border-red-200 text-red-800'
                     }`}
                   >
                     <ShieldCheck className="w-2.5 h-2.5" />
@@ -217,10 +217,10 @@ const DashboardLayout = memo(({ children }: DashboardLayoutProps) => {
                     key={item.path}
                     to={item.path}
                     onClick={() => setSidebarOpen(false)}
-                    className={`flex items-center gap-3 px-3 py-2.5 rounded-xl text-xs font-semibold uppercase tracking-wider transition-all ${
+                    className={`flex items-center gap-3 px-3 py-2 rounded text-[11px] font-mono font-bold uppercase tracking-wider transition-all ${
                       active
-                        ? 'bg-teal-500/10 border border-teal-500/20 text-teal-400 shadow-[0_0_15px_rgba(20,184,166,0.1)]'
-                        : 'text-slate-400 hover:bg-white/5 hover:text-white'
+                        ? 'bg-slate-900 text-white shadow-sm'
+                        : 'text-slate-500 hover:bg-slate-100 hover:text-slate-900'
                     }`}
                   >
                     {item.icon}
@@ -233,10 +233,10 @@ const DashboardLayout = memo(({ children }: DashboardLayoutProps) => {
           </div>
 
           {/* Bottom Actions */}
-          <div className="p-3 border-t border-white/5 bg-slate-950/20">
+          <div className="p-3 border-t border-slate-200 bg-slate-50">
             <button
               onClick={() => void handleSignOut()}
-              className="flex items-center gap-3 px-3 py-2.5 rounded-xl text-xs font-semibold uppercase tracking-wider text-slate-400 hover:bg-red-500/10 hover:text-red-400 transition-all w-full"
+              className="flex items-center gap-3 px-3 py-2 rounded text-xs font-mono font-bold uppercase tracking-wider text-slate-500 hover:bg-red-50 hover:text-red-700 transition-all w-full"
             >
               <LogOut className="w-4 h-4" />
               <span>De-auth Node</span>
@@ -246,28 +246,28 @@ const DashboardLayout = memo(({ children }: DashboardLayoutProps) => {
       </aside>
 
       {/* Overlay backdrop */}
-      {sidebarOpen && <div className="fixed inset-0 z-40 bg-slate-950/60 backdrop-blur-md lg:hidden" onClick={() => setSidebarOpen(false)} />}
+      {sidebarOpen && <div className="fixed inset-0 z-40 bg-slate-900/10 backdrop-blur-xs lg:hidden" onClick={() => setSidebarOpen(false)} />}
 
       {/* Main Console Deck */}
       <div className="flex-1 lg:ml-64 flex flex-col min-h-screen">
 
         {/* Top Control Bar */}
-        <header className="sticky top-0 z-30 h-16 border-b border-white/5 bg-[#050709]/80 backdrop-blur-xl flex items-center justify-between px-6">
-          <button onClick={() => setSidebarOpen(true)} className="lg:hidden text-white hover:text-teal-400">
+        <header className="sticky top-0 z-30 h-16 border-b border-slate-200 bg-white/95 backdrop-blur flex items-center justify-between px-6">
+          <button onClick={() => setSidebarOpen(true)} className="lg:hidden text-slate-500 hover:text-slate-900">
             <Menu className="w-5 h-5" />
           </button>
 
           {/* Secure Network Telemetry Status */}
-          <div className="hidden lg:flex items-center gap-2 rounded-full border border-teal-500/15 bg-teal-950/25 px-3 py-1 text-[10px] font-mono text-teal-400">
-            <div className={`w-1.5 h-1.5 rounded-full ${isLive ? 'bg-emerald-400 animate-pulse' : 'bg-slate-500'}`} />
-            <span>{isLive ? `SECURE DISPATCH NODE ACTIVE · ${feedLabel.toUpperCase()}` : 'TELEMETRY DISCONNECTED'}</span>
+          <div className="hidden lg:flex items-center gap-2 rounded border border-slate-200 bg-slate-50 px-3 py-1 text-[10px] font-mono text-slate-600">
+            <div className={`w-1.5 h-1.5 rounded-full ${isLive ? 'bg-emerald-600 animate-pulse' : 'bg-slate-400'}`} />
+            <span>{isLive ? `SECURE DISPATCH NODE ACTIVE · ${feedLabel.toUpperCase()}` : 'TELEMETRY OFFLINE'}</span>
           </div>
 
           {/* Header Controls */}
           <div className="flex items-center gap-3">
             <Link
               to="/dashboard/profile"
-              className="w-9 h-9 rounded-xl border border-white/5 bg-slate-900/60 flex items-center justify-center text-slate-300 hover:bg-white/5 hover:text-teal-400 transition-all"
+              className="w-9 h-9 rounded border border-slate-200 bg-slate-50 flex items-center justify-center text-slate-500 hover:bg-slate-100 hover:text-slate-900 transition-colors"
             >
               <Settings className="w-4 h-4" />
             </Link>
@@ -276,11 +276,11 @@ const DashboardLayout = memo(({ children }: DashboardLayoutProps) => {
             <div className="relative">
               <button
                 onClick={() => setNotifOpen(!notifOpen)}
-                className="relative w-9 h-9 rounded-xl border border-white/5 bg-slate-900/60 flex items-center justify-center text-slate-300 hover:bg-white/5 hover:text-teal-400 transition-all"
+                className="relative w-9 h-9 rounded border border-slate-200 bg-slate-50 flex items-center justify-center text-slate-500 hover:bg-slate-100 hover:text-slate-900 transition-colors"
               >
                 <Bell className="w-4 h-4" />
                 {unreadCount > 0 && (
-                  <span className="absolute -top-1 -right-1 w-4 h-4 rounded-full bg-red-500 text-white text-[9px] font-bold flex items-center justify-center animate-pulse">
+                  <span className="absolute -top-1 -right-1 w-4 h-4 rounded-full bg-red-600 text-white text-[9px] font-bold flex items-center justify-center">
                     {unreadCount > 9 ? '9+' : unreadCount}
                   </span>
                 )}
@@ -293,21 +293,21 @@ const DashboardLayout = memo(({ children }: DashboardLayoutProps) => {
         {/* Notices */}
         <div className="mx-6 mt-4 space-y-3">
           {isEmailUnverified && (
-            <div className="rounded-2xl border border-cyan-500/20 bg-cyan-950/20 px-4 py-3 text-sm text-cyan-400 backdrop-blur">
+            <div className="rounded border border-slate-200 bg-white px-4 py-3 text-sm text-slate-700">
               <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
                 <div className="flex items-start gap-3">
-                  <Mail className="mt-0.5 h-4 w-4 flex-shrink-0" />
+                  <Mail className="mt-0.5 h-4 w-4 flex-shrink-0 text-slate-500" />
                   <div>
-                    <p className="font-bold">Ecosystem Verification Unresolved</p>
-                    <p className="text-xs text-slate-400">Please verify your email coordinates to activate safe patient encryption.</p>
-                    {verificationNotice && <p className="mt-2 text-xs text-cyan-200 font-mono">{verificationNotice}</p>}
+                    <p className="font-bold text-slate-950">Ecosystem Verification Unresolved</p>
+                    <p className="text-xs text-slate-500">Please verify your email coordinates to activate safe patient encryption.</p>
+                    {verificationNotice && <p className="mt-2 text-xs text-slate-700 font-mono">{verificationNotice}</p>}
                   </div>
                 </div>
                 <button
                   type="button"
                   onClick={() => void handleResendVerification()}
                   disabled={sendingVerification}
-                  className="inline-flex items-center justify-center rounded-xl border border-cyan-500/20 bg-cyan-950/40 px-3 py-2 text-xs font-semibold uppercase tracking-wider text-cyan-400 hover:bg-cyan-400 hover:text-slate-950 transition-all disabled:opacity-50"
+                  className="inline-flex items-center justify-center rounded border border-slate-200 bg-white px-3 py-1.5 text-xs font-mono font-bold uppercase tracking-wider text-slate-600 hover:bg-slate-50 disabled:opacity-50"
                 >
                   {sendingVerification ? 'Transmitting...' : 'Re-issue Token'}
                 </button>
@@ -315,7 +315,7 @@ const DashboardLayout = memo(({ children }: DashboardLayoutProps) => {
             </div>
           )}
           {isPendingVerification && (
-            <div className="rounded-2xl border border-amber-500/25 bg-amber-950/20 px-4 py-3 text-xs font-mono uppercase tracking-wider text-amber-400 backdrop-blur-md animate-pulse">
+            <div className="rounded border border-amber-200 bg-amber-50 px-4 py-3 text-xs font-mono uppercase tracking-wider text-amber-800">
               [NOTICE] Clinical node verification in progress. Restricted capabilities remain inactive until credential validation completes.
             </div>
           )}
@@ -323,7 +323,6 @@ const DashboardLayout = memo(({ children }: DashboardLayoutProps) => {
 
         {/* Workspace Core Area */}
         <main className="flex-1 p-6 relative">
-          <div className="absolute top-10 right-10 w-[400px] h-[400px] bg-teal-500/[0.01] blur-[150px] rounded-full pointer-events-none" />
           {children}
         </main>
       </div>
